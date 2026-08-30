@@ -10,6 +10,10 @@ interface NavigationHeaderProps {
   onOpenSpikeDashboard?: () => void;
   onOpenOnboarding?: () => void;
   discardMode?: boolean;
+  isAuthenticated?: boolean;
+  onLogin?: () => void;
+  onSync?: () => void;
+  isSyncing?: boolean;
 }
 
 export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
@@ -19,6 +23,10 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
   onOpenSpikeDashboard,
   onOpenOnboarding,
   discardMode = false,
+  isAuthenticated = false,
+  onLogin,
+  onSync,
+  isSyncing = false,
 }) => {
   const readerStats = useMemo(() => {
     if (books.length === 0) return null;
@@ -146,6 +154,35 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
+          {!discardMode && (
+            isAuthenticated ? (
+              <button
+                onClick={() => {
+                  haptic.lightImpact();
+                  if (onSync) onSync();
+                }}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1916] border border-[#3A332A] text-[#C9963F] hover:bg-[#2C251D] transition-colors font-mono-ibm text-[11px]"
+                title="Sync Library to Cloud"
+              >
+                <span className={`material-symbols-outlined text-[16px] ${isSyncing ? 'animate-spin' : ''}`}>sync</span>
+                <span className="hidden sm:inline">SYNC</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  haptic.lightImpact();
+                  if (onLogin) onLogin();
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1916] border border-[#3A332A] text-[#A79C8C] hover:text-[#C9963F] transition-colors font-mono-ibm text-[11px]"
+                title="Login with Google to Enable Cloud Sync"
+              >
+                <span className="material-symbols-outlined text-[16px]">cloud_off</span>
+                <span className="hidden sm:inline">LOGIN</span>
+              </button>
+            )
+          )}
+
           <button
             onClick={() => {
               haptic.lightImpact();

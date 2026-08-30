@@ -3,9 +3,11 @@ import { Book } from '../types';
 
 interface ReadingCalendarWidgetProps {
   books: Book[];
+  reminderEnabled?: boolean;
+  onToggleReminder?: (enabled: boolean) => void;
 }
 
-export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ books }) => {
+export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ books, reminderEnabled = false, onToggleReminder }) => {
   const { activityMap, cells, currentStreak, maxStreak, activeDays } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -96,8 +98,22 @@ export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ bo
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-[16px] text-[#C9963F]">calendar_month</span>
-          <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold">
+          <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold flex items-center gap-3">
             Reading Habit
+            {onToggleReminder && (
+              <button
+                onClick={() => onToggleReminder(!reminderEnabled)}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-colors ${
+                  reminderEnabled 
+                    ? 'border-[#C9963F] bg-[#C9963F]/10 text-[#C9963F]' 
+                    : 'border-[#3A332A] bg-transparent text-[#A79C8C] hover:text-[#F4EFE6] hover:border-[#4F4537]'
+                }`}
+                title={reminderEnabled ? "48h Reminder Active" : "Enable 48h Reminder"}
+              >
+                <span className="material-symbols-outlined text-[12px]">{reminderEnabled ? 'notifications_active' : 'notifications_off'}</span>
+                <span className="text-[9px] font-mono-ibm uppercase tracking-wider">{reminderEnabled ? 'Reminder On' : 'Reminder Off'}</span>
+              </button>
+            )}
           </h3>
         </div>
         <div className="flex gap-4 sm:gap-6 text-left sm:text-right w-full sm:w-auto overflow-hidden">

@@ -113,3 +113,14 @@ export interface SpikeSample {
     unknownCount: number;
   };
 }
+
+export interface GenreMilestone {
+  genre: string;
+  targetCount: number;
+}
+
+export interface ReadingGoals {
+  annualPageCount?: number;
+  annualBookCount?: number;
+  genreMilestones?: GenreMilestone[];
+}

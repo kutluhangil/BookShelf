@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Book, Shelf, SpineCandidate, EditionOption, ReadingStatus, SpikeSample } from './types';
+import { Book, Shelf, SpineCandidate, EditionOption, ReadingStatus, SpikeSample, ReadingGoals } from './types';
 import { INITIAL_BOOKS, INITIAL_SHELVES } from './data/initialLibrary';
 import { segmentAndMatchShelf } from './services/clusteringEngine';
+import { auth, loginWithGoogle, onAuthStateChanged, User } from './lib/firebase';
+import { syncToCloud, fetchFromCloud } from './services/cloudSync';
 import { ShelfStrip } from './components/ShelfStrip';
 import { BookCard } from './components/BookCard';
 import { NavigationHeader } from './components/NavigationHeader';
@@ -18,12 +20,15 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { YourShelvesView } from './components/YourShelvesView';
 import { LibraryGrowthDashboard } from './components/LibraryGrowthDashboard';
 import { MonthlyGoalDashboard } from './components/MonthlyGoalDashboard';
+import { ReadingGoalsDashboard } from './components/ReadingGoalsDashboard';
 import { DailyQuoteDashboard } from './components/DailyQuoteDashboard';
 import { RecommendedBooks } from './components/RecommendedBooks';
 import { ReadingCalendarWidget } from './components/ReadingCalendarWidget';
 import { WeeklyReadingChart } from './components/WeeklyReadingChart';
 import { ToastContainer, ToastMessage } from './components/Toast';
+import { ReadingGoalsModal } from './components/ReadingGoalsModal';
 import { calculateReadingStreak } from './utils/streak';
+import { parseNLPSearchQuery } from './utils/searchParser';
 import { haptic } from './services/haptics';
 
 export default function App() {
@@ -31,6 +36,11 @@ export default function App() {
   const [books, setBooks] = useState<Book[]>(INITIAL_BOOKS);
   const [shelves, setShelves] = useState<Shelf[]>(INITIAL_SHELVES);
   const [monthlyGoal, setMonthlyGoal] = useState<number>(5);
+  const [readingGoals, setReadingGoals] = useState<ReadingGoals>({
+    annualPageCount: 10000,
+    annualBookCount: 50,
+    genreMilestones: []
+  });
 
   // Active View Tabs: 'library' | 'shelves' | 'eval'
   const [activeTab, setActiveTab] = useState<'library' | 'shelves' | 'eval'>('library');
@@ -38,6 +48,7 @@ export default function App() {
   // Filter & Search States
   const [selectedShelfId, setSelectedShelfId] = useState<string>('all');
   const [readingStatusFilter, setReadingStatusFilter] = useState<'all' | ReadingStatus>('all');
+  const [smartFilter, setSmartFilter] = useState<'none' | 'recently_added' | 'high_priority' | 'abandoned'>('none');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortMode, setSortMode] = useState<'physical' | 'recent' | 'author' | 'title'>('physical');
   const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
@@ -59,11 +70,112 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isSpikeDashboardOpen, setIsSpikeDashboardOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isReadingGoalsModalOpen, setIsReadingGoalsModalOpen] = useState(false);
 
   // Toast & Milestone States
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [lastNotifiedCompletedCount, setLastNotifiedCompletedCount] = useState<number>(() => INITIAL_BOOKS.filter(b => b.status === 'read').length);
   const [lastNotifiedStreak, setLastNotifiedStreak] = useState<number>(() => calculateReadingStreak(INITIAL_BOOKS));
+  const [isReminderEnabled, setIsReminderEnabled] = useState(false);
+  const reminderTriggeredRef = React.useRef(false);
+
+  // Auth & Sync States
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        // Auto-fetch on login
+        try {
+          setIsSyncing(true);
+          const cloudData = await fetchFromCloud(user.uid);
+          if (cloudData.books.length > 0 || cloudData.shelves.length > 0) {
+            setBooks(cloudData.books);
+            setShelves(cloudData.shelves);
+            if (cloudData.readingGoals) {
+              setReadingGoals(cloudData.readingGoals);
+            }
+            setToasts(prev => [...prev, {
+              id: `sync-fetch-${Date.now()}`,
+              title: 'Library Synced',
+              description: 'Successfully loaded your library from the cloud.',
+              icon: 'cloud_download'
+            }]);
+          }
+        } catch (error) {
+          console.error('Failed to fetch from cloud:', error);
+        } finally {
+          setIsSyncing(false);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleSyncToCloud = async () => {
+    if (!currentUser) return;
+    try {
+      setIsSyncing(true);
+      await syncToCloud(currentUser.uid, books, shelves, readingGoals);
+      setToasts(prev => [...prev, {
+        id: `sync-push-${Date.now()}`,
+        title: 'Sync Complete',
+        description: 'Your library has been securely backed up to the cloud.',
+        icon: 'cloud_done'
+      }]);
+    } catch (error) {
+      console.error('Failed to sync to cloud:', error);
+      setToasts(prev => [...prev, {
+        id: `sync-error-${Date.now()}`,
+        title: 'Sync Failed',
+        description: 'Could not sync library. Please try again.',
+        icon: 'error'
+      }]);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isReminderEnabled) return;
+    if (reminderTriggeredRef.current) return;
+
+    let latestDate = 0;
+    books.forEach(b => {
+      b.readingSessions?.forEach(s => {
+        const t = new Date(s.date).getTime();
+        if (t > latestDate) latestDate = t;
+      });
+      b.readHistory?.forEach(dateString => {
+        const t = new Date(dateString).getTime();
+        if (t > latestDate) latestDate = t;
+      });
+      if (b.readAt) {
+        const t = new Date(b.readAt).getTime();
+        if (t > latestDate) latestDate = t;
+      }
+    });
+
+    if (latestDate > 0) {
+      const msSinceLastRead = Date.now() - latestDate;
+      if (msSinceLastRead > 48 * 60 * 60 * 1000) {
+        reminderTriggeredRef.current = true;
+        const id = `reminder-${Date.now()}`;
+        setToasts(prev => [...prev, {
+          id,
+          title: 'Reading Reminder',
+          description: 'It’s been over 48 hours since your last reading session. Keep your streak alive!',
+          icon: 'menu_book'
+        }]);
+        haptic.success();
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, 5000);
+      }
+    }
+  }, [isReminderEnabled, books]);
 
   useEffect(() => {
     const currentCompletedCount = books.filter(b => b.status === 'read').length;
@@ -122,14 +234,26 @@ export default function App() {
       if (readingStatusFilter !== 'all' && book.status !== readingStatusFilter) {
         return false;
       }
-      // Search query
+      // Smart Filter
+      if (smartFilter !== 'none') {
+        if (smartFilter === 'recently_added') {
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          if (new Date(book.addedAt).getTime() < sevenDaysAgo.getTime()) {
+            return false;
+          }
+        } else if (smartFilter === 'high_priority') {
+          const priorityTags = ['high priority', 'urgent', 'must read', 'priority'];
+          const hasPriorityTag = book.tags?.some(tag => priorityTags.includes(tag.toLowerCase()));
+          if (!hasPriorityTag) return false;
+        } else if (smartFilter === 'abandoned') {
+          if (book.status === 'unread') return false;
+          if (book.progress === undefined || book.progress >= 30) return false;
+        }
+      }
+      // Search query (NLP mapped)
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const titleMatch = book.title.toLowerCase().includes(q);
-        const authorMatch = book.author.toLowerCase().includes(q);
-        const publisherMatch = book.publisher?.toLowerCase().includes(q);
-        const isbnMatch = book.isbn?.includes(q);
-        if (!titleMatch && !authorMatch && !publisherMatch && !isbnMatch) {
+        if (!parseNLPSearchQuery(searchQuery, book)) {
           return false;
         }
       }
@@ -149,7 +273,7 @@ export default function App() {
     }
 
     return result;
-  }, [books, selectedShelfId, readingStatusFilter, searchQuery, sortMode]);
+  }, [books, selectedShelfId, readingStatusFilter, smartFilter, searchQuery, sortMode]);
 
   // Overall Spine Colors Palette for the Hero Strip
   const allSpineColors = useMemo(() => {
@@ -587,6 +711,10 @@ export default function App() {
         onOpenProfile={() => setIsShareModalOpen(true)}
         onOpenSpikeDashboard={() => setIsSpikeDashboardOpen(true)}
         onOpenOnboarding={() => setIsOnboardingOpen(true)}
+        isAuthenticated={!!currentUser}
+        onLogin={loginWithGoogle}
+        onSync={handleSyncToCloud}
+        isSyncing={isSyncing}
       />
 
       {/* Main Content Router */}
@@ -677,15 +805,19 @@ export default function App() {
               <DailyQuoteDashboard />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ReadingCalendarWidget books={books} />
+                <ReadingCalendarWidget 
+                  books={books} 
+                  reminderEnabled={isReminderEnabled}
+                  onToggleReminder={setIsReminderEnabled}
+                />
                 <WeeklyReadingChart books={books} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <MonthlyGoalDashboard
+                <ReadingGoalsDashboard
                   books={books}
-                  monthlyGoal={monthlyGoal}
-                  onUpdateGoal={setMonthlyGoal}
+                  goals={readingGoals}
+                  onEditGoals={() => setIsReadingGoalsModalOpen(true)}
                 />
                 <LibraryGrowthDashboard books={books} />
               </div>
@@ -716,7 +848,7 @@ export default function App() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by title, author, publisher, ISBN..."
+                    placeholder="Try 'unread books by Orwell' or 'reading now'..."
                     className="w-full pl-10 pr-4 py-2 bg-[#12100E] hairline-border rounded-xl text-[13px] font-sans-inter text-[#F4EFE6] placeholder:text-[#9C8F7E] focus:outline-none focus:border-[#C9963F]"
                   />
                   {searchQuery && (
@@ -771,6 +903,31 @@ export default function App() {
                     {st}
                   </button>
                 ))}
+              </div>
+
+              {/* Smart Filters */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar font-mono-ibm text-[11px] pt-1 border-t border-[#3A332A]/50 mt-1">
+                <span className="text-[#A79C8C] text-[10px] uppercase tracking-wider mr-1 shrink-0 mt-2">
+                  SMART:
+                </span>
+                <div className="flex items-center gap-1.5 mt-2">
+                  {(['none', 'recently_added', 'high_priority', 'abandoned'] as const).map((filterId) => (
+                    <button
+                      key={filterId}
+                      onClick={() => {
+                        haptic.selectionClick();
+                        setSmartFilter(filterId);
+                      }}
+                      className={`px-3 py-1 rounded-lg uppercase tracking-wider transition-all shrink-0 ${
+                        smartFilter === filterId
+                          ? 'bg-[#85E07D] text-[#12100E] font-bold'
+                          : 'bg-[#12100E] text-[#A79C8C] hairline-border hover:text-[#F4EFE6]'
+                      }`}
+                    >
+                      {filterId.replace('_', ' ')}
+                    </button>
+                  ))}
+                </div>
               </div>
             </section>
 
@@ -974,6 +1131,18 @@ export default function App() {
         onUpdateNotes={handleUpdateNotes}
         onUpdateTags={handleUpdateTags}
         onAddReadingSession={handleAddReadingSession}
+      />
+
+      <ReadingGoalsModal
+        isOpen={isReadingGoalsModalOpen}
+        onClose={() => setIsReadingGoalsModalOpen(false)}
+        goals={readingGoals}
+        onSave={(newGoals) => {
+          setReadingGoals(newGoals);
+          if (currentUser) {
+            syncToCloud(currentUser.uid, books, shelves, newGoals).catch(console.error);
+          }
+        }}
       />
 
       {/* Share Export Modal (Image 13) */}

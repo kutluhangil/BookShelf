@@ -4,8 +4,9 @@ import { Shelf, Book } from '../types';
 import { ShelfStrip } from './ShelfStrip';
 import { haptic } from '../services/haptics';
 
-const SHELF_COLORS = ['#C9963F', '#304E2E', '#2C251D', '#8B2323', '#4A5B69', '#63456B', '#4D4336'];
-const SHELF_TEXTURES = ['solid', 'wood', 'metal', 'fabric'];
+const SHELF_COLORS = ['#C9963F', '#304E2E', '#2C251D', '#8B2323', '#4A5B69', '#63456B', '#4D4336', '#3E5C76', '#E29578'];
+const SHELF_TEXTURES = ['Solid', 'Oak', 'Minimalist Metal', 'Dark Walnut'];
+const SHELF_MAX_PAGES = 5000; // Estimated linear capacity per shelf
 
 const getShelfBackgroundStyle = (themeColor?: string, texture?: string): React.CSSProperties => {
   const baseBg = '#1C1916';
@@ -13,10 +14,13 @@ const getShelfBackgroundStyle = (themeColor?: string, texture?: string): React.C
 
   const colorPrefix = themeColor ? `linear-gradient(to bottom right, ${themeColor}15, ${themeColor}05), ` : '';
 
-  if (texture === 'wood') {
+  if (texture === 'Oak' || texture === 'wood') {
     backgroundStyle.backgroundImage = `${colorPrefix}repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 6px), repeating-linear-gradient(-45deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 2px, transparent 2px, transparent 8px)`;
-  } else if (texture === 'metal') {
+  } else if (texture === 'Minimalist Metal' || texture === 'metal') {
     backgroundStyle.backgroundImage = `${colorPrefix}linear-gradient(90deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 20%, rgba(0,0,0,0.1) 50%, rgba(255,255,255,0) 80%, rgba(255,255,255,0.02) 100%), repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)`;
+  } else if (texture === 'Dark Walnut') {
+    backgroundStyle.backgroundImage = `${colorPrefix}repeating-linear-gradient(45deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 4px), repeating-linear-gradient(-45deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 2px, transparent 2px, transparent 6px)`;
+    backgroundStyle.backgroundColor = '#15110E';
   } else if (texture === 'fabric') {
     backgroundStyle.backgroundImage = `${colorPrefix}repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 4px), repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 4px)`;
   } else if (themeColor) {
@@ -288,6 +292,10 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
             const isDragging = draggedShelfId === shelf.id;
             const isOver = dragOverShelfId === shelf.id;
 
+            const totalPages = shelfBooks.reduce((sum, b) => sum + (b.pageCount || 250), 0);
+            const capacityPercentage = Math.min(100, Math.round((totalPages / SHELF_MAX_PAGES) * 100));
+            const isNearCapacity = capacityPercentage > 85;
+
             return (
               <motion.div
                 key={shelf.id}
@@ -349,6 +357,20 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                         <p className="font-mono-ibm text-[11px] text-[#A79C8C] mt-1">
                           {shelfBooks.length > 0 ? shelfBooks.length : shelf.volumeCount} PHYSICAL VOLUMES
                         </p>
+                        
+                        {/* Capacity Indicator */}
+                        <div className="mt-3 flex flex-col gap-1.5 w-full max-w-[200px]">
+                          <div className="flex justify-between items-center text-[9px] font-mono-ibm tracking-wider">
+                            <span className="text-[#A79C8C]">CAPACITY</span>
+                            <span className={isNearCapacity ? "text-[#E57373]" : "text-[#C9963F]"}>{capacityPercentage}%</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-[#12100E] rounded-full overflow-hidden border border-[#3A332A]">
+                            <div 
+                              className={`h-full rounded-full ${isNearCapacity ? 'bg-[#E57373]' : 'bg-[#C9963F]'}`}
+                              style={{ width: `${capacityPercentage}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -471,7 +493,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                                     haptic.selectionClick();
                                     onUpdateShelf?.(shelf.id, { texture: t });
                                   }}
-                                  className={`px-2 py-1 rounded text-[10px] uppercase font-mono-ibm transition-colors ${(shelf.texture || 'solid') === t ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#1C1916] text-[#A79C8C] border border-[#3A332A] hover:text-[#F4EFE6]'}`}
+                                  className={`px-2 py-1 rounded text-[10px] uppercase font-mono-ibm transition-colors ${(shelf.texture || 'Solid') === t ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#1C1916] text-[#A79C8C] border border-[#3A332A] hover:text-[#F4EFE6]'}`}
                                 >
                                   {t}
                                 </button>

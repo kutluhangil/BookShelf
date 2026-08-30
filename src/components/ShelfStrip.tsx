@@ -20,10 +20,13 @@ const getShelfStripBackgroundStyle = (themeColor?: string, texture?: string): Re
 
   const colorPrefix = themeColor ? `linear-gradient(to bottom right, ${themeColor}15, ${themeColor}05), ` : '';
 
-  if (texture === 'wood') {
+  if (texture === 'Oak' || texture === 'wood') {
     backgroundStyle.backgroundImage = `${colorPrefix}repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 6px), repeating-linear-gradient(-45deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 2px, transparent 2px, transparent 8px)`;
-  } else if (texture === 'metal') {
+  } else if (texture === 'Minimalist Metal' || texture === 'metal') {
     backgroundStyle.backgroundImage = `${colorPrefix}linear-gradient(90deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 20%, rgba(0,0,0,0.1) 50%, rgba(255,255,255,0) 80%, rgba(255,255,255,0.02) 100%), repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)`;
+  } else if (texture === 'Dark Walnut') {
+    backgroundStyle.backgroundImage = `${colorPrefix}repeating-linear-gradient(45deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 4px), repeating-linear-gradient(-45deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 2px, transparent 2px, transparent 6px)`;
+    backgroundStyle.backgroundColor = '#15110E';
   } else if (texture === 'fabric') {
     backgroundStyle.backgroundImage = `${colorPrefix}repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 4px), repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 4px)`;
   } else if (themeColor) {

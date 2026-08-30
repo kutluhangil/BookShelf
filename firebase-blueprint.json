@@ -1,0 +1,41 @@
+{
+  "collections": [
+    {
+      "name": "users",
+      "path": "users/{userId}",
+      "description": "User profile data and settings.",
+      "securityRules": {
+        "read": "request.auth != null && request.auth.uid == userId",
+        "write": "request.auth != null && request.auth.uid == userId"
+      }
+    },
+    {
+      "name": "books",
+      "path": "books/{bookId}",
+      "description": "Library books belonging to a user.",
+      "fields": {
+        "userId": "string"
+      },
+      "securityRules": {
+        "read": "request.auth != null && resource.data.userId == request.auth.uid",
+        "create": "request.auth != null && request.resource.data.userId == request.auth.uid",
+        "update": "request.auth != null && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid",
+        "delete": "request.auth != null && resource.data.userId == request.auth.uid"
+      }
+    },
+    {
+      "name": "shelves",
+      "path": "shelves/{shelfId}",
+      "description": "Library shelves belonging to a user.",
+      "fields": {
+        "userId": "string"
+      },
+      "securityRules": {
+        "read": "request.auth != null && resource.data.userId == request.auth.uid",
+        "create": "request.auth != null && request.resource.data.userId == request.auth.uid",
+        "update": "request.auth != null && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid",
+        "delete": "request.auth != null && resource.data.userId == request.auth.uid"
+      }
+    }
+  ]
+}
