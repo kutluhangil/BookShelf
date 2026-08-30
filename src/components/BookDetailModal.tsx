@@ -12,6 +12,7 @@ interface BookDetailModalProps {
   onUpdateStatus: (bookId: string, status: ReadingStatus) => void;
   onUpdateProgress?: (bookId: string, progress: number) => void;
   onUpdateShelf: (bookId: string, shelfId: string) => void;
+  onUpdateCoordinate?: (bookId: string, shelfId: string, x: number | undefined, y: number | undefined) => void;
   onDeleteBook: (bookId: string) => void;
   onUpdateNotes?: (bookId: string, notes: string) => void;
   onUpdateTags?: (bookId: string, tags: string[]) => void;
@@ -26,6 +27,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onUpdateStatus,
   onUpdateProgress,
   onUpdateShelf,
+  onUpdateCoordinate,
   onDeleteBook,
   onUpdateNotes,
   onUpdateTags,
@@ -328,6 +330,65 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 ))}
               </select>
             </div>
+
+            {currentShelf?.layout === 'coordinate' && (
+              <div className="flex flex-col gap-1.5">
+                <label className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
+                  BIN COORDINATES (X, Y)
+                </label>
+                <div className="flex gap-3">
+                  <div className="flex-1 flex items-center gap-2 bg-[#262119] hairline-border rounded-lg p-1.5 px-3">
+                    <span className="font-mono-ibm text-[11px] text-[#A79C8C]">X (COL)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={currentShelf.gridDimensions?.cols || 10}
+                      value={currentShelf.coordinates?.[book.id]?.x || ''}
+                      onChange={(e) => {
+                        if (onUpdateCoordinate) {
+                          const val = e.target.value;
+                          if (val === '') {
+                            onUpdateCoordinate(book.id, currentShelf.id, undefined, undefined);
+                          } else {
+                            const x = parseInt(val);
+                            const currentY = currentShelf.coordinates?.[book.id]?.y || 1;
+                            onUpdateCoordinate(book.id, currentShelf.id, x, currentY);
+                          }
+                        }
+                      }}
+                      className="w-full bg-transparent text-[#F4EFE6] text-[13px] font-sans-inter focus:outline-none text-right"
+                      placeholder="e.g. 1"
+                    />
+                  </div>
+                  <div className="flex-1 flex items-center gap-2 bg-[#262119] hairline-border rounded-lg p-1.5 px-3">
+                    <span className="font-mono-ibm text-[11px] text-[#A79C8C]">Y (ROW)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={currentShelf.gridDimensions?.rows || 10}
+                      value={currentShelf.coordinates?.[book.id]?.y || ''}
+                      onChange={(e) => {
+                        if (onUpdateCoordinate) {
+                          const val = e.target.value;
+                          if (val === '') {
+                            onUpdateCoordinate(book.id, currentShelf.id, undefined, undefined);
+                          } else {
+                            const y = parseInt(val);
+                            const currentX = currentShelf.coordinates?.[book.id]?.x || 1;
+                            onUpdateCoordinate(book.id, currentShelf.id, currentX, y);
+                          }
+                        }
+                      }}
+                      className="w-full bg-transparent text-[#F4EFE6] text-[13px] font-sans-inter focus:outline-none text-right"
+                      placeholder="e.g. 1"
+                    />
+                  </div>
+                </div>
+                <p className="text-[#A79C8C] text-[11px] mt-1 leading-snug">
+                  Map this book to a specific physical coordinate bin (e.g. X:1, Y:1).
+                </p>
+              </div>
+            )}
 
             {/* Reading Timeline */}
             {(book.readHistory?.length || book.readingSessions?.length) ? (

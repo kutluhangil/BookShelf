@@ -117,7 +117,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
             {/* Title */}
             <div className="flex items-center gap-2">
               <h1 className="font-serif-literata text-[24px] sm:text-[28px] text-[#C9963F] font-bold tracking-tight">
-                SPINE
+                Book Shelf
               </h1>
               <span className="hidden md:inline-block font-mono-ibm text-[9px] text-[#A79C8C] border border-[#3A332A] px-1.5 py-0.5 rounded tracking-widest">
                 v1.0

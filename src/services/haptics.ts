@@ -1,5 +1,5 @@
 /**
- * SPINE Haptic Feedback & Tactile Response Service (§4.6)
+ * Book Shelf Haptic Feedback & Tactile Response Service (§4.6)
  * Implements platform-specific UX requirements:
  * - lightImpact: Subtle card taps, spine strip clicks, modal navigation
  * - selectionClick: Selection state changes, filter toggles, edition picks

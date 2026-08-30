@@ -24,7 +24,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       title: 'Digitize Your Library In Seconds',
       subtitle: 'Simply point your camera at any physical bookshelf.',
       description:
-        'SPINE analyzes physical book spines at any angle, extracting typography, colors, and author titles without manual entry.',
+        'Book Shelf analyzes physical book spines at any angle, extracting typography, colors, and author titles without manual entry.',
       image: 'https://images.unsplash.com/photo-1507842229451-79b1be8d6293?q=80&w=900&auto=format&fit=crop',
       showStrip: false,
     },

@@ -9,6 +9,12 @@ export const INITIAL_SHELVES: Shelf[] = [
     sortOrder: 1,
     layout: 'coordinate',
     gridDimensions: { cols: 6, rows: 2 },
+    coordinates: {
+      'book-1': { x: 1, y: 1 },
+      'book-2': { x: 1, y: 2 },
+      'book-4': { x: 3, y: 1 },
+      'book-5': { x: 4, y: 2 }
+    }
   },
   {
     id: 'shelf-to-read',
@@ -48,7 +54,6 @@ export const INITIAL_BOOKS: Book[] = [
     spineCropUrl: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=300&auto=format&fit=crop',
     spineColor: '#C9963F',
     shelfId: 'shelf-fiction',
-    shelfCoordinate: 'A1',
     status: 'read',
     progress: 100,
     readAt: '2026-08-18T10:00:00Z',
@@ -73,7 +78,6 @@ export const INITIAL_BOOKS: Book[] = [
     spineCropUrl: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?q=80&w=300&auto=format&fit=crop',
     spineColor: '#304E2E',
     shelfId: 'shelf-fiction',
-    shelfCoordinate: 'A2',
     status: 'read',
     progress: 100,
     readAt: '2026-08-25T14:30:00Z',
@@ -120,7 +124,6 @@ export const INITIAL_BOOKS: Book[] = [
     spineCropUrl: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=300&auto=format&fit=crop',
     spineColor: '#723700',
     shelfId: 'shelf-fiction',
-    shelfCoordinate: 'C1',
     status: 'read',
     progress: 100,
     readAt: '2026-08-25T11:00:00Z',
@@ -144,7 +147,6 @@ export const INITIAL_BOOKS: Book[] = [
     spineCropUrl: 'https://images.unsplash.com/photo-1505664194779-8beaceb93744?q=80&w=300&auto=format&fit=crop',
     spineColor: '#C97A3F',
     shelfId: 'shelf-fiction',
-    shelfCoordinate: 'D2',
     status: 'read',
     progress: 100,
     readAt: '2026-08-26T16:00:00Z',

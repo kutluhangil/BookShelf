@@ -19,7 +19,6 @@ export interface Book {
   spineCropUrl: string;
   spineColor: string;
   shelfId: string;
-  shelfCoordinate?: string; // e.g., "A1", "B2" representing Bin/Coordinate
   status: ReadingStatus;
   progress?: number; // Reader completion percentage (0-100%)
   readAt?: string;
@@ -41,9 +40,11 @@ export interface Shelf {
   volumeCount: number;
   dominantColors: string[];
   themeColor?: string;
+  texture?: string;
   sortOrder: number;
   layout?: 'standard' | 'coordinate';
   gridDimensions?: { cols: number; rows: number };
+  coordinates?: Record<string, { x: number; y: number }>;
 }
 
 export interface EditionOption {

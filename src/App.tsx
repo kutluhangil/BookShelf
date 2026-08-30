@@ -40,6 +40,7 @@ export default function App() {
   const [readingStatusFilter, setReadingStatusFilter] = useState<'all' | ReadingStatus>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortMode, setSortMode] = useState<'physical' | 'recent' | 'author' | 'title'>('physical');
+  const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
 
   // Scanning Lifecycle States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -156,8 +157,47 @@ export default function App() {
   }, [books]);
 
   // Handle Capture from Camera or Sample
-  const handleCapture = (imageUrl: string, sampleData?: SpikeSample, scanMode?: 'shelf' | 'isbn') => {
+  const handleCapture = (imageUrl: string, sampleData?: SpikeSample, scanMode?: 'shelf' | 'isbn' | 'qr') => {
     setIsScannerOpen(false);
+
+    if (scanMode === 'qr') {
+      const qrBook: Book = {
+        id: `qr-${Date.now()}`,
+        title: "The Design of Everyday Things",
+        author: "Don Norman",
+        isbn: "978-0465050659",
+        publisher: "Basic Books",
+        publishYear: 2013,
+        pageCount: 368,
+        description: "Quick-added via QR Code link. Even the smartest among us can feel inept as we fail to figure out which light switch or oven burner to turn on.",
+        coverUrl: "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&q=80&w=300",
+        spineColor: "#F5C71A",
+        shelfId: selectedShelfId !== 'all' ? selectedShelfId : 'shelf-design',
+        status: 'unread',
+        confidence: 'matched',
+        score: 1.0,
+        category: 'QR Sync',
+        addedAt: new Date().toISOString(),
+      };
+
+      // Also ensure a 'Design' shelf exists if we fallback to it
+      if (selectedShelfId === 'all' && !shelves.find(s => s.id === 'shelf-design')) {
+        setShelves(prev => [...prev, {
+          id: 'shelf-design',
+          name: 'Design & Architecture',
+          volumeCount: 1,
+          dominantColors: ['#F5C71A', '#C9963F', '#F5C71A', '#2C251D'],
+          themeColor: '#F5C71A',
+          texture: 'solid',
+          sortOrder: prev.length + 1
+        }]);
+      }
+
+      setBooks((prev) => [qrBook, ...prev]);
+      haptic.success();
+      setActiveBookDetail(qrBook);
+      return;
+    }
 
     if (scanMode === 'isbn') {
       const ed = sampleData?.groundTruth?.[0]?.editions?.[0] || {
@@ -422,18 +462,34 @@ export default function App() {
     }
   };
 
+  const handleUpdateCoordinate = (bookId: string, shelfId: string, x: number | undefined, y: number | undefined) => {
+    setShelves((prev) =>
+      prev.map((s) => {
+        if (s.id !== shelfId) return s;
+        const newCoords = { ...(s.coordinates || {}) };
+        if (x === undefined || y === undefined) {
+          delete newCoords[bookId];
+        } else {
+          newCoords[bookId] = { x, y };
+        }
+        return { ...s, coordinates: newCoords };
+      })
+    );
+  };
+
   const handleDeleteBook = (bookId: string) => {
     setBooks((prev) => prev.filter((b) => b.id !== bookId));
     setActiveBookDetail(null);
   };
 
-  const handleCreateShelf = (name: string, color?: string) => {
+  const handleCreateShelf = (name: string, color?: string, texture?: string) => {
     const newShelf: Shelf = {
       id: `shelf-${Date.now()}`,
       name,
       volumeCount: 0,
       dominantColors: color ? [color, color, color, color] : ['#C9963F', '#304E2E', '#2C251D', '#8B2323'],
       themeColor: color,
+      texture: texture || 'solid',
       sortOrder: shelves.length + 1,
     };
     setShelves((prev) => [...prev, newShelf]);
@@ -722,21 +778,45 @@ export default function App() {
             <section className="space-y-4">
               <div className="flex justify-between items-center font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
                 <span>CATALOGED VOLUMES ({filteredBooks.length})</span>
-                <div className="flex items-center gap-2">
-                  <span>SORT:</span>
-                  <select
-                    value={sortMode}
-                    onChange={(e) => {
-                      haptic.selectionClick();
-                      setSortMode(e.target.value as any);
-                    }}
-                    className="bg-transparent text-[#F4EFE6] focus:outline-none cursor-pointer"
-                  >
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center bg-[#12100E] rounded-lg p-0.5 border border-[#3A332A]">
+                    <button
+                      onClick={() => {
+                        haptic.selectionClick();
+                        setViewMode('list');
+                      }}
+                      className={`p-1 rounded ${viewMode === 'list' ? 'bg-[#2C251D] text-[#C9963F]' : 'text-[#A79C8C] hover:text-[#F4EFE6]'} transition-colors`}
+                      title="List View"
+                    >
+                      <span className="material-symbols-outlined text-[16px] block">view_list</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        haptic.selectionClick();
+                        setViewMode('gallery');
+                      }}
+                      className={`p-1 rounded ${viewMode === 'gallery' ? 'bg-[#2C251D] text-[#C9963F]' : 'text-[#A79C8C] hover:text-[#F4EFE6]'} transition-colors`}
+                      title="Gallery View"
+                    >
+                      <span className="material-symbols-outlined text-[16px] block">grid_view</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>SORT:</span>
+                    <select
+                      value={sortMode}
+                      onChange={(e) => {
+                        haptic.selectionClick();
+                        setSortMode(e.target.value as any);
+                      }}
+                      className="bg-transparent text-[#F4EFE6] focus:outline-none cursor-pointer"
+                    >
                     <option value="physical" className="bg-[#1C1916]">PHYSICAL ORDER</option>
                     <option value="recent" className="bg-[#1C1916]">MOST RECENTLY READ</option>
                     <option value="author" className="bg-[#1C1916]">AUTHOR (A-Z)</option>
                     <option value="title" className="bg-[#1C1916]">TITLE (A-Z)</option>
                   </select>
+                </div>
                 </div>
               </div>
 
@@ -760,6 +840,41 @@ export default function App() {
                     <span className="material-symbols-outlined text-[18px]">photo_camera</span>
                     <span>Scan New Shelf</span>
                   </button>
+                </div>
+              ) : viewMode === 'gallery' ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {filteredBooks.map((book, idx) => (
+                    <motion.div
+                      key={book.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: Math.min(idx * 0.05, 0.5) }}
+                      onClick={() => {
+                        haptic.selectionClick();
+                        setActiveBookDetail(book);
+                      }}
+                      className="group relative cursor-pointer aspect-[2/3] rounded-xl overflow-hidden bg-[#1C1916] border border-[#3A332A] hover:border-[#C9963F] shadow-md hover:shadow-xl transition-all"
+                    >
+                      {book.coverUrl ? (
+                        <img 
+                          src={book.coverUrl} 
+                          alt={book.title} 
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center" style={{ backgroundColor: book.spineColor || '#2C251D' }}>
+                          <span className="font-serif-literata text-[#F4EFE6] font-bold text-sm line-clamp-3">{book.title}</span>
+                          <span className="font-mono-ibm text-xs text-[#F4EFE6]/70 mt-2 line-clamp-1">{book.author}</span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+                         <div className="w-full">
+                           <h4 className="text-[#F4EFE6] font-serif-literata text-sm font-semibold line-clamp-1">{book.title}</h4>
+                           <p className="text-[#A79C8C] font-mono-ibm text-[10px] line-clamp-1">{book.author}</p>
+                         </div>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -854,6 +969,7 @@ export default function App() {
         onUpdateStatus={handleUpdateStatus}
         onUpdateProgress={handleUpdateProgress}
         onUpdateShelf={handleUpdateShelf}
+        onUpdateCoordinate={handleUpdateCoordinate}
         onDeleteBook={handleDeleteBook}
         onUpdateNotes={handleUpdateNotes}
         onUpdateTags={handleUpdateTags}

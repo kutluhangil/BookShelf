@@ -4,7 +4,7 @@ import { SPIKE_DATASET } from '../data/spikeDataset';
 import { SpikeSample } from '../types';
 import { haptic } from '../services/haptics';
 
-export type ScanMode = 'shelf' | 'isbn';
+export type ScanMode = 'shelf' | 'isbn' | 'qr';
 
 interface ScanModalProps {
   isOpen: boolean;
@@ -188,26 +188,39 @@ export const ScanModal: React.FC<ScanModalProps> = ({
               haptic.selectionClick();
               setScanMode('shelf');
             }}
-            className={`px-6 py-1.5 rounded-full font-mono-ibm text-[11px] font-bold tracking-wider transition-all ${
+            className={`px-4 sm:px-6 py-1.5 rounded-full font-mono-ibm text-[11px] font-bold tracking-wider transition-all ${
               scanMode === 'shelf'
                 ? 'bg-[#C9963F] text-[#12100E] shadow-sm'
                 : 'text-[#A79C8C] hover:text-[#F4EFE6]'
             }`}
           >
-            SHELF SCAN
+            SHELF
           </button>
           <button
             onClick={() => {
               haptic.selectionClick();
               setScanMode('isbn');
             }}
-            className={`px-6 py-1.5 rounded-full font-mono-ibm text-[11px] font-bold tracking-wider transition-all ${
+            className={`px-4 sm:px-6 py-1.5 rounded-full font-mono-ibm text-[11px] font-bold tracking-wider transition-all ${
               scanMode === 'isbn'
                 ? 'bg-[#C9963F] text-[#12100E] shadow-sm'
                 : 'text-[#A79C8C] hover:text-[#F4EFE6]'
             }`}
           >
-            ISBN SCAN
+            ISBN
+          </button>
+          <button
+            onClick={() => {
+              haptic.selectionClick();
+              setScanMode('qr');
+            }}
+            className={`px-4 sm:px-6 py-1.5 rounded-full font-mono-ibm text-[11px] font-bold tracking-wider transition-all ${
+              scanMode === 'qr'
+                ? 'bg-[#C9963F] text-[#12100E] shadow-sm'
+                : 'text-[#A79C8C] hover:text-[#F4EFE6]'
+            }`}
+          >
+            QR CODE
           </button>
         </div>
       </div>
@@ -304,6 +317,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           className={`absolute pointer-events-none flex flex-col justify-between p-3 transition-all duration-300 ${
             scanMode === 'shelf'
               ? 'inset-x-6 sm:inset-x-16 inset-y-24 sm:inset-y-28 rounded-xl'
+              : scanMode === 'qr'
+              ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-xl bg-black/20 backdrop-blur-sm'
               : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-40 rounded-lg bg-black/20 backdrop-blur-sm'
           } ${
             isAligned
@@ -349,6 +364,11 @@ export const ScanModal: React.FC<ScanModalProps> = ({
             {scanMode === 'isbn' && (
               <div className="flex items-center justify-center w-full my-2">
                 <span className="material-symbols-outlined text-[32px] text-[#C9963F] opacity-50">barcode_scanner</span>
+              </div>
+            )}
+            {scanMode === 'qr' && (
+              <div className="flex items-center justify-center w-full my-2">
+                <span className="material-symbols-outlined text-[32px] text-[#C9963F] opacity-50">qr_code_scanner</span>
               </div>
             )}
 

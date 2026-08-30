@@ -5,12 +5,32 @@ import { ShelfStrip } from './ShelfStrip';
 import { haptic } from '../services/haptics';
 
 const SHELF_COLORS = ['#C9963F', '#304E2E', '#2C251D', '#8B2323', '#4A5B69', '#63456B', '#4D4336'];
+const SHELF_TEXTURES = ['solid', 'wood', 'metal', 'fabric'];
+
+const getShelfBackgroundStyle = (themeColor?: string, texture?: string): React.CSSProperties => {
+  const baseBg = '#1C1916';
+  let backgroundStyle: React.CSSProperties = { backgroundColor: baseBg };
+
+  const colorPrefix = themeColor ? `linear-gradient(to bottom right, ${themeColor}15, ${themeColor}05), ` : '';
+
+  if (texture === 'wood') {
+    backgroundStyle.backgroundImage = `${colorPrefix}repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 6px), repeating-linear-gradient(-45deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 2px, transparent 2px, transparent 8px)`;
+  } else if (texture === 'metal') {
+    backgroundStyle.backgroundImage = `${colorPrefix}linear-gradient(90deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 20%, rgba(0,0,0,0.1) 50%, rgba(255,255,255,0) 80%, rgba(255,255,255,0.02) 100%), repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)`;
+  } else if (texture === 'fabric') {
+    backgroundStyle.backgroundImage = `${colorPrefix}repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 4px), repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 4px)`;
+  } else if (themeColor) {
+    backgroundStyle.backgroundImage = `linear-gradient(to bottom right, ${themeColor}15, transparent)`;
+  }
+
+  return backgroundStyle;
+};
 
 interface YourShelvesViewProps {
   shelves: Shelf[];
   books: Book[];
   onSelectShelf: (shelfId: string) => void;
-  onCreateShelf: (name: string, color?: string) => void;
+  onCreateShelf: (name: string, color?: string, texture?: string) => void;
   onUpdateShelf?: (shelfId: string, updates: Partial<Shelf>) => void;
   onShareShelf: (shelf: Shelf) => void;
   onReorderShelves?: (newShelves: Shelf[]) => void;
@@ -28,6 +48,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
   const [isCreating, setIsCreating] = useState(false);
   const [newShelfName, setNewShelfName] = useState('');
   const [newShelfColor, setNewShelfColor] = useState<string>(SHELF_COLORS[0]);
+  const [newShelfTexture, setNewShelfTexture] = useState<string>(SHELF_TEXTURES[0]);
   const [editingColorShelfId, setEditingColorShelfId] = useState<string | null>(null);
 
   const [draggedShelfId, setDraggedShelfId] = useState<string | null>(null);
@@ -39,9 +60,10 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
     e.preventDefault();
     if (newShelfName.trim()) {
       haptic.mediumImpact();
-      onCreateShelf(newShelfName.trim(), newShelfColor);
+      onCreateShelf(newShelfName.trim(), newShelfColor, newShelfTexture);
       setNewShelfName('');
       setNewShelfColor(SHELF_COLORS[0]);
+      setNewShelfTexture(SHELF_TEXTURES[0]);
       setIsCreating(false);
     }
   };
@@ -195,7 +217,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
               <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider">
                 Theme Color:
               </span>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {SHELF_COLORS.map((c) => (
                   <button
                     key={c}
@@ -208,6 +230,27 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                     style={{ backgroundColor: c }}
                     title={`Select color ${c}`}
                   />
+                ))}
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider">
+                Texture:
+              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {SHELF_TEXTURES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      haptic.selectionClick();
+                      setNewShelfTexture(t);
+                    }}
+                    className={`px-3 py-1 rounded-lg text-[10px] uppercase font-mono-ibm transition-colors ${newShelfTexture === t ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#12100E] text-[#A79C8C] border border-[#3A332A] hover:text-[#F4EFE6]'}`}
+                  >
+                    {t}
+                  </button>
                 ))}
               </div>
             </div>
@@ -263,7 +306,8 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                   haptic.lightImpact();
                   onSelectShelf(shelf.id);
                 }}
-                className={`bg-[#1C1916] rounded-2xl p-5 sm:p-6 hairline-border paper-glow transition-all duration-200 cursor-pointer group flex flex-col justify-between relative ${
+                style={getShelfBackgroundStyle(shelf.themeColor, shelf.texture)}
+                className={`rounded-2xl p-5 sm:p-6 hairline-border paper-glow transition-all duration-200 cursor-pointer group flex flex-col justify-between relative ${
                   isDragging
                     ? 'opacity-40 scale-[0.98] border-dashed border-[#C9963F]'
                     : isOver
@@ -389,28 +433,59 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                         onClick={(e) => e.stopPropagation()}
                         className="overflow-hidden"
                       >
-                        <div className="flex items-center gap-2 p-2 bg-[#12100E] rounded-lg border border-[#3A332A]">
-                          <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider ml-1">
-                            Theme:
-                          </span>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {SHELF_COLORS.map((c) => (
-                              <button
-                                key={c}
-                                type="button"
-                                onClick={() => {
-                                  haptic.selectionClick();
-                                  onUpdateShelf?.(shelf.id, { 
-                                    themeColor: c, 
-                                    dominantColors: [c, c, c, c] 
-                                  });
-                                  setEditingColorShelfId(null);
-                                }}
-                                className={`w-5 h-5 rounded-full transition-transform ${shelf.themeColor === c ? 'scale-110 ring-2 ring-offset-2 ring-offset-[#12100E] ring-[#C9963F]' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
-                                style={{ backgroundColor: c }}
-                                title={`Set color ${c}`}
-                              />
-                            ))}
+                        <div className="flex flex-col gap-2 p-3 bg-[#12100E] rounded-lg border border-[#3A332A]">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider min-w-[50px]">
+                              Color:
+                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {SHELF_COLORS.map((c) => (
+                                <button
+                                  key={c}
+                                  type="button"
+                                  onClick={() => {
+                                    haptic.selectionClick();
+                                    onUpdateShelf?.(shelf.id, { 
+                                      themeColor: c, 
+                                      dominantColors: [c, c, c, c] 
+                                    });
+                                  }}
+                                  className={`w-5 h-5 rounded-full transition-transform ${shelf.themeColor === c ? 'scale-110 ring-2 ring-offset-2 ring-offset-[#12100E] ring-[#C9963F]' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
+                                  style={{ backgroundColor: c }}
+                                  title={`Set color ${c}`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider min-w-[50px]">
+                              Texture:
+                            </span>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {SHELF_TEXTURES.map((t) => (
+                                <button
+                                  key={t}
+                                  type="button"
+                                  onClick={() => {
+                                    haptic.selectionClick();
+                                    onUpdateShelf?.(shelf.id, { texture: t });
+                                  }}
+                                  className={`px-2 py-1 rounded text-[10px] uppercase font-mono-ibm transition-colors ${(shelf.texture || 'solid') === t ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#1C1916] text-[#A79C8C] border border-[#3A332A] hover:text-[#F4EFE6]'}`}
+                                >
+                                  {t}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-end mt-1">
+                            <button
+                               onClick={() => setEditingColorShelfId(null)}
+                               className="text-[10px] font-mono-ibm text-[#C9963F] hover:text-[#E8B660] transition-colors"
+                            >
+                               DONE
+                            </button>
                           </div>
                         </div>
                       </motion.div>
@@ -419,20 +494,61 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
 
                   {/* ShelfStrip Signature visualization */}
                   <div className="my-4">
-                    {shelf.layout === 'coordinate' ? (
-                      <ShelfStrip 
-                        colors={colors}
-                        variant="coordinate"
-                        gridDimensions={shelf.gridDimensions || { cols: 6, rows: 3 }}
-                        coordinates={shelfBooks.filter(b => b.shelfCoordinate).map(b => ({
-                          id: b.id,
-                          coord: b.shelfCoordinate!,
-                          color: b.spineColor || '#C9963F'
-                        }))}
-                      />
-                    ) : (
-                      <ShelfStrip colors={colors} variant="compact" height={44} />
-                    )}
+                    <div className="flex flex-col gap-3">
+                      <div className="flex justify-between items-end">
+                         <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider">
+                           {shelf.layout === 'coordinate' ? 'Coordinate Grid Layout' : 'Compact Layout'}
+                         </span>
+                         <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              haptic.selectionClick();
+                              const cols = shelf.gridDimensions?.cols || 6;
+                              const rows = shelf.gridDimensions?.rows || Math.max(3, Math.ceil(shelfBooks.length / (shelf.gridDimensions?.cols || 6)));
+                              const newCoords: Record<string, {x: number, y: number}> = {};
+                              let x = 1; let y = 1;
+                              shelfBooks.forEach(b => {
+                                if (y <= rows) {
+                                  newCoords[b.id] = { x, y };
+                                  x++;
+                                  if (x > cols) {
+                                    x = 1;
+                                    y++;
+                                  }
+                                }
+                              });
+                              onUpdateShelf?.(shelf.id, { 
+                                layout: 'coordinate',
+                                gridDimensions: { cols, rows },
+                                coordinates: newCoords 
+                              });
+                            }}
+                            className="text-[10px] font-mono-ibm text-[#C9963F] hover:text-[#E8B660] transition-colors border border-[#C9963F]/30 hover:border-[#C9963F] rounded px-2 py-1 bg-[#100E0C] flex items-center gap-1"
+                         >
+                           <span className="material-symbols-outlined text-[12px]">grid_view</span>
+                           BULK ARRANGE
+                         </button>
+                      </div>
+                      {shelf.layout === 'coordinate' ? (
+                        <ShelfStrip 
+                          colors={colors}
+                          variant="coordinate"
+                          themeColor={shelf.themeColor}
+                          texture={shelf.texture}
+                          gridDimensions={shelf.gridDimensions || { cols: 6, rows: 3 }}
+                          coordinates={shelfBooks.filter(b => shelf.coordinates?.[b.id]).map(b => ({
+                            id: b.id,
+                            x: shelf.coordinates![b.id].x,
+                            y: shelf.coordinates![b.id].y,
+                            color: b.spineColor || '#C9963F',
+                            title: b.title,
+                            author: b.author
+                          }))}
+                        />
+                      ) : (
+                        <ShelfStrip colors={colors} variant="compact" height={44} themeColor={shelf.themeColor} texture={shelf.texture} />
+                      )}
+                    </div>
                   </div>
                 </div>
 

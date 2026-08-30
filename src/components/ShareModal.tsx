@@ -120,6 +120,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   colors={colors}
                   variant="hero"
                   height={80}
+                  themeColor={shelf?.themeColor}
+                  texture={shelf?.texture}
                   className="shadow-[0_8px_20px_rgba(0,0,0,0.8)]"
                 />
               </div>
@@ -133,9 +135,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 <span>HISTORICAL</span>
               </div>
 
-              {/* SPINE Watermark Branding */}
+              {/* Book Shelf Watermark Branding */}
               <div className="mt-6 pt-4 border-t border-[#3A332A]/50 w-full flex justify-between items-center font-mono-ibm text-[10px] text-[#9C8F7E]">
-                <span className="text-[#C9963F] font-serif-literata font-bold text-[14px]">SPINE</span>
+                <span className="text-[#C9963F] font-serif-literata font-bold text-[14px]">Book Shelf</span>
                 <span>DIGITIZED IN 2.4 SECONDS</span>
               </div>
             </div>
