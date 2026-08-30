@@ -36,6 +36,7 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 import { ReadingGoalsModal } from './components/ReadingGoalsModal';
 import { BookComparisonModal } from './components/BookComparisonModal';
 import { AIRecommendationsModal } from './components/AIRecommendationsModal';
+import { ImportModal } from './components/ImportModal';
 import { LibraryAnnualProgressBar } from './components/LibraryAnnualProgressBar';
 import { calculateReadingStreak } from './utils/streak';
 import { parseNLPSearchQuery } from './utils/searchParser';
@@ -130,6 +131,7 @@ export default function App() {
   const [activeReviewCandidate, setActiveReviewCandidate] = useState<SpineCandidate | null>(null);
   const [manualSearchCandidateId, setManualSearchCandidateId] = useState<string | null>(null);
   const [isManualAddOpen, setIsManualAddOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [activeBookDetail, setActiveBookDetail] = useState<Book | null>(null);
   const [activeShareShelf, setActiveShareShelf] = useState<Shelf | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -1056,6 +1058,17 @@ export default function App() {
                   <button
                     onClick={() => {
                       haptic.lightImpact();
+                      setIsImportOpen(true);
+                    }}
+                    className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">upload_file</span>
+                    <span>IMPORT</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      haptic.lightImpact();
                       setActiveShareShelf(null);
                       setIsShareModalOpen(true);
                     }}
@@ -1324,6 +1337,13 @@ export default function App() {
                       <span className="material-symbols-outlined text-[18px]">search</span>
                       <span>Add by search</span>
                     </button>
+                    <button
+                      onClick={() => setIsImportOpen(true)}
+                      className="px-5 py-2.5 bg-[#262119] text-[#C9963F] hairline-border font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                      <span>Import CSV</span>
+                    </button>
                   </div>
                 </div>
               ) : viewMode === 'gallery' ? (
@@ -1498,6 +1518,21 @@ export default function App() {
         onClose={() => {
           setIsShareModalOpen(false);
           setActiveShareShelf(null);
+        }}
+      />
+
+      <ImportModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        existingBooks={books}
+        targetShelfId={targetShelfId}
+        onImport={(imported) => {
+          setBooks((prev) => [...imported, ...prev]);
+          pushToast({
+            title: 'Import complete',
+            description: `${imported.length} book${imported.length === 1 ? '' : 's'} added to your library.`,
+            icon: 'library_add',
+          });
         }}
       />
 

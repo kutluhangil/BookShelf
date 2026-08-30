@@ -1,6 +1,7 @@
 import { SpineCandidate, Book, EditionOption, ConfidenceLevel } from '../types';
 import { INITIAL_BOOKS, MOCK_GLOBAL_CATALOG } from '../data/initialLibrary';
 import { postJson, ApiError } from './apiClient';
+import { cropRegions } from './imageCrop';
 
 // Helper for Turkish character normalization & unaccent
 export function normalizeSpineText(input: string): string {
@@ -273,7 +274,24 @@ export async function recognizeShelf(shelfImageDataUrl: string): Promise<SpineCa
     throw new ShelfRecognitionError('Shelf recognition returned no spine list.', JSON.stringify(payload).slice(0, 300));
   }
 
-  return buildCandidatesFromRecognition(shelfImageDataUrl, spines as RecognizedSpine[]);
+  const candidates = buildCandidatesFromRecognition(shelfImageDataUrl, spines as RecognizedSpine[]);
+
+  // Give every candidate its own spine thumbnail instead of the whole shelf.
+  const crops = await cropRegions(
+    shelfImageDataUrl,
+    candidates.map((candidate) => candidate.bbox)
+  );
+
+  return candidates.map((candidate, index) => {
+    const cropUrl = crops[index] ?? shelfImageDataUrl;
+    return {
+      ...candidate,
+      cropUrl,
+      matchedBook: candidate.matchedBook
+        ? { ...candidate.matchedBook, spineCropUrl: cropUrl, proofOfCaptureUrl: cropUrl }
+        : undefined,
+    };
+  });
 }
 
 /**
