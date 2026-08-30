@@ -1,5 +1,6 @@
 import { SpineCandidate, Book, EditionOption, ConfidenceLevel } from '../types';
 import { INITIAL_BOOKS, MOCK_GLOBAL_CATALOG } from '../data/initialLibrary';
+import { postJson, ApiError } from './apiClient';
 
 // Helper for Turkish character normalization & unaccent
 export function normalizeSpineText(input: string): string {
@@ -257,19 +258,14 @@ export async function recognizeShelf(shelfImageDataUrl: string): Promise<SpineCa
     ? shelfImageDataUrl.slice(shelfImageDataUrl.indexOf(',') + 1)
     : shelfImageDataUrl;
 
-  const response = await fetch('/api/gemini/shelf', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64 }),
-  });
-
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new ShelfRecognitionError(
-      payload?.error || `Shelf recognition failed with status ${response.status}`,
-      payload?.detail
-    );
+  let payload: { spines?: unknown };
+  try {
+    payload = await postJson<{ spines?: unknown }>('/api/gemini/shelf', { imageBase64 });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw new ShelfRecognitionError(error.message, error.isAuthError ? 'Sign in to use the shelf scanner.' : undefined);
+    }
+    throw error;
   }
 
   const spines = payload?.spines;

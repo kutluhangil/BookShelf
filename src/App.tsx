@@ -6,6 +6,7 @@ import { lookupByIsbn, lookupFromQrPayload, BookLookupResult } from './services/
 import { isFirebaseConfigured, firebaseConfigError, loginWithGoogle, logout, observeAuthState, type User } from './lib/firebase';
 import { syncToCloud, fetchFromCloud, mergeLibraries } from './services/cloudSync';
 import { loadLibrary, saveLibrary, isPersistenceAvailable } from './services/localStore';
+import { fetchServerCapabilities, type ServerCapabilities } from './services/apiClient';
 import { ShelfStrip } from './components/ShelfStrip';
 import { BookCard } from './components/BookCard';
 import { NavigationHeader } from './components/NavigationHeader';
@@ -149,6 +150,7 @@ export default function App() {
   // Auth & Sync States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [serverCapabilities, setServerCapabilities] = useState<ServerCapabilities | null>(null);
 
   const pushToast = useCallback((toast: Omit<ToastMessage, 'id'> & { id?: string }) => {
     const id = toast.id ?? `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -159,6 +161,21 @@ export default function App() {
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  // The server tells us whether the AI endpoints need a signed-in user.
+  useEffect(() => {
+    fetchServerCapabilities()
+      .then(setServerCapabilities)
+      .catch((error) =>
+        pushToast({
+          title: 'Server unreachable',
+          description: `Scanning and AI features are unavailable: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          icon: 'cloud_off',
+        })
+      );
+  }, [pushToast]);
 
   // Surface a storage problem instead of silently losing data.
   useEffect(() => {
@@ -434,6 +451,19 @@ export default function App() {
     }
   };
 
+  /** AI features need a signed-in user when the server enforces authentication. */
+  const aiRequiresLogin = serverCapabilities?.authRequired === true && !currentUser;
+
+  const blockAiWithLoginPrompt = useCallback((): boolean => {
+    if (!aiRequiresLogin) return false;
+    pushToast({
+      title: 'Sign in required',
+      description: 'This deployment requires a signed-in account for AI scanning and recommendations.',
+      icon: 'lock',
+    });
+    return true;
+  }, [aiRequiresLogin, pushToast]);
+
   const exitCompareMode = () => {
     setIsCompareMode(false);
     setCompareQueue([]);
@@ -524,6 +554,8 @@ export default function App() {
         return;
       }
 
+      if (blockAiWithLoginPrompt()) return;
+
       setProcessingLabel('Reading spines with Gemini');
       setIsProcessing(true);
       try {
@@ -547,7 +579,7 @@ export default function App() {
         });
       }
     },
-    [addBook, bookFromLookup, pushToast]
+    [addBook, bookFromLookup, pushToast, blockAiWithLoginPrompt]
   );
 
   const handleProcessingComplete = () => {
@@ -947,7 +979,10 @@ export default function App() {
         currentView={activeTab}
         books={books}
         onOpenProfile={() => setIsShareModalOpen(true)}
-        onOpenRecommendations={() => setIsRecommendationsModalOpen(true)}
+        onOpenRecommendations={() => {
+          if (blockAiWithLoginPrompt()) return;
+          setIsRecommendationsModalOpen(true);
+        }}
         onOpenSpikeDashboard={() => setIsSpikeDashboardOpen(true)}
         onOpenOnboarding={() => setIsOnboardingOpen(true)}
         isAuthenticated={!!currentUser}

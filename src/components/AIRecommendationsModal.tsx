@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Book } from '../types';
+import { postJson } from '../services/apiClient';
 
 export interface AIRecommendation {
   title: string;
@@ -32,17 +33,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/gemini/recommend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ books }),
-      });
-
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(payload?.detail || payload?.error || `Request failed with status ${response.status}`);
-      }
-
+      const payload = await postJson<{ recommendations?: unknown }>('/api/gemini/recommend', { books });
       const list = payload?.recommendations;
       if (!Array.isArray(list)) {
         throw new Error('The recommendation service returned an unexpected payload.');

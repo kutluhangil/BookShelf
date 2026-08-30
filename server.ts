@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { createAuth } from "./src/server/auth";
 
 dotenv.config();
 
@@ -32,6 +33,16 @@ const ai = new GoogleGenAI({
  */
 function createRateLimiter(options: { windowMs: number; max: number }) {
   const hits = new Map<string, { count: number; resetAt: number }>();
+
+  // Without pruning, the map keeps one entry per client IP for the lifetime of
+  // the process and grows without bound.
+  const sweeper = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of hits) {
+      if (entry.resetAt <= now) hits.delete(key);
+    }
+  }, options.windowMs);
+  sweeper.unref();
 
   return (req: Request, res: Response, next: NextFunction) => {
     const key = req.ip ?? "unknown";
@@ -107,13 +118,16 @@ async function startServer() {
   app.use(express.json({ limit: "12mb" }));
 
   const aiLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
+  const auth = await createAuth();
 
+  // The client reads this to know whether it must send an ID token before
+  // offering the AI-backed features.
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", model: GEMINI_MODEL });
+    res.json({ status: "ok", model: GEMINI_MODEL, authRequired: auth.mode === "firebase" });
   });
 
   // Shelf photo -> individual book spines (real recognition, replaces the old stub).
-  app.post("/api/gemini/shelf", aiLimiter, async (req, res) => {
+  app.post("/api/gemini/shelf", auth.middleware, aiLimiter, async (req, res) => {
     try {
       const imageBase64 = readImageBase64(req);
 
@@ -153,7 +167,7 @@ Return JSON: {"spines": [...]}. Never invent books you cannot see. If a spine is
   });
 
   // Book page photo -> quote text (OCR).
-  app.post("/api/gemini/quote", aiLimiter, async (req, res) => {
+  app.post("/api/gemini/quote", auth.middleware, aiLimiter, async (req, res) => {
     try {
       const imageBase64 = readImageBase64(req);
 
@@ -183,7 +197,7 @@ Return JSON: {"spines": [...]}. Never invent books you cannot see. If a spine is
   });
 
   // Library -> personalised recommendations.
-  app.post("/api/gemini/recommend", aiLimiter, async (req, res) => {
+  app.post("/api/gemini/recommend", auth.middleware, aiLimiter, async (req, res) => {
     try {
       const { books } = req.body ?? {};
       if (!Array.isArray(books) || books.length === 0) {
@@ -232,7 +246,13 @@ Return JSON: {"recommendations":[{"title","author","year","category","reason"}]}
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT} (model: ${GEMINI_MODEL})`);
+    console.log(`Server running on port ${PORT} (model: ${GEMINI_MODEL}, auth: ${auth.mode})`);
+    if (auth.mode === "disabled") {
+      console.warn(
+        "[warn] Auth is disabled: the Gemini endpoints are open to anyone who can reach this server. " +
+          "This is only allowed outside production."
+      );
+    }
   });
 }
 

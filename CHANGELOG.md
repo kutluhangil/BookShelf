@@ -2,6 +2,20 @@
 
 Newest entries at the top.
 
+## Unreleased
+
+### Security
+- The Gemini endpoints now require a Firebase ID token. Enforced by default in production, where `REQUIRE_AUTH=false` refuses to start; development opts out explicitly. The client attaches the token automatically and gates the AI features when the server reports `authRequired`.
+- Fixed an unbounded memory leak in the rate limiter: expired per-IP entries are now swept.
+
+### Added
+- Root `ErrorBoundary` with a "reset stored library" escape hatch, so a bad persisted record can no longer permanently brick the app on every reload.
+- GitHub Actions CI running type check, unit tests and build on every push and pull request.
+
+### Changed
+- Camera frames are downscaled to 1280px before upload, cutting a 1-3MB payload per scan.
+- All AI calls go through a single `apiClient` that attaches credentials and surfaces the server's structured error detail.
+
 ## 2026-08-30
 
 ### Fixed — critical

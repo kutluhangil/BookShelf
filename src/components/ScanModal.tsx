@@ -21,6 +21,9 @@ interface ScanModalProps {
   onCapture: (payload: CapturePayload) => void;
 }
 
+/** Longest edge, in pixels, of a frame sent to the server. */
+const MAX_CAPTURE_EDGE = 1280;
+
 const BARCODE_FORMATS: Record<ScanMode, string[]> = {
   shelf: [],
   isbn: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'],
@@ -172,13 +175,20 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
     wasAlignedRef.current = isAligned;
   }, [isAligned, isOpen, hasOrientation]);
 
-  const grabFrame = useCallback((): string | null => {
+  /**
+   * Grabs a frame, downscaled so the upload stays small. A full 1920px frame is
+   * 1-3MB once base64 encoded, which is slow on mobile and wasteful to send to
+   * the vision model; 1280px is plenty to read book spines.
+   */
+  const grabFrame = useCallback((maxEdge = MAX_CAPTURE_EDGE): string | null => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || !video.videoWidth) return null;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const scale = Math.min(1, maxEdge / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);

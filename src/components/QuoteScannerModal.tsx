@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { haptic } from '../services/haptics';
+import { postJson } from '../services/apiClient';
 
 interface QuoteScannerModalProps {
   isOpen: boolean;
@@ -70,16 +71,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
       const imageBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
       
       try {
-        const response = await fetch('/api/gemini/quote', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64 })
-        });
-        
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(payload?.detail || payload?.error || `Request failed with status ${response.status}`);
-        }
+        const payload = await postJson<{ text?: string }>('/api/gemini/quote', { imageBase64 });
         if (!payload?.text) {
           throw new Error('No readable text was found in this frame.');
         }
