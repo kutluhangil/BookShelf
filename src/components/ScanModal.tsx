@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SPIKE_DATASET } from '../data/spikeDataset';
 import { SpikeSample } from '../types';
@@ -6,479 +6,501 @@ import { haptic } from '../services/haptics';
 
 export type ScanMode = 'shelf' | 'isbn' | 'qr';
 
+export interface CapturePayload {
+  imageUrl: string;
+  mode: ScanMode;
+  /** Present for isbn/qr captures decoded by the Barcode Detection API. */
+  barcode?: string;
+  /** Present only when the user picked one of the bundled demo shelves. */
+  sample?: SpikeSample;
+}
+
 interface ScanModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCapture: (imageUrl: string, sampleData?: SpikeSample, mode?: ScanMode) => void;
+  onCapture: (payload: CapturePayload) => void;
 }
 
-export const ScanModal: React.FC<ScanModalProps> = ({
-  isOpen,
-  onClose,
-  onCapture,
-}) => {
-  const [selectedSample, setSelectedSample] = useState<SpikeSample>(SPIKE_DATASET[0]);
-  const [isTorchOn, setIsTorchOn] = useState(false);
-  const [scanMode, setScanMode] = useState<ScanMode>('shelf');
-  const [roll, setRoll] = useState(1.2); // Roll angle in degrees (optimal: 0° ± 7°)
-  const [pitch, setPitch] = useState(88.0); // Pitch angle in degrees (optimal: 90° ± 7°)
-  const [showAngleAdjuster, setShowAngleAdjuster] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Track previous alignment state to trigger haptic on edge transition
+const BARCODE_FORMATS: Record<ScanMode, string[]> = {
+  shelf: [],
+  isbn: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'],
+  qr: ['qr_code'],
+};
+
+export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const detectorRef = useRef<BarcodeDetector | null>(null);
+  const scanLoopRef = useRef<number | null>(null);
   const wasAlignedRef = useRef<boolean>(false);
 
-  // Stable alignment threshold check (±7° roll from level, ±7° pitch from 90° vertical)
-  const isRollValid = Math.abs(roll) <= 7.0;
-  const isPitchValid = Math.abs(pitch - 90.0) <= 7.0;
-  const isAligned = isRollValid && isPitchValid;
+  const [scanMode, setScanMode] = useState<ScanMode>('shelf');
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isTorchAvailable, setIsTorchAvailable] = useState(false);
+  const [isTorchOn, setIsTorchOn] = useState(false);
+  const [barcodeSupported, setBarcodeSupported] = useState(true);
+  const [showDemoShelves, setShowDemoShelves] = useState(false);
+  const [roll, setRoll] = useState<number | null>(null);
+  const [pitch, setPitch] = useState<number | null>(null);
+  const [orientationPermissionNeeded, setOrientationPermissionNeeded] = useState(false);
 
-  // Listen to real DeviceOrientation if available on mobile
-  useEffect(() => {
-    if (!isOpen) return;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleOrientation = (e: DeviceOrientationEvent) => {
-      if (e.gamma !== null && e.beta !== null) {
-        // gamma: left-to-right roll (-90 to 90)
-        // beta: front-to-back pitch (-180 to 180, ~90 is vertical)
-        const currentRoll = Math.round(e.gamma * 10) / 10;
-        const currentPitch = Math.round(e.beta * 10) / 10;
-        setRoll(currentRoll);
-        setPitch(currentPitch);
-      }
-    };
+  const hasOrientation = roll !== null && pitch !== null;
+  const isRollValid = roll !== null && Math.abs(roll) <= 7;
+  const isPitchValid = pitch !== null && Math.abs(pitch - 90) <= 7;
+  const isAligned = hasOrientation ? isRollValid && isPitchValid : true;
 
-    if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
-      window.addEventListener('deviceorientation', handleOrientation, true);
+  const stopCamera = useCallback(() => {
+    if (scanLoopRef.current !== null) {
+      window.clearTimeout(scanLoopRef.current);
+      scanLoopRef.current = null;
     }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setIsCameraReady(false);
+    setIsTorchOn(false);
+    setIsTorchAvailable(false);
+  }, []);
 
-    return () => {
-      if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
-        window.removeEventListener('deviceorientation', handleOrientation, true);
+  const startCamera = useCallback(async () => {
+    setCameraError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('This browser does not expose a camera API. Use the photo upload button instead.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => undefined);
       }
-    };
-  }, [isOpen]);
+      const [track] = stream.getVideoTracks();
+      const capabilities = track?.getCapabilities?.() as MediaTrackCapabilities | undefined;
+      setIsTorchAvailable(Boolean(capabilities?.torch));
+      setIsCameraReady(true);
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : '';
+      setCameraError(
+        name === 'NotAllowedError'
+          ? 'Camera permission was denied. Allow camera access in your browser settings, or upload a photo instead.'
+          : name === 'NotFoundError'
+            ? 'No camera was found on this device. Use the photo upload button instead.'
+            : `Camera could not be started: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }, []);
 
-  // Edge-triggered light haptic tap when entering stable ±7° alignment threshold
+  // Camera lifecycle
+  useEffect(() => {
+    if (isOpen) {
+      void startCamera();
+    } else {
+      stopCamera();
+    }
+    return stopCamera;
+  }, [isOpen, startCamera, stopCamera]);
+
+  // Torch control on the live track
+  useEffect(() => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || !isTorchAvailable) return;
+    track.applyConstraints({ advanced: [{ torch: isTorchOn }] }).catch(() => {
+      setIsTorchAvailable(false);
+    });
+  }, [isTorchOn, isTorchAvailable]);
+
+  // Device orientation (real gyro only; no simulated angles)
   useEffect(() => {
     if (!isOpen) {
+      setRoll(null);
+      setPitch(null);
       wasAlignedRef.current = false;
       return;
     }
 
-    if (isAligned && !wasAlignedRef.current) {
-      // Trigger light haptic tap when device alignment enters stable ±7° capture threshold
-      haptic.lightImpact();
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      if (event.gamma === null || event.beta === null) return;
+      setRoll(Math.round(event.gamma * 10) / 10);
+      setPitch(Math.round(event.beta * 10) / 10);
+    };
+
+    const requestPermission = (
+      DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<PermissionState> }
+    ).requestPermission;
+
+    if (typeof requestPermission === 'function') {
+      // iOS 13+ requires an explicit user gesture before orientation events fire.
+      setOrientationPermissionNeeded(true);
+    } else if ('DeviceOrientationEvent' in window) {
+      window.addEventListener('deviceorientation', handleOrientation, true);
     }
+
+    return () => window.removeEventListener('deviceorientation', handleOrientation, true);
+  }, [isOpen]);
+
+  const enableOrientation = async () => {
+    const requestPermission = (
+      DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<PermissionState> }
+    ).requestPermission;
+    if (typeof requestPermission !== 'function') return;
+    const state = await requestPermission();
+    if (state === 'granted') {
+      setOrientationPermissionNeeded(false);
+      window.addEventListener(
+        'deviceorientation',
+        (event: DeviceOrientationEvent) => {
+          if (event.gamma === null || event.beta === null) return;
+          setRoll(Math.round(event.gamma * 10) / 10);
+          setPitch(Math.round(event.beta * 10) / 10);
+        },
+        true
+      );
+    }
+  };
+
+  // Haptic tap when the device enters the stable capture window
+  useEffect(() => {
+    if (!isOpen || !hasOrientation) return;
+    if (isAligned && !wasAlignedRef.current) haptic.lightImpact();
     wasAlignedRef.current = isAligned;
-  }, [isAligned, isOpen]);
+  }, [isAligned, isOpen, hasOrientation]);
+
+  const grabFrame = useCallback((): string | null => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || !video.videoWidth) return null;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  }, []);
+
+  // Continuous barcode / QR detection while those modes are active
+  useEffect(() => {
+    if (!isOpen || scanMode === 'shelf' || !isCameraReady) return;
+
+    const Detector = window.BarcodeDetector;
+    if (!Detector) {
+      setBarcodeSupported(false);
+      return;
+    }
+    setBarcodeSupported(true);
+    detectorRef.current = new Detector({ formats: BARCODE_FORMATS[scanMode] });
+
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled) return;
+      const video = videoRef.current;
+      if (video && video.videoWidth && detectorRef.current) {
+        try {
+          const results = await detectorRef.current.detect(video);
+          const hit = results[0];
+          if (hit?.rawValue) {
+            haptic.success();
+            onCapture({ imageUrl: grabFrame() ?? '', mode: scanMode, barcode: hit.rawValue });
+            return;
+          }
+        } catch {
+          // A single failed frame is not fatal; keep polling.
+        }
+      }
+      scanLoopRef.current = window.setTimeout(tick, 350);
+    };
+
+    void tick();
+
+    return () => {
+      cancelled = true;
+      if (scanLoopRef.current !== null) {
+        window.clearTimeout(scanLoopRef.current);
+        scanLoopRef.current = null;
+      }
+    };
+  }, [isOpen, scanMode, isCameraReady, grabFrame, onCapture]);
 
   if (!isOpen) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          onCapture(event.target.result as string, undefined, scanMode);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (loaded) => {
+      if (loaded.target?.result) {
+        onCapture({ imageUrl: loaded.target.result as string, mode: scanMode });
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
   };
 
-  const handleSimulateCapture = () => {
+  const handleShutter = () => {
     haptic.mediumImpact();
-    onCapture(selectedSample.imageUrl, selectedSample, scanMode);
+    const frame = grabFrame();
+    if (!frame) {
+      setCameraError('Could not read a frame from the camera. Try again or upload a photo.');
+      return;
+    }
+    onCapture({ imageUrl: frame, mode: scanMode });
   };
 
-  const setPresetAngle = (newRoll: number, newPitch: number) => {
-    haptic.selectionClick();
-    setRoll(newRoll);
-    setPitch(newPitch);
-  };
+  const alignmentLabel = !hasOrientation
+    ? 'GYRO UNAVAILABLE'
+    : isAligned
+      ? `LEVEL LOCKED (${roll! > 0 ? '+' : ''}${roll!.toFixed(1)}° ROLL / ${pitch!.toFixed(0)}° PITCH)`
+      : `TILTED: ROLL ${roll! > 0 ? '+' : ''}${roll!.toFixed(1)}° — HOLD PARALLEL`;
 
   return (
     <div className="fixed inset-0 z-50 bg-[#12100E] flex flex-col justify-between overflow-hidden">
-      {/* Top HUD Controls */}
+      {/* Top HUD */}
       <div className="relative z-20 p-4 sm:px-6 flex flex-col gap-4 bg-gradient-to-b from-black/80 to-transparent">
-        <div className="flex justify-between items-center w-full">
+        <div className="flex justify-between items-center w-full gap-2">
           <button
             onClick={() => {
               haptic.lightImpact();
               onClose();
             }}
             className="text-[#F4EFE6] bg-black/40 backdrop-blur-md p-2 rounded-full hairline-border hover:bg-black/70 transition-colors"
+            aria-label="Close scanner"
           >
             <span className="material-symbols-outlined text-[24px]">close</span>
           </button>
 
-          {/* Gyro Alignment Pill / Warning (§4.6 HUD Horizon Indicator) */}
           <div
-            onClick={() => {
-              if (isAligned) {
-                setPresetAngle(14.5, 72.0); // Simulate tilted out of threshold
-              } else {
-                setPresetAngle(1.2, 89.0); // Simulate locking into threshold
-              }
-            }}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full backdrop-blur-md font-mono-ibm text-[11px] tracking-wider transition-all cursor-pointer select-none shadow-lg ${
-              isAligned
-                ? 'bg-[#1C2C1D]/90 text-[#85E07D] border border-[#6E8F6A] ring-1 ring-[#6E8F6A]/40'
-                : 'bg-[#3A2412]/90 text-[#F5BD62] border border-[#C9963F] ring-1 ring-[#C9963F]/30'
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full backdrop-blur-md font-mono-ibm text-[10px] sm:text-[11px] tracking-wider shadow-lg select-none ${
+              !hasOrientation
+                ? 'bg-black/60 text-[#A79C8C] border border-[#3A332A]'
+                : isAligned
+                  ? 'bg-[#1C2C1D]/90 text-[#85E07D] border border-[#6E8F6A]'
+                  : 'bg-[#3A2412]/90 text-[#F5BD62] border border-[#C9963F]'
             }`}
-            title="Click to toggle level / tilted angles and test threshold haptic"
           >
             <span
-              className={`w-2.5 h-2.5 rounded-full transition-all ${
-                isAligned ? 'bg-[#6E8F6A] shadow-[0_0_8px_#6E8F6A]' : 'bg-[#C9963F] animate-ping'
+              className={`w-2.5 h-2.5 rounded-full ${
+                !hasOrientation ? 'bg-[#3A332A]' : isAligned ? 'bg-[#6E8F6A]' : 'bg-[#C9963F] animate-ping'
               }`}
             />
-            <span className="font-semibold">
-              {isAligned
-                ? `LEVEL LOCKED (${roll > 0 ? '+' : ''}${roll.toFixed(1)}° ROLL / ${pitch.toFixed(0)}° PITCH)`
-                : `TILTED: ROLL ${roll > 0 ? '+' : ''}${roll.toFixed(1)}° — HOLD PARALLEL`}
-            </span>
-            <span className="material-symbols-outlined text-[15px] opacity-70">
-              {isAligned ? 'check_circle' : 'screen_rotation'}
-            </span>
+            <span className="font-semibold">{alignmentLabel}</span>
           </div>
 
-          {/* Right Top Actions (Angle Tuning & Torch) */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                haptic.lightImpact();
-                setShowAngleAdjuster(!showAngleAdjuster);
-              }}
-              className={`p-2 rounded-full backdrop-blur-md hairline-border transition-colors ${
-                showAngleAdjuster
-                  ? 'bg-[#C9963F] text-[#12100E]'
-                  : 'bg-black/40 text-[#F4EFE6] hover:bg-black/70'
-              }`}
-              title="Toggle Gyro Alignment Controls"
-            >
-              <span className="material-symbols-outlined text-[20px]">tune</span>
-            </button>
-
-            <button
-              onClick={() => {
-                haptic.lightImpact();
-                setIsTorchOn(!isTorchOn);
-              }}
-              className={`p-2 rounded-full backdrop-blur-md hairline-border transition-colors ${
-                isTorchOn
-                  ? 'bg-[#C9963F] text-[#12100E]'
-                  : 'bg-black/40 text-[#F4EFE6] hover:bg-black/70'
-              }`}
-              title="Toggle Flash"
-            >
-              <span className="material-symbols-outlined text-[22px]">
-                {isTorchOn ? 'flash_on' : 'flash_off'}
-              </span>
-            </button>
+            {orientationPermissionNeeded && (
+              <button
+                onClick={enableOrientation}
+                className="p-2 rounded-full backdrop-blur-md hairline-border bg-black/40 text-[#F4EFE6] hover:bg-black/70 transition-colors"
+                title="Enable level indicator"
+              >
+                <span className="material-symbols-outlined text-[20px]">screen_rotation</span>
+              </button>
+            )}
+            {isTorchAvailable && (
+              <button
+                onClick={() => {
+                  haptic.lightImpact();
+                  setIsTorchOn((on) => !on);
+                }}
+                className={`p-2 rounded-full backdrop-blur-md hairline-border transition-colors ${
+                  isTorchOn ? 'bg-[#C9963F] text-[#12100E]' : 'bg-black/40 text-[#F4EFE6] hover:bg-black/70'
+                }`}
+                title="Toggle torch"
+              >
+                <span className="material-symbols-outlined text-[22px]">{isTorchOn ? 'flash_on' : 'flash_off'}</span>
+              </button>
+            )}
           </div>
         </div>
-        
-        {/* Scan Mode Toggle */}
+
+        {/* Mode toggle */}
         <div className="flex self-center bg-black/40 backdrop-blur-md p-1 rounded-full hairline-border w-max shadow-lg">
-          <button
-            onClick={() => {
-              haptic.selectionClick();
-              setScanMode('shelf');
-            }}
-            className={`px-4 sm:px-6 py-1.5 rounded-full font-mono-ibm text-[11px] font-bold tracking-wider transition-all ${
-              scanMode === 'shelf'
-                ? 'bg-[#C9963F] text-[#12100E] shadow-sm'
-                : 'text-[#A79C8C] hover:text-[#F4EFE6]'
-            }`}
-          >
-            SHELF
-          </button>
-          <button
-            onClick={() => {
-              haptic.selectionClick();
-              setScanMode('isbn');
-            }}
-            className={`px-4 sm:px-6 py-1.5 rounded-full font-mono-ibm text-[11px] font-bold tracking-wider transition-all ${
-              scanMode === 'isbn'
-                ? 'bg-[#C9963F] text-[#12100E] shadow-sm'
-                : 'text-[#A79C8C] hover:text-[#F4EFE6]'
-            }`}
-          >
-            ISBN
-          </button>
-          <button
-            onClick={() => {
-              haptic.selectionClick();
-              setScanMode('qr');
-            }}
-            className={`px-4 sm:px-6 py-1.5 rounded-full font-mono-ibm text-[11px] font-bold tracking-wider transition-all ${
-              scanMode === 'qr'
-                ? 'bg-[#C9963F] text-[#12100E] shadow-sm'
-                : 'text-[#A79C8C] hover:text-[#F4EFE6]'
-            }`}
-          >
-            QR CODE
-          </button>
-        </div>
-      </div>
-
-      {/* Interactive Angle Calibration & Preset HUD Bar (Optional Dropdown) */}
-      <AnimatePresence>
-        {showAngleAdjuster && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="relative z-30 mx-4 sm:mx-auto max-w-lg bg-[#181512]/95 backdrop-blur-md p-3.5 rounded-xl border border-[#3A332A] flex flex-col gap-2.5 shadow-2xl"
-          >
-            <div className="flex justify-between items-center text-[11px] font-mono-ibm text-[#A79C8C]">
-              <span>GYRO ALIGNMENT TEST BENCH (THRESHOLD ±7° STABLE)</span>
-              <span className={isAligned ? 'text-[#85E07D] font-bold' : 'text-[#F5BD62] font-bold'}>
-                {isAligned ? 'VALID THRESHOLD (LOCKED)' : 'OUT OF BOUNDS'}
-              </span>
-            </div>
-
-            {/* Roll slider */}
-            <div className="flex items-center gap-3">
-              <span className="font-mono-ibm text-[11px] text-[#F4EFE6] w-20 shrink-0">
-                Roll: {roll > 0 ? '+' : ''}{roll.toFixed(1)}°
-              </span>
-              <input
-                type="range"
-                min="-20"
-                max="20"
-                step="0.5"
-                value={roll}
-                onChange={(e) => setRoll(parseFloat(e.target.value))}
-                className="w-full accent-[#C9963F] cursor-pointer"
-              />
-            </div>
-
-            {/* Pitch slider */}
-            <div className="flex items-center gap-3">
-              <span className="font-mono-ibm text-[11px] text-[#F4EFE6] w-20 shrink-0">
-                Pitch: {pitch.toFixed(1)}°
-              </span>
-              <input
-                type="range"
-                min="65"
-                max="115"
-                step="0.5"
-                value={pitch}
-                onChange={(e) => setPitch(parseFloat(e.target.value))}
-                className="w-full accent-[#C9963F] cursor-pointer"
-              />
-            </div>
-
-            {/* Quick Angle Presets to Test Lock-in Haptics */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPresetAngle(0.5, 90.0)}
-                className={`flex-1 py-1.5 rounded text-[10px] font-mono-ibm font-semibold transition-all ${
-                  isAligned ? 'bg-[#6E8F6A] text-[#101F12]' : 'bg-[#262119] text-[#A79C8C] hover:text-[#F4EFE6]'
-                }`}
-              >
-                Snap to Level (0.5°, 90°)
-              </button>
-              <button
-                onClick={() => setPresetAngle(12.5, 88.0)}
-                className={`flex-1 py-1.5 rounded text-[10px] font-mono-ibm font-semibold transition-all ${
-                  !isRollValid ? 'bg-[#C9963F] text-[#12100E]' : 'bg-[#262119] text-[#A79C8C] hover:text-[#F4EFE6]'
-                }`}
-              >
-                Tilt Roll (+12.5°)
-              </button>
-              <button
-                onClick={() => setPresetAngle(0.0, 75.0)}
-                className={`flex-1 py-1.5 rounded text-[10px] font-mono-ibm font-semibold transition-all ${
-                  !isPitchValid ? 'bg-[#C9963F] text-[#12100E]' : 'bg-[#262119] text-[#A79C8C] hover:text-[#F4EFE6]'
-                }`}
-              >
-                Tilt Pitch (75°)
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Main Camera Viewfinder with Live Shelf Preview */}
-      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
-        <img
-          src={selectedSample.imageUrl}
-          alt="Camera viewfinder"
-          className="w-full h-full object-cover opacity-85 select-none"
-        />
-
-        {/* Dynamic Alignment Guideline Box */}
-        <div
-          className={`absolute pointer-events-none flex flex-col justify-between p-3 transition-all duration-300 ${
-            scanMode === 'shelf'
-              ? 'inset-x-6 sm:inset-x-16 inset-y-24 sm:inset-y-28 rounded-xl'
-              : scanMode === 'qr'
-              ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-xl bg-black/20 backdrop-blur-sm'
-              : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-40 rounded-lg bg-black/20 backdrop-blur-sm'
-          } ${
-            isAligned
-              ? 'border-2 border-[#6E8F6A]/90 shadow-[0_0_30px_rgba(110,143,106,0.3)]'
-              : 'border border-[#C9963F]/50 shadow-[0_0_20px_rgba(201,150,63,0.15)]'
-          }`}
-        >
-          {/* Top corners */}
-          <div className="flex justify-between w-full">
-            <div
-              className={`w-6 h-6 border-t-2 border-l-2 transition-colors ${
-                isAligned ? 'border-[#85E07D]' : 'border-[#C9963F]'
-              }`}
-            />
-            <div
-              className={`w-6 h-6 border-t-2 border-r-2 transition-colors ${
-                isAligned ? 'border-[#85E07D]' : 'border-[#C9963F]'
-              }`}
-            />
-          </div>
-
-          {/* Center Dynamic Alignment Crosshair & Level Bubble */}
-          <div className="flex flex-col items-center gap-2">
-            {/* Horizon bar that tilts with roll */}
-            {scanMode === 'shelf' && (
-              <div className="relative w-48 h-6 flex items-center justify-center">
-                <div className="absolute w-full h-[1px] bg-white/20" />
-                <motion.div
-                  animate={{ rotate: roll }}
-                  transition={{ type: 'spring', damping: 15, stiffness: 200 }}
-                  className={`w-36 h-1 rounded-full shadow-md transition-colors ${
-                    isAligned ? 'bg-[#85E07D]' : 'bg-[#C9963F]'
-                  }`}
-                />
-                <div
-                  className={`w-3 h-3 rounded-full border-2 border-black z-10 transition-colors ${
-                    isAligned ? 'bg-[#85E07D]' : 'bg-[#C9963F]'
-                  }`}
-                />
-              </div>
-            )}
-            
-            {scanMode === 'isbn' && (
-              <div className="flex items-center justify-center w-full my-2">
-                <span className="material-symbols-outlined text-[32px] text-[#C9963F] opacity-50">barcode_scanner</span>
-              </div>
-            )}
-            {scanMode === 'qr' && (
-              <div className="flex items-center justify-center w-full my-2">
-                <span className="material-symbols-outlined text-[32px] text-[#C9963F] opacity-50">qr_code_scanner</span>
-              </div>
-            )}
-
-            <span
-              className={`px-3 py-1 rounded text-[11px] font-mono-ibm font-semibold uppercase tracking-widest backdrop-blur-md hairline-border transition-all text-center ${
-                isAligned
-                  ? 'bg-[#18261A]/90 text-[#85E07D] border-[#6E8F6A]'
-                  : 'bg-black/70 text-[#F4EFE6] border-[#C9963F]/60'
-              }`}
-            >
-              {isAligned 
-                ? 'ALIGNMENT LOCKED • OPTIMAL' 
-                : (scanMode === 'shelf' ? 'ALIGN SPINES PARALLEL TO GRID' : 'FRAME ISBN BARCODE HERE')}
-            </span>
-          </div>
-
-          {/* Bottom corners */}
-          <div className="flex justify-between w-full">
-            <div
-              className={`w-6 h-6 border-b-2 border-l-2 transition-colors ${
-                isAligned ? 'border-[#85E07D]' : 'border-[#C9963F]'
-              }`}
-            />
-            <div
-              className={`w-6 h-6 border-b-2 border-r-2 transition-colors ${
-                isAligned ? 'border-[#85E07D]' : 'border-[#C9963F]'
-              }`}
-            />
-          </div>
-        </div>
-
-        {/* Flash Simulation Sheen */}
-        {isTorchOn && (
-          <div className="absolute inset-0 bg-white/10 pointer-events-none mix-blend-overlay" />
-        )}
-      </div>
-
-      {/* Bottom Shutter Controls & Shelf Sample Preset Bar */}
-      <div className="relative z-20 p-4 sm:px-8 pb-8 pt-3 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col gap-4">
-        {/* Preset Shelf Sample Selector (Quick Test Matrix) */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-          <span className="font-mono-ibm text-[10px] text-[#A79C8C] shrink-0 uppercase tracking-widest">
-            TEST SAMPLES:
-          </span>
-          {SPIKE_DATASET.slice(0, 8).map((sample, index) => (
+          {(['shelf', 'isbn', 'qr'] as const).map((mode) => (
             <button
-              key={sample.id}
+              key={mode}
               onClick={() => {
                 haptic.selectionClick();
-                setSelectedSample(sample);
+                setScanMode(mode);
               }}
-              className={`px-2.5 py-1 rounded text-[11px] font-mono-ibm shrink-0 transition-all ${
-                selectedSample.id === sample.id
-                  ? 'bg-[#C9963F] text-[#12100E] font-semibold shadow-md'
-                  : 'bg-black/60 text-[#A79C8C] hairline-border hover:text-[#F4EFE6]'
+              className={`px-4 sm:px-6 py-1.5 rounded-full font-mono-ibm text-[11px] font-bold tracking-wider transition-all ${
+                scanMode === mode ? 'bg-[#C9963F] text-[#12100E] shadow-sm' : 'text-[#A79C8C] hover:text-[#F4EFE6]'
               }`}
             >
-              #{index + 1} {sample.name.split('—')[1] || sample.name}
+              {mode === 'qr' ? 'QR CODE' : mode.toUpperCase()}
             </button>
           ))}
         </div>
+      </div>
 
-        {/* Shutter Action Strip */}
+      {/* Live viewfinder */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`w-full h-full object-cover ${cameraError ? 'opacity-0' : 'opacity-100'}`}
+        />
+        <canvas ref={canvasRef} className="hidden" />
+
+        {cameraError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center">
+            <span className="material-symbols-outlined text-[44px] text-[#C97A3F]">videocam_off</span>
+            <p className="font-sans-inter text-[14px] text-[#F4EFE6] max-w-sm leading-relaxed">{cameraError}</p>
+            <button
+              onClick={() => void startCamera()}
+              className="px-4 py-2 bg-[#262119] hairline-border rounded-xl font-mono-ibm text-[11px] text-[#C9963F] uppercase tracking-wider"
+            >
+              Retry camera
+            </button>
+          </div>
+        )}
+
+        {!cameraError && scanMode !== 'shelf' && !barcodeSupported && (
+          <div className="absolute bottom-40 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/80 rounded-xl hairline-border max-w-xs text-center">
+            <p className="font-mono-ibm text-[11px] text-[#F5BD62] leading-relaxed">
+              Live barcode detection is not supported by this browser. Use the shutter to capture, then search manually.
+            </p>
+          </div>
+        )}
+
+        {/* Framing guide */}
+        {!cameraError && (
+          <div
+            className={`absolute pointer-events-none flex flex-col justify-between p-3 transition-all duration-300 ${
+              scanMode === 'shelf'
+                ? 'inset-x-6 sm:inset-x-16 inset-y-24 sm:inset-y-28 rounded-xl'
+                : scanMode === 'qr'
+                  ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-xl'
+                  : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-40 rounded-lg'
+            } ${
+              isAligned
+                ? 'border-2 border-[#6E8F6A]/90 shadow-[0_0_30px_rgba(110,143,106,0.3)]'
+                : 'border border-[#C9963F]/60 shadow-[0_0_20px_rgba(201,150,63,0.15)]'
+            }`}
+          >
+            <div className="flex justify-between w-full">
+              <div className={`w-6 h-6 border-t-2 border-l-2 ${isAligned ? 'border-[#85E07D]' : 'border-[#C9963F]'}`} />
+              <div className={`w-6 h-6 border-t-2 border-r-2 ${isAligned ? 'border-[#85E07D]' : 'border-[#C9963F]'}`} />
+            </div>
+
+            <div className="flex flex-col items-center gap-2">
+              {scanMode === 'shelf' && hasOrientation && (
+                <div className="relative w-48 h-6 flex items-center justify-center">
+                  <div className="absolute w-full h-[1px] bg-white/20" />
+                  <motion.div
+                    animate={{ rotate: roll ?? 0 }}
+                    transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+                    className={`w-36 h-1 rounded-full shadow-md ${isAligned ? 'bg-[#85E07D]' : 'bg-[#C9963F]'}`}
+                  />
+                  <div
+                    className={`w-3 h-3 rounded-full border-2 border-black z-10 ${
+                      isAligned ? 'bg-[#85E07D]' : 'bg-[#C9963F]'
+                    }`}
+                  />
+                </div>
+              )}
+
+              <span
+                className={`px-3 py-1 rounded text-[11px] font-mono-ibm font-semibold uppercase tracking-widest backdrop-blur-md hairline-border text-center ${
+                  isAligned ? 'bg-[#18261A]/90 text-[#85E07D] border-[#6E8F6A]' : 'bg-black/70 text-[#F4EFE6] border-[#C9963F]/60'
+                }`}
+              >
+                {scanMode === 'shelf'
+                  ? isAligned
+                    ? 'ALIGN SPINES • READY'
+                    : 'ALIGN SPINES PARALLEL TO GRID'
+                  : scanMode === 'isbn'
+                    ? 'FRAME THE ISBN BARCODE'
+                    : 'FRAME THE QR CODE'}
+              </span>
+            </div>
+
+            <div className="flex justify-between w-full">
+              <div className={`w-6 h-6 border-b-2 border-l-2 ${isAligned ? 'border-[#85E07D]' : 'border-[#C9963F]'}`} />
+              <div className={`w-6 h-6 border-b-2 border-r-2 ${isAligned ? 'border-[#85E07D]' : 'border-[#C9963F]'}`} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom controls */}
+      <div className="relative z-20 p-4 sm:px-8 pb-8 pt-3 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col gap-3">
+        <button
+          onClick={() => setShowDemoShelves((open) => !open)}
+          className="self-center font-mono-ibm text-[10px] text-[#A79C8C] hover:text-[#C9963F] uppercase tracking-widest flex items-center gap-1"
+        >
+          <span className="material-symbols-outlined text-[14px]">science</span>
+          {showDemoShelves ? 'Hide demo shelves' : 'Try a demo shelf (no camera needed)'}
+        </button>
+
+        <AnimatePresence>
+          {showDemoShelves && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1"
+            >
+              <span className="font-mono-ibm text-[10px] text-[#C97A3F] shrink-0 uppercase tracking-widest">
+                DEMO DATA:
+              </span>
+              {SPIKE_DATASET.slice(0, 8).map((sample, index) => (
+                <button
+                  key={sample.id}
+                  onClick={() => {
+                    haptic.selectionClick();
+                    onCapture({ imageUrl: sample.imageUrl, mode: 'shelf', sample });
+                  }}
+                  className="px-2.5 py-1 rounded text-[11px] font-mono-ibm shrink-0 bg-black/60 text-[#A79C8C] hairline-border hover:text-[#F4EFE6] transition-all"
+                >
+                  #{index + 1} {sample.name.split('—')[1] || sample.name}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="flex items-center justify-between max-w-md mx-auto w-full px-4">
-          {/* File Upload from Photos / Camera Roll */}
           <div>
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileUpload}
-            />
+            <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleFileUpload} />
             <button
               onClick={() => {
                 haptic.lightImpact();
                 fileInputRef.current?.click();
               }}
               className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md hairline-border text-[#F4EFE6] flex items-center justify-center hover:bg-black/90 transition-colors"
-              title="Upload from Photo Library"
+              title="Upload from photo library"
             >
               <span className="material-symbols-outlined text-[24px]">photo_library</span>
             </button>
           </div>
 
-          {/* Primary Shutter Button */}
-          <div className="relative flex items-center justify-center">
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              onClick={handleSimulateCapture}
-              className={`w-20 h-20 rounded-full border-4 p-1.5 flex items-center justify-center hover:brightness-110 active:brightness-95 transition-all bg-black/40 ${
-                isAligned
-                  ? 'border-[#6E8F6A] shadow-[0_0_28px_rgba(110,143,106,0.6)]'
-                  : 'border-[#C9963F] shadow-[0_0_24px_rgba(201,150,63,0.5)]'
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={handleShutter}
+            disabled={!isCameraReady}
+            className={`w-20 h-20 rounded-full border-4 p-1.5 flex items-center justify-center transition-all bg-black/40 disabled:opacity-40 ${
+              isAligned ? 'border-[#6E8F6A] shadow-[0_0_28px_rgba(110,143,106,0.6)]' : 'border-[#C9963F] shadow-[0_0_24px_rgba(201,150,63,0.5)]'
+            }`}
+            title="Capture"
+          >
+            <div
+              className={`w-full h-full rounded-full flex items-center justify-center text-[#12100E] ${
+                isAligned ? 'bg-[#6E8F6A]' : 'bg-[#C9963F]'
               }`}
-              title="Capture Shelf"
             >
-              <div
-                className={`w-full h-full rounded-full flex items-center justify-center text-[#12100E] transition-colors ${
-                  isAligned ? 'bg-[#6E8F6A]' : 'bg-[#C9963F]'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[32px] font-bold">
-                  photo_camera
-                </span>
-              </div>
-            </motion.button>
-          </div>
+              <span className="material-symbols-outlined text-[32px] font-bold">photo_camera</span>
+            </div>
+          </motion.button>
 
-          {/* Close / Cancel Button */}
           <button
             onClick={() => {
               haptic.lightImpact();

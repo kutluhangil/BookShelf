@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shelf, Book } from '../types';
 import { ShelfStrip } from './ShelfStrip';
 import { haptic } from '../services/haptics';
+import { renderShelfCard, canvasToBlob, downloadBlob } from '../services/shelfCard';
 
 interface ShareModalProps {
   shelf?: Shelf;
@@ -18,24 +19,105 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   onClose,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const booksInScope = useMemo(
+    () => (shelf ? books.filter((b) => b.shelfId === shelf.id) : books),
+    [books, shelf]
+  );
+
+  const topCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+    booksInScope.forEach((book) => {
+      const category = book.category?.trim();
+      if (category) counts.set(category, (counts.get(category) ?? 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([category]) => category);
+  }, [booksInScope]);
 
   if (!isOpen) return null;
 
-  const totalCount = shelf ? shelf.volumeCount : books.length;
+  const totalCount = booksInScope.length;
   const shelfName = shelf ? shelf.name : 'Physical Library';
-  const colors = shelf ? shelf.dominantColors : books.map((b) => b.spineColor || '#C9963F');
+  const colors = (shelf ? shelf.dominantColors : booksInScope.map((b) => b.spineColor || '#C9963F')).slice(0, 60);
 
-  const handleCopyLink = () => {
+  const flash = (message: string) => {
+    setError(null);
+    setStatus(message);
+    window.setTimeout(() => setStatus(null), 2500);
+  };
+
+  const fail = (thrown: unknown) => {
+    setStatus(null);
+    setError(thrown instanceof Error ? thrown.message : String(thrown));
+  };
+
+  const buildCard = (format: 'card' | 'story') =>
+    renderShelfCard({
+      title: shelfName,
+      subtitle: `${totalCount} books • physical archive`,
+      colors: colors.length > 0 ? colors : ['#C9963F'],
+      footnote: new Date().toLocaleDateString(),
+      format,
+    });
+
+  const handleCopyLink = async () => {
     haptic.selectionClick();
-    navigator.clipboard?.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard access is not available in this browser.');
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch (thrown) {
+      fail(thrown);
+    }
+  };
+
+  const handleSaveImage = async (format: 'card' | 'story') => {
+    haptic.lightImpact();
+    try {
+      const blob = await canvasToBlob(buildCard(format));
+      downloadBlob(blob, `${shelfName.replace(/\s+/g, '_').toLowerCase()}_${format}.png`);
+      flash(format === 'story' ? 'Story image saved' : 'Shelf card saved');
+    } catch (thrown) {
+      fail(thrown);
+    }
+  };
+
+  const handleShare = async () => {
+    haptic.lightImpact();
+    const text = `${shelfName} — ${totalCount} books in my physical library.`;
+    try {
+      const blob = await canvasToBlob(buildCard('card'));
+      const file = new File([blob], 'shelf-card.png', { type: 'image/png' });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ title: shelfName, text, files: [file] });
+        flash('Shared');
+        return;
+      }
+      if (navigator.share) {
+        await navigator.share({ title: shelfName, text, url: window.location.href });
+        flash('Shared');
+        return;
+      }
+      if (!navigator.clipboard) throw new Error('Sharing and clipboard are both unavailable in this browser.');
+      await navigator.clipboard.writeText(`${text} ${window.location.href}`);
+      flash('Summary copied to clipboard');
+    } catch (thrown) {
+      if (thrown instanceof DOMException && thrown.name === 'AbortError') return;
+      fail(thrown);
+    }
   };
 
   const handleExportCSV = () => {
     haptic.selectionClick();
     
-    const booksToExport = shelf ? books.filter(b => b.shelfId === shelf.id) : books;
+    const booksToExport = booksInScope;
     
     const headers = ['Title', 'Author', 'ISBN', 'Publisher', 'Publish Year', 'Page Count', 'Status', 'Progress (%)', 'Tags', 'Notes'];
     
@@ -62,6 +144,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    flash(`Exported ${booksToExport.length} volumes as CSV`);
   };
 
   return (
@@ -127,25 +211,28 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               </div>
 
               {/* Category tags */}
-              <div className="mt-4 flex gap-2 font-mono-ibm text-[10px] text-[#A79C8C] tracking-widest uppercase">
-                <span>POETRY</span>
-                <span>•</span>
-                <span>NOIR</span>
-                <span>•</span>
-                <span>HISTORICAL</span>
-              </div>
+              {topCategories.length > 0 && (
+                <div className="mt-4 flex flex-wrap justify-center gap-2 font-mono-ibm text-[10px] text-[#A79C8C] tracking-widest uppercase">
+                  {topCategories.map((category, index) => (
+                    <React.Fragment key={category}>
+                      {index > 0 && <span>•</span>}
+                      <span>{category}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
 
               {/* Book Shelf Watermark Branding */}
               <div className="mt-6 pt-4 border-t border-[#3A332A]/50 w-full flex justify-between items-center font-mono-ibm text-[10px] text-[#9C8F7E]">
                 <span className="text-[#C9963F] font-serif-literata font-bold text-[14px]">Book Shelf</span>
-                <span>DIGITIZED IN 2.4 SECONDS</span>
+                <span>{new Date().toLocaleDateString()}</span>
               </div>
             </div>
 
             {/* Share Target Buttons */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full mb-3">
               <button
-                onClick={handleCopyLink}
+                onClick={() => void handleCopyLink()}
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
                 <span className="material-symbols-outlined text-[#C9963F] text-[22px]">link</span>
@@ -155,11 +242,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               </button>
 
               <button
-                onClick={() => {
-                  haptic.lightImpact();
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
+                onClick={() => void handleSaveImage('card')}
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
                 <span className="material-symbols-outlined text-[#C9963F] text-[22px]">download</span>
@@ -167,29 +250,31 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               </button>
 
               <button
-                onClick={() => {
-                  haptic.lightImpact();
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
+                onClick={() => void handleSaveImage('story')}
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
                 <span className="material-symbols-outlined text-[#C9963F] text-[22px]">auto_stories</span>
-                <span className="font-mono-ibm text-[10px] tracking-wider uppercase">Story</span>
+                <span className="font-mono-ibm text-[10px] tracking-wider uppercase">Story 9:16</span>
               </button>
 
               <button
-                onClick={() => {
-                  haptic.lightImpact();
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
+                onClick={() => void handleShare()}
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
                 <span className="material-symbols-outlined text-[#C9963F] text-[22px]">send</span>
-                <span className="font-mono-ibm text-[10px] tracking-wider uppercase">Message</span>
+                <span className="font-mono-ibm text-[10px] tracking-wider uppercase">Share</span>
               </button>
             </div>
+
+            {(status || error) && (
+              <p
+                className={`w-full text-center font-mono-ibm text-[11px] mb-3 ${
+                  error ? 'text-[#FF6B6B]' : 'text-[#85E07D]'
+                }`}
+              >
+                {error ?? status}
+              </p>
+            )}
 
             {/* CSV Export Button */}
             <button

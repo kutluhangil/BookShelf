@@ -1,59 +1,48 @@
 import { Book } from '../types';
 
-export const calculateReadingStreak = (books: Book[]): number => {
-  // Collect all unique reading dates
-  const dates = new Set<string>();
-  
-  books.forEach(book => {
-    if (book.readingSessions) {
-      book.readingSessions.forEach(session => {
-        // Just extract the local date portion YYYY-MM-DD
-        const dateObj = new Date(session.date);
-        const dateStr = dateObj.toISOString().split('T')[0];
-        dates.add(dateStr);
-      });
-    }
+/** Local calendar day key (YYYY-MM-DD) — never UTC, or the streak shifts at night. */
+export function toLocalDateKey(value: string | number | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** Every calendar day on which the reader logged a session or finished a book. */
+export function collectReadingDays(books: Book[]): Set<string> {
+  const days = new Set<string>();
+
+  books.forEach((book) => {
+    book.readingSessions?.forEach((session) => days.add(toLocalDateKey(session.date)));
+    book.readHistory?.forEach((entry) => days.add(toLocalDateKey(entry)));
+    if (book.readAt) days.add(toLocalDateKey(book.readAt));
   });
-  
-  if (dates.size === 0) return 0;
-  
-  const sortedDates = Array.from(dates).sort().reverse();
-  
+
+  return days;
+}
+
+/**
+ * Consecutive days of reading activity, counting back from today. A streak stays
+ * alive if the reader logged something today or yesterday.
+ */
+export const calculateReadingStreak = (books: Book[]): number => {
+  const days = collectReadingDays(books);
+  if (days.size === 0) return 0;
+
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+
+  if (!days.has(toLocalDateKey(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+    if (!days.has(toLocalDateKey(cursor))) return 0;
+  }
+
   let streak = 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  
-  // Check if today or yesterday has a session to start the streak
-  let currentDateToCheck = today;
-  let todayStr = today.toISOString().split('T')[0];
-  let yesterdayStr = yesterday.toISOString().split('T')[0];
-  
-  if (sortedDates.includes(todayStr)) {
-    streak = 1;
-    currentDateToCheck = today;
-  } else if (sortedDates.includes(yesterdayStr)) {
-    streak = 1;
-    currentDateToCheck = yesterday;
-  } else {
-    return 0; // No session today or yesterday, streak is 0
+  while (days.has(toLocalDateKey(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
   }
-  
-  // Go backwards
-  for (let i = 1; i < dates.size; i++) {
-    const nextDateToCheck = new Date(currentDateToCheck);
-    nextDateToCheck.setDate(nextDateToCheck.getDate() - 1);
-    const nextDateStr = nextDateToCheck.toISOString().split('T')[0];
-    
-    if (sortedDates.includes(nextDateStr)) {
-      streak++;
-      currentDateToCheck = nextDateToCheck;
-    } else {
-      break;
-    }
-  }
-  
+
   return streak;
 };

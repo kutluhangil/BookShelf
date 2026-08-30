@@ -1,14 +1,16 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Book, Shelf, SpineCandidate, EditionOption, ReadingStatus, SpikeSample, ReadingGoals } from './types';
 import { INITIAL_BOOKS, INITIAL_SHELVES } from './data/initialLibrary';
-import { segmentAndMatchShelf } from './services/clusteringEngine';
-import { auth, loginWithGoogle, onAuthStateChanged, User } from './lib/firebase';
-import { syncToCloud, fetchFromCloud } from './services/cloudSync';
+import { recognizeShelf, buildDemoCandidates } from './services/clusteringEngine';
+import { lookupByIsbn, lookupFromQrPayload, BookLookupResult } from './services/bookLookup';
+import { isFirebaseConfigured, firebaseConfigError, loginWithGoogle, logout, observeAuthState, type User } from './lib/firebase';
+import { syncToCloud, fetchFromCloud, mergeLibraries } from './services/cloudSync';
+import { loadLibrary, saveLibrary, isPersistenceAvailable } from './services/localStore';
 import { ShelfStrip } from './components/ShelfStrip';
 import { BookCard } from './components/BookCard';
 import { NavigationHeader } from './components/NavigationHeader';
 import { BottomNavBar } from './components/BottomNavBar';
-import { ScanModal } from './components/ScanModal';
+import { ScanModal, type CapturePayload } from './components/ScanModal';
 import { ProcessingView } from './components/ProcessingView';
 import { ScanResultsView } from './components/ScanResultsView';
 import { ReviewMatchSheet } from './components/ReviewMatchSheet';
@@ -37,21 +39,71 @@ import { LibraryAnnualProgressBar } from './components/LibraryAnnualProgressBar'
 import { calculateReadingStreak } from './utils/streak';
 import { parseNLPSearchQuery } from './utils/searchParser';
 import { haptic } from './services/haptics';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
+
+type ActiveTab = 'library' | 'shelves' | 'shared' | 'eval';
+
+const DEFAULT_GOALS: ReadingGoals = {
+  annualPageCount: 10000,
+  annualBookCount: 50,
+  genreMilestones: [],
+};
+
+/** Reads the persisted library once, falling back to the bundled starter library. */
+function readInitialState() {
+  try {
+    const stored = loadLibrary();
+    if (stored) {
+      return {
+        books: stored.books,
+        shelves: stored.shelves,
+        readingGoals: stored.readingGoals ?? DEFAULT_GOALS,
+        monthlyGoal: stored.monthlyGoal ?? 5,
+        deletedBookIds: stored.deletedBookIds ?? [],
+        deletedShelfIds: stored.deletedShelfIds ?? [],
+        restored: true,
+        error: null as string | null,
+      };
+    }
+  } catch (error) {
+    return {
+      books: INITIAL_BOOKS,
+      shelves: INITIAL_SHELVES,
+      readingGoals: DEFAULT_GOALS,
+      monthlyGoal: 5,
+      deletedBookIds: [] as string[],
+      deletedShelfIds: [] as string[],
+      restored: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  return {
+    books: INITIAL_BOOKS,
+    shelves: INITIAL_SHELVES,
+    readingGoals: DEFAULT_GOALS,
+    monthlyGoal: 5,
+    deletedBookIds: [] as string[],
+    deletedShelfIds: [] as string[],
+    restored: false,
+    error: null as string | null,
+  };
+}
+
+const initialState = readInitialState();
 
 export default function App() {
   // Primary Store State
-  const [books, setBooks] = useState<Book[]>(INITIAL_BOOKS);
-  const [shelves, setShelves] = useState<Shelf[]>(INITIAL_SHELVES);
-  const [monthlyGoal, setMonthlyGoal] = useState<number>(5);
-  const [readingGoals, setReadingGoals] = useState<ReadingGoals>({
-    annualPageCount: 10000,
-    annualBookCount: 50,
-    genreMilestones: []
-  });
+  const [books, setBooks] = useState<Book[]>(initialState.books);
+  const [shelves, setShelves] = useState<Shelf[]>(initialState.shelves);
+  const [monthlyGoal, setMonthlyGoal] = useState<number>(initialState.monthlyGoal);
+  const [readingGoals, setReadingGoals] = useState<ReadingGoals>(initialState.readingGoals);
 
-  // Active View Tabs: 'library' | 'shelves' | 'eval'
-  const [activeTab, setActiveTab] = useState<'library' | 'shelves' | 'shared' | 'eval'>('library');
+  // Tombstones so deletions propagate to the cloud instead of resurrecting.
+  const [deletedBookIds, setDeletedBookIds] = useState<string[]>(initialState.deletedBookIds);
+  const [deletedShelfIds, setDeletedShelfIds] = useState<string[]>(initialState.deletedShelfIds);
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>('library');
 
   // Filter & Search States
   const [selectedShelfId, setSelectedShelfId] = useState<string>('all');
@@ -60,7 +112,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortMode, setSortMode] = useState<'physical' | 'recent' | 'author' | 'title'>('physical');
   const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
-  
+
   // Compare Mode States
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [compareQueue, setCompareQueue] = useState<Book[]>([]);
@@ -69,15 +121,14 @@ export default function App() {
   // Scanning Lifecycle States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [pendingScanData, setPendingScanData] = useState<{
-    imageUrl: string;
-    candidates: SpineCandidate[];
-  } | null>(null);
+  const [processingLabel, setProcessingLabel] = useState<string>('Analyzing shelf');
+  const [pendingScanData, setPendingScanData] = useState<{ imageUrl: string; candidates: SpineCandidate[] } | null>(null);
   const [scanResultsMode, setScanResultsMode] = useState(false);
 
   // Modals & Sheets
   const [activeReviewCandidate, setActiveReviewCandidate] = useState<SpineCandidate | null>(null);
   const [manualSearchCandidateId, setManualSearchCandidateId] = useState<string | null>(null);
+  const [isManualAddOpen, setIsManualAddOpen] = useState(false);
   const [activeBookDetail, setActiveBookDetail] = useState<Book | null>(null);
   const [activeShareShelf, setActiveShareShelf] = useState<Shelf | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -88,81 +139,183 @@ export default function App() {
 
   // Toast & Milestone States
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [lastNotifiedCompletedCount, setLastNotifiedCompletedCount] = useState<number>(() => INITIAL_BOOKS.filter(b => b.status === 'read').length);
-  const [lastNotifiedStreak, setLastNotifiedStreak] = useState<number>(() => calculateReadingStreak(INITIAL_BOOKS));
+  const [lastNotifiedCompletedCount, setLastNotifiedCompletedCount] = useState<number>(
+    () => initialState.books.filter((b) => b.status === 'read').length
+  );
+  const [lastNotifiedStreak, setLastNotifiedStreak] = useState<number>(() => calculateReadingStreak(initialState.books));
   const [isReminderEnabled, setIsReminderEnabled] = useState(false);
-  const reminderTriggeredRef = React.useRef(false);
+  const reminderTriggeredRef = useRef(false);
 
   // Auth & Sync States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const pushToast = useCallback((toast: Omit<ToastMessage, 'id'> & { id?: string }) => {
+    const id = toast.id ?? `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setToasts((prev) => [...prev, { ...toast, id }]);
+    window.setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 6000);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // Surface a storage problem instead of silently losing data.
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (initialState.error) {
+      pushToast({
+        title: 'Stored library could not be read',
+        description: initialState.error,
+        icon: 'error',
+      });
+    } else if (!isPersistenceAvailable()) {
+      pushToast({
+        title: 'Local storage unavailable',
+        description: 'Your browser blocks local storage, so changes will be lost on reload. Sign in to keep a cloud copy.',
+        icon: 'warning',
+      });
+    }
+  }, [pushToast]);
+
+  // Persist every mutation locally.
+  useEffect(() => {
+    saveLibrary({ books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds });
+  }, [books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds]);
+
+  // Keep shelf volume counts in sync with the actual books.
+  useEffect(() => {
+    setShelves((prev) => {
+      let changed = false;
+      const next = prev.map((shelf) => {
+        const count = books.filter((book) => book.shelfId === shelf.id).length;
+        if (shelf.volumeCount === count) return shelf;
+        changed = true;
+        return { ...shelf, volumeCount: count };
+      });
+      return changed ? next : prev;
+    });
+  }, [books]);
+
+  const booksRef = useRef(books);
+  const shelvesRef = useRef(shelves);
+  booksRef.current = books;
+  shelvesRef.current = shelves;
+
+  useEffect(() => {
+    return observeAuthState(
+      async (user) => {
       setCurrentUser(user);
-      if (user) {
-        // Auto-fetch on login
-        try {
-          setIsSyncing(true);
-          const cloudData = await fetchFromCloud(user.uid);
-          if (cloudData.books.length > 0 || cloudData.shelves.length > 0) {
-            setBooks(cloudData.books);
-            setShelves(cloudData.shelves);
-            if (cloudData.readingGoals) {
-              setReadingGoals(cloudData.readingGoals);
-            }
-            setToasts(prev => [...prev, {
-              id: `sync-fetch-${Date.now()}`,
-              title: 'Library Synced',
-              description: 'Successfully loaded your library from the cloud.',
-              icon: 'cloud_download'
-            }]);
-          }
-        } catch (error) {
-          console.error('Failed to fetch from cloud:', error);
+      if (!user) return;
+
+      try {
+        setIsSyncing(true);
+        const cloudData = await fetchFromCloud(user.uid);
+        const merged = mergeLibraries(
+          { books: booksRef.current, shelves: shelvesRef.current },
+          cloudData,
+          { bookIds: deletedBookIds, shelfIds: deletedShelfIds }
+        );
+        setBooks(merged.books);
+        setShelves(merged.shelves);
+        if (cloudData.readingGoals) setReadingGoals(cloudData.readingGoals);
+        if (typeof cloudData.monthlyGoal === 'number') setMonthlyGoal(cloudData.monthlyGoal);
+
+        pushToast({
+          title: 'Library Synced',
+          description: `Merged ${cloudData.books.length} cloud volumes with your local library.`,
+          icon: 'cloud_download',
+        });
+      } catch (error) {
+        pushToast({
+          title: 'Cloud fetch failed',
+          description: error instanceof Error ? error.message : String(error),
+          icon: 'error',
+        });
         } finally {
           setIsSyncing(false);
         }
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+      },
+      (error) =>
+        pushToast({
+          title: 'Cloud features unavailable',
+          description: `The Firebase SDK could not be loaded: ${error.message}`,
+          icon: 'cloud_off',
+        })
+    );
+    // deletedBookIds/deletedShelfIds are read through the closure only at login time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pushToast]);
+
+  const handleLogin = async () => {
+    if (!isFirebaseConfigured) {
+      pushToast({ title: 'Cloud features disabled', description: firebaseConfigError ?? '', icon: 'cloud_off' });
+      return;
+    }
+    try {
+      await loginWithGoogle();
+    } catch (error) {
+      pushToast({
+        title: 'Sign-in failed',
+        description: error instanceof Error ? error.message : String(error),
+        icon: 'error',
+      });
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      pushToast({ title: 'Signed out', description: 'Your library stays on this device.', icon: 'logout' });
+    } catch (error) {
+      pushToast({
+        title: 'Sign-out failed',
+        description: error instanceof Error ? error.message : String(error),
+        icon: 'error',
+      });
+    }
+  };
 
   const handleSyncToCloud = async () => {
     if (!currentUser) return;
     try {
       setIsSyncing(true);
-      await syncToCloud(currentUser.uid, books, shelves, readingGoals);
-      setToasts(prev => [...prev, {
-        id: `sync-push-${Date.now()}`,
+      await syncToCloud(currentUser.uid, {
+        books,
+        shelves,
+        readingGoals,
+        monthlyGoal,
+        deletedBookIds,
+        deletedShelfIds,
+      });
+      // Tombstones have been applied remotely; drop them.
+      setDeletedBookIds([]);
+      setDeletedShelfIds([]);
+      pushToast({
         title: 'Sync Complete',
-        description: 'Your library has been securely backed up to the cloud.',
-        icon: 'cloud_done'
-      }]);
+        description: `${books.length} volumes backed up to the cloud.`,
+        icon: 'cloud_done',
+      });
     } catch (error) {
-      console.error('Failed to sync to cloud:', error);
-      setToasts(prev => [...prev, {
-        id: `sync-error-${Date.now()}`,
+      pushToast({
         title: 'Sync Failed',
-        description: 'Could not sync library. Please try again.',
-        icon: 'error'
-      }]);
+        description: error instanceof Error ? error.message : String(error),
+        icon: 'error',
+      });
     } finally {
       setIsSyncing(false);
     }
   };
 
   useEffect(() => {
-    if (!isReminderEnabled) return;
-    if (reminderTriggeredRef.current) return;
+    if (!isReminderEnabled || reminderTriggeredRef.current) return;
 
     let latestDate = 0;
-    books.forEach(b => {
-      b.readingSessions?.forEach(s => {
+    books.forEach((b) => {
+      b.readingSessions?.forEach((s) => {
         const t = new Date(s.date).getTime();
         if (t > latestDate) latestDate = t;
       });
-      b.readHistory?.forEach(dateString => {
+      b.readHistory?.forEach((dateString) => {
         const t = new Date(dateString).getTime();
         if (t > latestDate) latestDate = t;
       });
@@ -172,112 +325,83 @@ export default function App() {
       }
     });
 
-    if (latestDate > 0) {
-      const msSinceLastRead = Date.now() - latestDate;
-      if (msSinceLastRead > 48 * 60 * 60 * 1000) {
-        reminderTriggeredRef.current = true;
-        const id = `reminder-${Date.now()}`;
-        setToasts(prev => [...prev, {
-          id,
-          title: 'Reading Reminder',
-          description: 'It’s been over 48 hours since your last reading session. Keep your streak alive!',
-          icon: 'menu_book'
-        }]);
-        haptic.success();
-        setTimeout(() => {
-          setToasts(prev => prev.filter(t => t.id !== id));
-        }, 5000);
-      }
+    if (latestDate > 0 && Date.now() - latestDate > 48 * 60 * 60 * 1000) {
+      reminderTriggeredRef.current = true;
+      pushToast({
+        title: 'Reading Reminder',
+        description: 'It has been over 48 hours since your last reading session. Keep your streak alive!',
+        icon: 'menu_book',
+      });
+      haptic.success();
     }
-  }, [isReminderEnabled, books]);
+  }, [isReminderEnabled, books, pushToast]);
 
   useEffect(() => {
-    const currentCompletedCount = books.filter(b => b.status === 'read').length;
+    const currentCompletedCount = books.filter((b) => b.status === 'read').length;
     if (currentCompletedCount > lastNotifiedCompletedCount) {
-      if (currentCompletedCount % 5 === 0 && currentCompletedCount > 0) {
-        const id = `books-${currentCompletedCount}-${Date.now()}`;
-        setToasts(prev => [...prev, { 
-          id, 
-          title: 'Milestone Reached!', 
-          description: `You have read ${currentCompletedCount} books. Incredible progress!`, 
-          icon: 'emoji_events' 
-        }]);
+      if (currentCompletedCount % 5 === 0) {
+        pushToast({
+          title: 'Milestone Reached!',
+          description: `You have read ${currentCompletedCount} books. Incredible progress!`,
+          icon: 'emoji_events',
+        });
         haptic.success();
-        
-        setTimeout(() => {
-          setToasts(prev => prev.filter(t => t.id !== id));
-        }, 5000);
       }
       setLastNotifiedCompletedCount(currentCompletedCount);
     }
-  }, [books, lastNotifiedCompletedCount]);
+  }, [books, lastNotifiedCompletedCount, pushToast]);
 
   useEffect(() => {
     const streak = calculateReadingStreak(books);
     if (streak > lastNotifiedStreak) {
-      if (streak % 7 === 0 && streak > 0) {
-        const id = `streak-${streak}-${Date.now()}`;
-        setToasts(prev => [...prev, { 
-          id, 
-          title: 'Reading Streak!', 
-          description: `You have reached a ${streak}-day reading streak! Keep the momentum going.`, 
-          icon: 'local_fire_department' 
-        }]);
+      if (streak % 7 === 0) {
+        pushToast({
+          title: 'Reading Streak!',
+          description: `You have reached a ${streak}-day reading streak! Keep the momentum going.`,
+          icon: 'local_fire_department',
+        });
         haptic.success();
-        
-        setTimeout(() => {
-          setToasts(prev => prev.filter(t => t.id !== id));
-        }, 5000);
       }
       setLastNotifiedStreak(streak);
     }
-  }, [books, lastNotifiedStreak]);
-
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
+  }, [books, lastNotifiedStreak, pushToast]);
 
   // Filtered books in the current view
   const filteredBooks = useMemo(() => {
     let result = books.filter((book) => {
-      // Shelf filter
-      if (selectedShelfId !== 'all' && book.shelfId !== selectedShelfId) {
-        return false;
-      }
-      // Status filter
-      if (readingStatusFilter !== 'all' && book.status !== readingStatusFilter) {
-        return false;
-      }
-      // Smart Filter
+      if (selectedShelfId !== 'all' && book.shelfId !== selectedShelfId) return false;
+      if (readingStatusFilter !== 'all' && book.status !== readingStatusFilter) return false;
+
       if (smartFilter !== 'none') {
         if (smartFilter === 'recently_added') {
           const sevenDaysAgo = new Date();
           sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-          if (new Date(book.addedAt).getTime() < sevenDaysAgo.getTime()) {
-            return false;
-          }
+          if (new Date(book.addedAt).getTime() < sevenDaysAgo.getTime()) return false;
         } else if (smartFilter === 'high_priority') {
           const priorityTags = ['high priority', 'urgent', 'must read', 'priority'];
-          const hasPriorityTag = book.tags?.some(tag => priorityTags.includes(tag.toLowerCase()));
-          if (!hasPriorityTag) return false;
+          if (!book.tags?.some((tag) => priorityTags.includes(tag.toLowerCase()))) return false;
         } else if (smartFilter === 'abandoned') {
           if (book.status === 'unread') return false;
           if (book.progress === undefined || book.progress >= 30) return false;
         }
       }
-      // Search query (NLP mapped)
-      if (searchQuery.trim()) {
-        if (!parseNLPSearchQuery(searchQuery, book)) {
-          return false;
-        }
-      }
+
+      if (searchQuery.trim() && !parseNLPSearchQuery(searchQuery, book)) return false;
       return true;
     });
 
     if (sortMode === 'recent') {
       result = [...result].sort((a, b) => {
-        const lastReadA = a.readHistory?.length ? new Date(a.readHistory[a.readHistory.length - 1]).getTime() : (a.readAt ? new Date(a.readAt).getTime() : 0);
-        const lastReadB = b.readHistory?.length ? new Date(b.readHistory[b.readHistory.length - 1]).getTime() : (b.readAt ? new Date(b.readAt).getTime() : 0);
+        const lastReadA = a.readHistory?.length
+          ? new Date(a.readHistory[a.readHistory.length - 1]).getTime()
+          : a.readAt
+            ? new Date(a.readAt).getTime()
+            : 0;
+        const lastReadB = b.readHistory?.length
+          ? new Date(b.readHistory[b.readHistory.length - 1]).getTime()
+          : b.readAt
+            ? new Date(b.readAt).getTime()
+            : 0;
         return lastReadB - lastReadA;
       });
     } else if (sortMode === 'author') {
@@ -289,161 +413,183 @@ export default function App() {
     return result;
   }, [books, selectedShelfId, readingStatusFilter, smartFilter, searchQuery, sortMode]);
 
-  // Overall Spine Colors Palette for the Hero Strip
-  const allSpineColors = useMemo(() => {
-    return books.map((b) => b.spineColor || '#C9963F');
-  }, [books]);
+  const allSpineColors = useMemo(() => books.map((b) => b.spineColor || '#C9963F'), [books]);
 
-  // Handle Book Click (Normal vs Compare Mode)
+  const targetShelfId = selectedShelfId !== 'all' ? selectedShelfId : shelves[0]?.id ?? 'shelf-fiction';
+
   const handleBookClick = (book: Book) => {
     haptic.selectionClick();
-    if (isCompareMode) {
-      if (compareQueue.some(b => b.id === book.id)) {
-        setCompareQueue(q => q.filter(b => b.id !== book.id));
-      } else if (compareQueue.length < 2) {
-        const newQueue = [...compareQueue, book];
-        setCompareQueue(newQueue);
-        if (newQueue.length === 2) {
-          setIsCompareModalOpen(true);
-        }
-      }
-    } else {
+    if (!isCompareMode) {
       setActiveBookDetail(book);
+      return;
+    }
+    if (compareQueue.some((b) => b.id === book.id)) {
+      setCompareQueue((queue) => queue.filter((b) => b.id !== book.id));
+      return;
+    }
+    if (compareQueue.length < 2) {
+      const newQueue = [...compareQueue, book];
+      setCompareQueue(newQueue);
+      if (newQueue.length === 2) setIsCompareModalOpen(true);
     }
   };
 
-  // Handle Capture from Camera or Sample
-  const handleCapture = (imageUrl: string, sampleData?: SpikeSample, scanMode?: 'shelf' | 'isbn' | 'qr') => {
-    setIsScannerOpen(false);
+  const exitCompareMode = () => {
+    setIsCompareMode(false);
+    setCompareQueue([]);
+    setIsCompareModalOpen(false);
+  };
 
-    if (scanMode === 'qr') {
-      const qrBook: Book = {
-        id: `qr-${Date.now()}`,
-        title: "The Design of Everyday Things",
-        author: "Don Norman",
-        isbn: "978-0465050659",
-        publisher: "Basic Books",
-        publishYear: 2013,
-        pageCount: 368,
-        description: "Quick-added via QR Code link. Even the smartest among us can feel inept as we fail to figure out which light switch or oven burner to turn on.",
-        coverUrl: "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&q=80&w=300",
-        spineCropUrl: "",
-        spineColor: "#F5C71A",
-        shelfId: selectedShelfId !== 'all' ? selectedShelfId : 'shelf-design',
-        status: 'unread',
-        confidence: 'matched',
-        score: 1.0,
-        category: 'QR Sync',
-        addedAt: new Date().toISOString(),
-      };
+  /** Turns an Open Library result into a library book on the active shelf. */
+  const bookFromLookup = useCallback(
+    (result: BookLookupResult, source: string): Book => ({
+      id: `${source}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      title: result.title,
+      author: result.author,
+      isbn: result.isbn,
+      publisher: result.publisher,
+      publishYear: result.publishYear,
+      pageCount: result.pageCount,
+      description: result.description ?? '',
+      coverUrl: result.coverUrl,
+      spineCropUrl: '',
+      spineColor: '#C9963F',
+      shelfId: targetShelfId,
+      status: 'unread',
+      confidence: 'matched',
+      score: 1,
+      category: result.subjects?.[0] ?? 'Uncategorized',
+      tags: result.subjects,
+      addedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+    [targetShelfId]
+  );
 
-      // Also ensure a 'Design' shelf exists if we fallback to it
-      if (selectedShelfId === 'all' && !shelves.find(s => s.id === 'shelf-design')) {
-        setShelves(prev => [...prev, {
-          id: 'shelf-design',
-          name: 'Design & Architecture',
-          volumeCount: 1,
-          dominantColors: ['#F5C71A', '#C9963F', '#F5C71A', '#2C251D'],
-          themeColor: '#F5C71A',
-          texture: 'solid',
-          sortOrder: prev.length + 1
-        }]);
+  const addBook = useCallback(
+    (book: Book) => {
+      setBooks((prev) => {
+        const duplicate = book.isbn && prev.find((b) => b.isbn && b.isbn === book.isbn);
+        if (duplicate) return prev;
+        return [book, ...prev];
+      });
+      setDeletedBookIds((prev) => prev.filter((id) => id !== book.id));
+    },
+    []
+  );
+
+  // Handle Capture from Camera, Upload, Barcode or Demo Sample
+  const handleCapture = useCallback(
+    async (payload: CapturePayload) => {
+      setIsScannerOpen(false);
+
+      if (payload.mode === 'isbn' || payload.mode === 'qr') {
+        if (!payload.barcode) {
+          pushToast({
+            title: 'No code detected',
+            description: 'No barcode was decoded from that frame. Frame the code more tightly and try again.',
+            icon: 'error',
+          });
+          return;
+        }
+
+        setProcessingLabel(payload.mode === 'isbn' ? 'Looking up ISBN' : 'Resolving QR code');
+        setIsProcessing(true);
+        try {
+          const result =
+            payload.mode === 'isbn' ? await lookupByIsbn(payload.barcode) : await lookupFromQrPayload(payload.barcode);
+          const book = bookFromLookup(result, payload.mode);
+          addBook(book);
+          haptic.success();
+          setActiveBookDetail(book);
+          pushToast({ title: 'Book added', description: `${result.title} — ${result.author}`, icon: 'library_add' });
+        } catch (error) {
+          pushToast({
+            title: 'Lookup failed',
+            description: error instanceof Error ? error.message : String(error),
+            icon: 'error',
+          });
+        } finally {
+          setIsProcessing(false);
+        }
+        return;
       }
 
-      setBooks((prev) => [qrBook, ...prev]);
-      haptic.success();
-      setActiveBookDetail(qrBook);
-      return;
-    }
+      // Shelf mode
+      if (payload.sample) {
+        const candidates = buildDemoCandidates(payload.sample.imageUrl, payload.sample.groundTruth);
+        setPendingScanData({ imageUrl: payload.sample.imageUrl, candidates });
+        setProcessingLabel('Analyzing demo shelf');
+        setIsProcessing(true);
+        return;
+      }
 
-    if (scanMode === 'isbn') {
-      const gt = sampleData?.groundTruth?.[0];
-      const ed = gt ? {
-        title: gt.title,
-        author: gt.author,
-        isbn: "",
-        publisher: gt.publisher,
-        year: gt.year,
-        coverUrl: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=300"
-      } : {
-        title: "The Book of Disquiet",
-        author: "Fernando Pessoa",
-        isbn: "978-0141183046",
-        publisher: "Penguin Classics",
-        year: 2002,
-        coverUrl: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=300"
-      };
+      setProcessingLabel('Reading spines with Gemini');
+      setIsProcessing(true);
+      try {
+        const candidates = await recognizeShelf(payload.imageUrl);
+        if (candidates.length === 0) {
+          setIsProcessing(false);
+          pushToast({
+            title: 'No spines detected',
+            description: 'The model could not find any book spines in that photo. Try better lighting or a closer shot.',
+            icon: 'error',
+          });
+          return;
+        }
+        setPendingScanData({ imageUrl: payload.imageUrl, candidates });
+      } catch (error) {
+        setIsProcessing(false);
+        pushToast({
+          title: 'Shelf recognition failed',
+          description: error instanceof Error ? error.message : String(error),
+          icon: 'error',
+        });
+      }
+    },
+    [addBook, bookFromLookup, pushToast]
+  );
 
-      const isbnBook: Book = {
-        id: `isbn-${Date.now()}`,
-        title: ed.title,
-        author: ed.author,
-        isbn: ed.isbn,
-        publisher: ed.publisher,
-        publishYear: ed.year,
-        pageCount: 320,
-        description: `Rapid ISBN scan of ${ed.title} by ${ed.author}.`,
-        coverUrl: ed.coverUrl,
-        spineCropUrl: "",
-        spineColor: "#3A2412",
-        shelfId: selectedShelfId !== 'all' ? selectedShelfId : 'shelf-fiction',
-        status: 'unread',
-        confidence: 'matched',
-        score: 0.99,
-        category: 'ISBN Scan',
-        addedAt: new Date().toISOString(),
-      };
-
-      setBooks((prev) => [isbnBook, ...prev]);
-      haptic.success();
-      setActiveBookDetail(isbnBook);
-      return;
-    }
-
-    const candidates = segmentAndMatchShelf(imageUrl, sampleData?.groundTruth);
-    setPendingScanData({
-      imageUrl,
-      candidates,
-    });
-    setIsProcessing(true);
-  };
-
-  // Complete Processing View and Transition to Review Screen
   const handleProcessingComplete = () => {
     setIsProcessing(false);
     setScanResultsMode(true);
   };
 
-  // Save All Selected Matched Books into Library
   const handleSaveMatchedBooks = (candidatesToSave: SpineCandidate[]) => {
+    const stamp = Date.now().toString(36);
     const newBooks: Book[] = candidatesToSave
-      .filter((c) => c.matchedBook || c.editions[0])
-      .map((c) => {
+      .filter((c) => !c.isDismissed && (c.matchedBook || c.editions[0]))
+      .map((c, index) => {
+        const uniqueId = `scan-${stamp}-${index}-${Math.random().toString(36).slice(2, 7)}`;
         if (c.matchedBook) {
           return {
             ...c.matchedBook,
-            shelfId: selectedShelfId !== 'all' ? selectedShelfId : 'shelf-fiction',
+            id: uniqueId,
+            shelfId: targetShelfId,
+            addedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           };
         }
         const ed = c.editions[0];
         return {
-          id: `scan-${Date.now()}-${c.orderIndex}`,
+          id: uniqueId,
           title: ed.title,
           author: ed.author,
           isbn: ed.isbn,
           publisher: ed.publisher,
           publishYear: ed.year,
-          pageCount: 320,
-          description: `Archival physical print of ${ed.title} by ${ed.author}, published by ${ed.publisher}.`,
+          pageCount: 0,
+          description: ed.description ?? '',
           coverUrl: ed.coverUrl,
           spineCropUrl: c.cropUrl,
           spineColor: c.dominantColor,
-          shelfId: selectedShelfId !== 'all' ? selectedShelfId : 'shelf-fiction',
+          shelfId: targetShelfId,
           status: 'unread',
           confidence: c.confidence,
           score: c.score,
           category: 'Physical Scan',
           addedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
           proofOfCaptureUrl: c.cropUrl,
         };
       });
@@ -452,192 +598,176 @@ export default function App() {
     setPendingScanData(null);
     setScanResultsMode(false);
     setActiveTab('library');
+    haptic.success();
+    pushToast({
+      title: 'Volumes cataloged',
+      description: `${newBooks.length} book${newBooks.length === 1 ? '' : 's'} added to your library.`,
+      icon: 'library_add',
+    });
   };
 
-  // Handle Edition Selection in Review Sheet
   const handleSelectEdition = (candidateId: string, edition: EditionOption) => {
     if (!pendingScanData) return;
     const updated = pendingScanData.candidates.map((c) => {
-      if (c.id === candidateId) {
-        return {
-          ...c,
+      if (c.id !== candidateId) return c;
+      return {
+        ...c,
+        confidence: 'matched' as const,
+        score: Math.max(c.score, edition.score),
+        matchedBook: {
+          id: `resolved-${Date.now().toString(36)}-${c.orderIndex}`,
+          title: edition.title,
+          author: edition.author,
+          isbn: edition.isbn,
+          publisher: edition.publisher,
+          publishYear: edition.year,
+          pageCount: 0,
+          description: edition.description ?? '',
+          coverUrl: edition.coverUrl,
+          spineCropUrl: c.cropUrl,
+          spineColor: c.dominantColor,
+          shelfId: targetShelfId,
+          status: 'unread' as const,
           confidence: 'matched' as const,
-          score: 0.96,
-          matchedBook: {
-            id: `resolved-${Date.now()}-${c.orderIndex}`,
-            title: edition.title,
-            author: edition.author,
-            isbn: edition.isbn,
-            publisher: edition.publisher,
-            publishYear: edition.year,
-            pageCount: 300,
-            description: edition.description || `Resolved physical edition of ${edition.title} by ${edition.author}.`,
-            coverUrl: edition.coverUrl,
-            spineCropUrl: c.cropUrl,
-            spineColor: c.dominantColor,
-            shelfId: 'shelf-fiction',
-            status: 'unread' as const,
-            confidence: 'matched' as const,
-            score: 0.96,
-            category: 'Resolved Volume',
-            addedAt: new Date().toISOString(),
-            proofOfCaptureUrl: c.cropUrl,
-          },
-        };
-      }
-      return c;
+          score: Math.max(c.score, edition.score),
+          category: 'Resolved Volume',
+          addedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          proofOfCaptureUrl: c.cropUrl,
+        },
+      };
     });
 
-    setPendingScanData({
-      ...pendingScanData,
-      candidates: updated,
-    });
+    setPendingScanData({ ...pendingScanData, candidates: updated });
     setActiveReviewCandidate(null);
   };
 
-  // Handle Manual Book Resolution
-  const handleSelectManualResult = (result: {
-    title: string;
-    author: string;
-    isbn: string;
-    publisher: string;
-    publishYear: number;
-    coverUrl: string;
-  }) => {
-    if (!manualSearchCandidateId || !pendingScanData) return;
+  const handleSelectManualResult = (result: BookLookupResult) => {
+    // Manual add from the library toolbar (no scan in progress).
+    if (!manualSearchCandidateId || !pendingScanData) {
+      const book = bookFromLookup(result, 'manual');
+      addBook(book);
+      haptic.success();
+      pushToast({ title: 'Book added', description: `${result.title} — ${result.author}`, icon: 'library_add' });
+      setIsManualAddOpen(false);
+      return;
+    }
 
     const updated = pendingScanData.candidates.map((c) => {
-      if (c.id === manualSearchCandidateId) {
-        return {
-          ...c,
+      if (c.id !== manualSearchCandidateId) return c;
+      return {
+        ...c,
+        confidence: 'matched' as const,
+        score: 0.99,
+        matchedBook: {
+          id: `manual-${Date.now().toString(36)}-${c.orderIndex}`,
+          title: result.title,
+          author: result.author,
+          isbn: result.isbn,
+          publisher: result.publisher,
+          publishYear: result.publishYear,
+          pageCount: result.pageCount,
+          description: result.description ?? '',
+          coverUrl: result.coverUrl,
+          spineCropUrl: c.cropUrl,
+          spineColor: c.dominantColor,
+          shelfId: targetShelfId,
+          status: 'unread' as const,
           confidence: 'matched' as const,
           score: 0.99,
-          matchedBook: {
-            id: `manual-${Date.now()}-${c.orderIndex}`,
-            title: result.title,
-            author: result.author,
-            isbn: result.isbn,
-            publisher: result.publisher,
-            publishYear: result.publishYear,
-            pageCount: 320,
-            description: `Manual catalog match for ${result.title} by ${result.author}.`,
-            coverUrl: result.coverUrl,
-            spineCropUrl: c.cropUrl,
-            spineColor: c.dominantColor,
-            shelfId: 'shelf-fiction',
-            status: 'unread' as const,
-            confidence: 'matched' as const,
-            score: 0.99,
-            category: 'Manual Identifier',
-            addedAt: new Date().toISOString(),
-            proofOfCaptureUrl: c.cropUrl,
-          },
-        };
-      }
-      return c;
+          category: 'Manual Identifier',
+          addedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          proofOfCaptureUrl: c.cropUrl,
+        },
+      };
     });
 
-    setPendingScanData({
-      ...pendingScanData,
-      candidates: updated,
-    });
+    setPendingScanData({ ...pendingScanData, candidates: updated });
     setManualSearchCandidateId(null);
   };
 
-  // Mark Candidate as Not a Book / Dismiss Noise
   const handleMarkNotBook = (candidateId: string) => {
     if (!pendingScanData) return;
-    const updated = pendingScanData.candidates.map((c) => {
-      if (c.id === candidateId) {
-        return { ...c, isDismissed: true };
-      }
-      return c;
-    });
     setPendingScanData({
       ...pendingScanData,
-      candidates: updated,
+      candidates: pendingScanData.candidates.map((c) => (c.id === candidateId ? { ...c, isDismissed: true } : c)),
     });
     setActiveReviewCandidate(null);
   };
 
-  // Update Status, Progress & Shelf
+  /** Applies a partial update to a book and mirrors it into the open detail modal. */
+  const updateBook = useCallback((bookId: string, patch: (book: Book) => Partial<Book>) => {
+    const stamp = new Date().toISOString();
+    setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, ...patch(b), updatedAt: stamp } : b)));
+    setActiveBookDetail((prev) => (prev && prev.id === bookId ? { ...prev, ...patch(prev), updatedAt: stamp } : prev));
+  }, []);
+
   const handleUpdateStatus = (bookId: string, status: ReadingStatus) => {
     const now = new Date().toISOString();
-    setBooks((prev) =>
-      prev.map((b) => {
-        if (b.id === bookId) {
-          const autoProgress =
-            status === 'read' ? 100 : status === 'unread' ? 0 : b.progress ?? 25;
-          const isNewlyRead = status === 'read' && b.status !== 'read';
-          const readAt = status === 'read' ? (isNewlyRead ? now : (b.readAt || now)) : undefined;
-          const readHistory = isNewlyRead ? [...(b.readHistory || []), now] : b.readHistory;
-          return { ...b, status, progress: autoProgress, readAt, readHistory };
-        }
-        return b;
-      })
-    );
-    if (activeBookDetail && activeBookDetail.id === bookId) {
-      const autoProgress =
-        status === 'read' ? 100 : status === 'unread' ? 0 : activeBookDetail.progress ?? 25;
-      const isNewlyRead = status === 'read' && activeBookDetail.status !== 'read';
-      const readAt = status === 'read' ? (isNewlyRead ? now : (activeBookDetail.readAt || now)) : undefined;
-      const readHistory = isNewlyRead ? [...(activeBookDetail.readHistory || []), now] : activeBookDetail.readHistory;
-      setActiveBookDetail({ ...activeBookDetail, status, progress: autoProgress, readAt, readHistory });
-    }
+    updateBook(bookId, (b) => {
+      const autoProgress = status === 'read' ? 100 : status === 'unread' ? 0 : b.progress ?? 25;
+      const isNewlyRead = status === 'read' && b.status !== 'read';
+      return {
+        status,
+        progress: autoProgress,
+        currentPage: b.pageCount ? Math.round((b.pageCount * autoProgress) / 100) : b.currentPage,
+        readAt: status === 'read' ? (isNewlyRead ? now : b.readAt || now) : undefined,
+        readHistory: isNewlyRead ? [...(b.readHistory || []), now] : b.readHistory,
+      };
+    });
   };
 
   const handleUpdateProgress = (bookId: string, progress: number) => {
     const clamped = Math.max(0, Math.min(100, Math.round(progress)));
-    const derivedStatus: ReadingStatus =
-      clamped === 100 ? 'read' : clamped > 0 ? 'reading' : 'unread';
+    const derivedStatus: ReadingStatus = clamped === 100 ? 'read' : clamped > 0 ? 'reading' : 'unread';
     const now = new Date().toISOString();
 
-    setBooks((prev) =>
-      prev.map((b) => {
-        if (b.id === bookId) {
-          const isNewlyRead = derivedStatus === 'read' && b.status !== 'read';
-          return {
-            ...b,
-            progress: clamped,
-            status: derivedStatus,
-            readAt: derivedStatus === 'read' ? (isNewlyRead ? now : (b.readAt || now)) : undefined,
-            readHistory: isNewlyRead ? [...(b.readHistory || []), now] : b.readHistory,
-          };
-        }
-        return b;
-      })
-    );
-    if (activeBookDetail && activeBookDetail.id === bookId) {
-      const isNewlyRead = derivedStatus === 'read' && activeBookDetail.status !== 'read';
-      setActiveBookDetail({
-        ...activeBookDetail,
+    updateBook(bookId, (b) => {
+      const isNewlyRead = derivedStatus === 'read' && b.status !== 'read';
+      return {
         progress: clamped,
+        currentPage: b.pageCount ? Math.round((b.pageCount * clamped) / 100) : b.currentPage,
         status: derivedStatus,
-        readAt: derivedStatus === 'read' ? (isNewlyRead ? now : (activeBookDetail.readAt || now)) : undefined,
-        readHistory: isNewlyRead ? [...(activeBookDetail.readHistory || []), now] : activeBookDetail.readHistory,
-      });
-    }
+        readAt: derivedStatus === 'read' ? (isNewlyRead ? now : b.readAt || now) : undefined,
+        readHistory: isNewlyRead ? [...(b.readHistory || []), now] : b.readHistory,
+      };
+    });
   };
 
-  const handleUpdateShelf = (bookId: string, shelfId: string) => {
-    setBooks((prev) =>
-      prev.map((b) => (b.id === bookId ? { ...b, shelfId } : b))
-    );
-    if (activeBookDetail && activeBookDetail.id === bookId) {
-      setActiveBookDetail({ ...activeBookDetail, shelfId });
+  /** Page-level progress; percentage is derived so both stay consistent. */
+  const handleUpdateCurrentPage = (bookId: string, page: number) => {
+    const book = books.find((b) => b.id === bookId);
+    if (!book) return;
+    if (!book.pageCount) {
+      pushToast({
+        title: 'Page count unknown',
+        description: 'Set the total page count for this book before tracking pages.',
+        icon: 'error',
+      });
+      return;
     }
+    const clampedPage = Math.max(0, Math.min(book.pageCount, Math.round(page)));
+    handleUpdateProgress(bookId, (clampedPage / book.pageCount) * 100);
   };
+
+  const handleUpdatePageCount = (bookId: string, pageCount: number) => {
+    const clamped = Math.max(0, Math.round(pageCount));
+    updateBook(bookId, (b) => ({
+      pageCount: clamped,
+      currentPage: clamped ? Math.round((clamped * (b.progress ?? 0)) / 100) : undefined,
+    }));
+  };
+
+  const handleUpdateShelf = (bookId: string, shelfId: string) => updateBook(bookId, () => ({ shelfId }));
 
   const handleUpdateCoordinate = (bookId: string, shelfId: string, x: number | undefined, y: number | undefined) => {
     setShelves((prev) =>
       prev.map((s) => {
         if (s.id !== shelfId) return s;
         const newCoords = { ...(s.coordinates || {}) };
-        if (x === undefined || y === undefined) {
-          delete newCoords[bookId];
-        } else {
-          newCoords[bookId] = { x, y };
-        }
+        if (x === undefined || y === undefined) delete newCoords[bookId];
+        else newCoords[bookId] = { x, y };
         return { ...s, coordinates: newCoords };
       })
     );
@@ -645,12 +775,15 @@ export default function App() {
 
   const handleDeleteBook = (bookId: string) => {
     setBooks((prev) => prev.filter((b) => b.id !== bookId));
+    setDeletedBookIds((prev) => (prev.includes(bookId) ? prev : [...prev, bookId]));
+    setCompareQueue((queue) => queue.filter((b) => b.id !== bookId));
     setActiveBookDetail(null);
+    pushToast({ title: 'Volume removed', description: 'The book was deleted from your library.', icon: 'delete' });
   };
 
   const handleCreateShelf = (name: string, color?: string, texture?: string) => {
     const newShelf: Shelf = {
-      id: `shelf-${Date.now()}`,
+      id: `shelf-${Date.now().toString(36)}`,
       name,
       volumeCount: 0,
       dominantColors: color ? [color, color, color, color] : ['#C9963F', '#304E2E', '#2C251D', '#8B2323'],
@@ -659,19 +792,46 @@ export default function App() {
       sortOrder: shelves.length + 1,
     };
     setShelves((prev) => [...prev, newShelf]);
+    haptic.mediumImpact();
+  };
+
+  const handleDeleteShelf = (shelfId: string) => {
+    const orphanCount = books.filter((b) => b.shelfId === shelfId).length;
+    const fallbackShelf = shelves.find((s) => s.id !== shelfId);
+
+    if (!fallbackShelf && orphanCount > 0) {
+      pushToast({
+        title: 'Cannot delete the last shelf',
+        description: 'Create another shelf first so its books have somewhere to go.',
+        icon: 'error',
+      });
+      return;
+    }
+
+    if (orphanCount > 0 && fallbackShelf) {
+      setBooks((prev) => prev.map((b) => (b.shelfId === shelfId ? { ...b, shelfId: fallbackShelf.id } : b)));
+    }
+    setShelves((prev) => prev.filter((s) => s.id !== shelfId));
+    setDeletedShelfIds((prev) => (prev.includes(shelfId) ? prev : [...prev, shelfId]));
+    if (selectedShelfId === shelfId) setSelectedShelfId('all');
+    pushToast({
+      title: 'Shelf removed',
+      description: orphanCount > 0 ? `${orphanCount} volume(s) moved to "${fallbackShelf?.name}".` : 'Empty shelf deleted.',
+      icon: 'delete',
+    });
   };
 
   const handleAutoSortGenres = () => {
-    setShelves(prevShelves => {
-      const categories = new Set<string>(books.map(b => b.category).filter((c): c is string => !!c));
+    const categories = Array.from(
+      new Set(books.map((b) => b.category).filter((c): c is string => Boolean(c && c.trim())))
+    );
+
+    setShelves((prevShelves) => {
       const newShelves = [...prevShelves];
-      let createdCount = 0;
-      
-      categories.forEach(category => {
-        if (!newShelves.find(s => s.name.toLowerCase() === category.toLowerCase())) {
-          createdCount++;
+      categories.forEach((category, index) => {
+        if (!newShelves.find((s) => s.name.toLowerCase() === category.toLowerCase())) {
           newShelves.push({
-            id: `shelf-auto-${Date.now()}-${createdCount}`,
+            id: `shelf-auto-${Date.now().toString(36)}-${index}`,
             name: category,
             volumeCount: 0,
             dominantColors: ['#C9963F', '#304E2E', '#2C251D', '#8B2323'],
@@ -679,66 +839,56 @@ export default function App() {
           });
         }
       });
-      
-      setBooks(prevBooks => prevBooks.map(book => {
-        if (book.category) {
-          const targetShelf = newShelves.find(s => s.name.toLowerCase() === book.category.toLowerCase());
-          if (targetShelf && book.shelfId !== targetShelf.id) {
-            return { ...book, shelfId: targetShelf.id };
-          }
-        }
-        return book;
-      }));
-      
+
+      setBooks((prevBooks) =>
+        prevBooks.map((book) => {
+          if (!book.category) return book;
+          const targetShelf = newShelves.find((s) => s.name.toLowerCase() === book.category.toLowerCase());
+          return targetShelf && book.shelfId !== targetShelf.id ? { ...book, shelfId: targetShelf.id } : book;
+        })
+      );
+
       return newShelves;
     });
+
+    pushToast({ title: 'Shelves reorganized', description: 'Books were grouped by category.', icon: 'auto_awesome' });
   };
 
   const handleUpdateShelfData = (shelfId: string, updates: Partial<Shelf>) => {
     setShelves((prev) => prev.map((s) => (s.id === shelfId ? { ...s, ...updates } : s)));
   };
 
-  const handleUpdateNotes = (bookId: string, notes: string) => {
-    setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, notes } : b)));
-    if (activeBookDetail && activeBookDetail.id === bookId) {
-      setActiveBookDetail({ ...activeBookDetail, notes });
-    }
-  };
+  const handleUpdateNotes = (bookId: string, notes: string) => updateBook(bookId, () => ({ notes }));
+  const handleUpdateQuotes = (bookId: string, quotes: string[]) => updateBook(bookId, () => ({ quotes }));
+  const handleUpdateTags = (bookId: string, tags: string[]) => updateBook(bookId, () => ({ tags }));
+  const handleUpdateRating = (bookId: string, rating: number | undefined) => updateBook(bookId, () => ({ rating }));
 
-  const handleUpdateQuotes = (bookId: string, quotes: string[]) => {
-    setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, quotes } : b)));
-    if (activeBookDetail && activeBookDetail.id === bookId) {
-      setActiveBookDetail({ ...activeBookDetail, quotes });
-    }
-  };
-
-  const handleUpdateLending = (bookId: string, lentTo?: string, lentAt?: string) => {
-    setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, lentTo, lentAt } : b)));
-    if (activeBookDetail && activeBookDetail.id === bookId) {
-      setActiveBookDetail({ ...activeBookDetail, lentTo, lentAt });
-    }
-  };
-
-  const handleUpdateTags = (bookId: string, tags: string[]) => {
-    setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, tags } : b)));
-    if (activeBookDetail && activeBookDetail.id === bookId) {
-      setActiveBookDetail({ ...activeBookDetail, tags });
-    }
-  };
+  const handleUpdateLending = (bookId: string, lentTo?: string, lentAt?: string, lentDueAt?: string) =>
+    updateBook(bookId, () => ({ lentTo, lentAt, lentDueAt }));
 
   const handleAddReadingSession = (bookId: string, durationSeconds: number) => {
     const newSession = { date: new Date().toISOString(), durationSeconds };
-    setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, readingSessions: [...(b.readingSessions || []), newSession] } : b)));
-    if (activeBookDetail && activeBookDetail.id === bookId) {
-      setActiveBookDetail({ ...activeBookDetail, readingSessions: [...(activeBookDetail.readingSessions || []), newSession] });
-    }
+    updateBook(bookId, (b) => ({ readingSessions: [...(b.readingSessions || []), newSession] }));
   };
 
-  const handleReorderShelves = (newShelves: Shelf[]) => {
-    setShelves(newShelves);
-  };
+  const handleReorderShelves = (newShelves: Shelf[]) => setShelves(newShelves);
 
-  // If in Scan Review Mode (Image 12), show the full results review interface
+  // Overdue lending reminders
+  useEffect(() => {
+    const overdue = books.filter(
+      (b) => b.lentTo && b.lentDueAt && new Date(b.lentDueAt).getTime() < Date.now()
+    );
+    if (overdue.length === 0) return;
+    pushToast({
+      title: 'Lent books overdue',
+      description: overdue.map((b) => `${b.title} (${b.lentTo})`).join(', '),
+      icon: 'handshake',
+    });
+    // Only fire once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Scan review screen
   if (scanResultsMode && pendingScanData) {
     return (
       <div className="min-h-screen bg-[#12100E] text-[#F4EFE6]">
@@ -763,7 +913,6 @@ export default function App() {
           }}
         />
 
-        {/* Review Bottom Sheet (Image 10) */}
         <ReviewMatchSheet
           candidate={activeReviewCandidate}
           isOpen={!!activeReviewCandidate}
@@ -774,17 +923,18 @@ export default function App() {
             setManualSearchCandidateId(id);
           }}
           onMarkNotBook={handleMarkNotBook}
-          onEnhanceWithAI={async () => {
-            await new Promise((r) => setTimeout(r, 1200));
-          }}
         />
 
-        {/* Manual Search Sheet (Image 5) */}
         <ManualSearchSheet
           isOpen={!!manualSearchCandidateId}
           onClose={() => setManualSearchCandidateId(null)}
           onSelectResult={handleSelectManualResult}
+          initialQuery={
+            pendingScanData.candidates.find((c) => c.id === manualSearchCandidateId)?.rawTextForward ?? ''
+          }
         />
+
+        <ToastContainer toasts={toasts} removeToast={removeToast} />
       </div>
     );
   }
@@ -792,8 +942,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#12100E] text-[#F4EFE6] flex flex-col antialiased selection:bg-[#C9963F] selection:text-[#12100E]">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-      
-      {/* Top Header */}
+
       <NavigationHeader
         currentView={activeTab}
         books={books}
@@ -802,15 +951,18 @@ export default function App() {
         onOpenSpikeDashboard={() => setIsSpikeDashboardOpen(true)}
         onOpenOnboarding={() => setIsOnboardingOpen(true)}
         isAuthenticated={!!currentUser}
-        onLogin={loginWithGoogle}
+        isCloudAvailable={isFirebaseConfigured}
+        userName={currentUser?.displayName ?? currentUser?.email ?? undefined}
+        userPhotoUrl={currentUser?.photoURL ?? undefined}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
         onSync={handleSyncToCloud}
         isSyncing={isSyncing}
       />
 
-      {/* Main Content Router */}
       <div className="flex-1 pb-24 md:pb-12">
         {activeTab === 'shelves' ? (
-            <YourShelvesView
+          <YourShelvesView
             shelves={shelves}
             books={books}
             onSelectShelf={(shelfId) => {
@@ -819,6 +971,7 @@ export default function App() {
             }}
             onCreateShelf={handleCreateShelf}
             onUpdateShelf={handleUpdateShelfData}
+            onDeleteShelf={handleDeleteShelf}
             onReorderShelves={handleReorderShelves}
             onAutoSort={handleAutoSortGenres}
             onShareShelf={(shelf) => {
@@ -828,22 +981,20 @@ export default function App() {
           />
         ) : activeTab === 'shared' ? (
           <div className="p-4 sm:p-6 max-w-[1200px] mx-auto w-full">
-            <SharedListsView books={books} currentUser={currentUser} />
+            <SharedListsView books={books} currentUser={currentUser} onRequestLogin={handleLogin} />
           </div>
         ) : activeTab === 'eval' ? (
           <div className="p-4 sm:p-6 max-w-[1200px] mx-auto w-full">
             <SpikeAccuracyDashboard
               onClose={() => setActiveTab('library')}
-              onTestSampleInScanner={(sample) => {
+              onTestSampleInScanner={(sample: SpikeSample) => {
                 setActiveTab('library');
-                handleCapture(sample.imageUrl, sample);
+                void handleCapture({ imageUrl: sample.imageUrl, mode: 'shelf', sample });
               }}
             />
           </div>
         ) : (
-          /* Primary Library View */
           <main className="max-w-[1200px] mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 space-y-7">
-            {/* Signature Hero Multicolored ShelfStrip (Image 3 / Design System) */}
             <section className="space-y-2.5">
               <div className="flex justify-between items-end">
                 <div>
@@ -856,6 +1007,17 @@ export default function App() {
                 </div>
 
                 <div className="hidden sm:flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      haptic.lightImpact();
+                      setIsManualAddOpen(true);
+                    }}
+                    className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add</span>
+                    <span>ADD BY SEARCH</span>
+                  </button>
+
                   <button
                     onClick={() => {
                       haptic.lightImpact();
@@ -881,32 +1043,27 @@ export default function App() {
                 </div>
               </div>
 
-              {/* ShelfStrip Component */}
               <ShelfStrip
                 colors={allSpineColors}
                 variant="hero"
                 height={76}
-                onBarClick={(idx) => {
+                onBarClick={(idx: number) => {
                   haptic.selectionClick();
-                  if (books[idx]) {
-                    setActiveBookDetail(books[idx]);
-                  }
+                  if (books[idx]) setActiveBookDetail(books[idx]);
                 }}
               />
             </section>
 
-            {/* Annual Progress Bar */}
             <LibraryAnnualProgressBar books={books} goals={readingGoals} />
 
-            {/* Dashboards */}
             <div className="space-y-4">
               <QueuedForReading books={books} onSelectBook={setActiveBookDetail} />
-              
+
               <DailyQuoteDashboard />
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ReadingCalendarWidget 
-                  books={books} 
+                <ReadingCalendarWidget
+                  books={books}
                   reminderEnabled={isReminderEnabled}
                   onToggleReminder={setIsReminderEnabled}
                 />
@@ -914,6 +1071,7 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <MonthlyGoalDashboard books={books} monthlyGoal={monthlyGoal} onUpdateGoal={setMonthlyGoal} />
                 <ReadingGoalsDashboard
                   books={books}
                   goals={readingGoals}
@@ -921,27 +1079,29 @@ export default function App() {
                 />
                 <LibraryGrowthDashboard books={books} />
                 <ReadingAnalyticsDashboard books={books} />
-                <GamificationBadges books={books} />
               </div>
 
-              <RecommendedBooks 
-                books={books} 
+              <GamificationBadges books={books} />
+
+              <RecommendedBooks
+                books={books}
                 onAddBook={(newBook) => {
                   const bookToAdd: Book = {
-                    ...newBook,
-                    id: `rec-${Date.now()}`,
+                    ...(newBook as Book),
+                    id: `rec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+                    shelfId: targetShelfId,
                     addedAt: new Date().toISOString(),
-                  } as Book;
-                  setBooks(prev => [bookToAdd, ...prev]);
+                    updatedAt: new Date().toISOString(),
+                  };
+                  addBook(bookToAdd);
                   haptic.success();
                 }}
               />
             </div>
 
-            {/* Filter, Search & Shelf Strip Selector Toolbar */}
+            {/* Filter, Search & Shelf Selector Toolbar */}
             <section className="bg-[#1C1916] p-4 rounded-2xl hairline-border space-y-3.5">
               <div className="flex flex-col sm:flex-row gap-3">
-                {/* Search Bar */}
                 <div className="relative flex-1">
                   <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#A79C8C] text-[19px]">
                     search
@@ -960,19 +1120,20 @@ export default function App() {
                         setSearchQuery('');
                       }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A79C8C] hover:text-[#F4EFE6]"
+                      aria-label="Clear search"
                     >
                       <span className="material-symbols-outlined text-[16px]">cancel</span>
                     </button>
                   )}
                 </div>
 
-                {/* Shelves Selector */}
                 <select
                   value={selectedShelfId}
                   onChange={(e) => {
                     haptic.selectionClick();
                     setSelectedShelfId(e.target.value);
                   }}
+                  aria-label="Filter by shelf"
                   className="bg-[#12100E] text-[#F4EFE6] hairline-border text-[12px] font-mono-ibm rounded-xl px-3 py-2 focus:outline-none focus:border-[#C9963F]"
                 >
                   <option value="all">All Shelves ({books.length})</option>
@@ -984,11 +1145,8 @@ export default function App() {
                 </select>
               </div>
 
-              {/* Status Chips Filter */}
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar font-mono-ibm text-[11px] pt-1">
-                <span className="text-[#A79C8C] text-[10px] uppercase tracking-wider mr-1 shrink-0">
-                  STATUS:
-                </span>
+                <span className="text-[#A79C8C] text-[10px] uppercase tracking-wider mr-1 shrink-0">STATUS:</span>
                 {(['all', 'unread', 'reading', 'read'] as const).map((st) => (
                   <button
                     key={st}
@@ -1007,11 +1165,8 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Smart Filters */}
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar font-mono-ibm text-[11px] pt-1 border-t border-[#3A332A]/50 mt-1">
-                <span className="text-[#A79C8C] text-[10px] uppercase tracking-wider mr-1 shrink-0 mt-2">
-                  SMART:
-                </span>
+                <span className="text-[#A79C8C] text-[10px] uppercase tracking-wider mr-1 shrink-0 mt-2">SMART:</span>
                 <div className="flex items-center gap-1.5 mt-2">
                   {(['none', 'recently_added', 'high_priority', 'abandoned'] as const).map((filterId) => (
                     <button
@@ -1041,22 +1196,35 @@ export default function App() {
                   <button
                     onClick={() => {
                       haptic.lightImpact();
-                      setIsCompareMode(!isCompareMode);
-                      if (isCompareMode) setCompareQueue([]);
+                      if (isCompareMode) exitCompareMode();
+                      else setIsCompareMode(true);
                     }}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${isCompareMode ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#12100E] text-[#A79C8C] hover:text-[#F4EFE6] border border-[#3A332A]'}`}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
+                      isCompareMode
+                        ? 'bg-[#C9963F] text-[#12100E] font-bold'
+                        : 'bg-[#12100E] text-[#A79C8C] hover:text-[#F4EFE6] border border-[#3A332A]'
+                    }`}
                     title="Compare Books"
                   >
                     <span className="material-symbols-outlined text-[14px]">compare_arrows</span>
-                    <span className="hidden sm:inline">{isCompareMode ? (compareQueue.length > 0 ? `SELECT 2ND (${compareQueue.length}/2)` : 'SELECT 2 BOOKS') : 'COMPARE'}</span>
+                    <span className="hidden sm:inline">
+                      {isCompareMode
+                        ? compareQueue.length > 0
+                          ? `SELECT 2ND (${compareQueue.length}/2)`
+                          : 'SELECT 2 BOOKS'
+                        : 'COMPARE'}
+                    </span>
                   </button>
+
                   <div className="flex items-center bg-[#12100E] rounded-lg p-0.5 border border-[#3A332A]">
                     <button
                       onClick={() => {
                         haptic.selectionClick();
                         setViewMode('list');
                       }}
-                      className={`p-1 rounded ${viewMode === 'list' ? 'bg-[#2C251D] text-[#C9963F]' : 'text-[#A79C8C] hover:text-[#F4EFE6]'} transition-colors`}
+                      className={`p-1 rounded ${
+                        viewMode === 'list' ? 'bg-[#2C251D] text-[#C9963F]' : 'text-[#A79C8C] hover:text-[#F4EFE6]'
+                      } transition-colors`}
                       title="List View"
                     >
                       <span className="material-symbols-outlined text-[16px] block">view_list</span>
@@ -1066,36 +1234,38 @@ export default function App() {
                         haptic.selectionClick();
                         setViewMode('gallery');
                       }}
-                      className={`p-1 rounded ${viewMode === 'gallery' ? 'bg-[#2C251D] text-[#C9963F]' : 'text-[#A79C8C] hover:text-[#F4EFE6]'} transition-colors`}
+                      className={`p-1 rounded ${
+                        viewMode === 'gallery' ? 'bg-[#2C251D] text-[#C9963F]' : 'text-[#A79C8C] hover:text-[#F4EFE6]'
+                      } transition-colors`}
                       title="Gallery View"
                     >
                       <span className="material-symbols-outlined text-[16px] block">grid_view</span>
                     </button>
                   </div>
+
                   <div className="flex items-center gap-2">
                     <span>SORT:</span>
                     <select
                       value={sortMode}
                       onChange={(e) => {
                         haptic.selectionClick();
-                        setSortMode(e.target.value as any);
+                        setSortMode(e.target.value as typeof sortMode);
                       }}
+                      aria-label="Sort books"
                       className="bg-transparent text-[#F4EFE6] focus:outline-none cursor-pointer"
                     >
-                    <option value="physical" className="bg-[#1C1916]">PHYSICAL ORDER</option>
-                    <option value="recent" className="bg-[#1C1916]">MOST RECENTLY READ</option>
-                    <option value="author" className="bg-[#1C1916]">AUTHOR (A-Z)</option>
-                    <option value="title" className="bg-[#1C1916]">TITLE (A-Z)</option>
-                  </select>
-                </div>
+                      <option value="physical" className="bg-[#1C1916]">PHYSICAL ORDER</option>
+                      <option value="recent" className="bg-[#1C1916]">MOST RECENTLY READ</option>
+                      <option value="author" className="bg-[#1C1916]">AUTHOR (A-Z)</option>
+                      <option value="title" className="bg-[#1C1916]">TITLE (A-Z)</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
               {filteredBooks.length === 0 ? (
                 <div className="bg-[#1C1916] rounded-2xl p-12 text-center hairline-border flex flex-col items-center justify-center space-y-4">
-                  <span className="material-symbols-outlined text-5xl text-[#3A332A]">
-                    shelves
-                  </span>
+                  <span className="material-symbols-outlined text-5xl text-[#3A332A]">shelves</span>
                   <div>
                     <h3 className="font-serif-literata text-[20px] text-[#F4EFE6] font-semibold">
                       No volumes found matching filter
@@ -1104,112 +1274,100 @@ export default function App() {
                       Try clearing search parameters or point your camera at a new bookshelf.
                     </p>
                   </div>
-                  <button
-                    onClick={() => setIsScannerOpen(true)}
-                    className="px-5 py-2.5 bg-[#C9963F] text-[#12100E] font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider shadow-lg flex items-center gap-2"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">photo_camera</span>
-                    <span>Scan New Shelf</span>
-                  </button>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <button
+                      onClick={() => setIsScannerOpen(true)}
+                      className="px-5 py-2.5 bg-[#C9963F] text-[#12100E] font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider shadow-lg flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">photo_camera</span>
+                      <span>Scan New Shelf</span>
+                    </button>
+                    <button
+                      onClick={() => setIsManualAddOpen(true)}
+                      className="px-5 py-2.5 bg-[#262119] text-[#C9963F] hairline-border font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">search</span>
+                      <span>Add by search</span>
+                    </button>
+                  </div>
                 </div>
               ) : viewMode === 'gallery' ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {filteredBooks.map((book, idx) => {
-                    const isSelected = isCompareMode && compareQueue.some(b => b.id === book.id);
+                    const isSelected = isCompareMode && compareQueue.some((b) => b.id === book.id);
                     return (
-                    <motion.div
-                      key={book.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: Math.min(idx * 0.05, 0.5) }}
-                      onClick={() => handleBookClick(book)}
-                      className={`group relative cursor-pointer aspect-[2/3] rounded-xl overflow-hidden bg-[#1C1916] border shadow-md hover:shadow-xl transition-all ${isSelected ? 'border-[#C9963F] ring-2 ring-[#C9963F]' : 'border-[#3A332A] hover:border-[#C9963F]'}`}
-                    >
-                      {book.coverUrl ? (
-                        <img 
-                          src={book.coverUrl} 
-                          alt={book.title} 
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center" style={{ backgroundColor: book.spineColor || '#2C251D' }}>
-                          <span className="font-serif-literata text-[#F4EFE6] font-bold text-sm line-clamp-3">{book.title}</span>
-                          <span className="font-mono-ibm text-xs text-[#F4EFE6]/70 mt-2 line-clamp-1">{book.author}</span>
+                      <motion.div
+                        key={book.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: Math.min(idx * 0.05, 0.5) }}
+                        onClick={() => handleBookClick(book)}
+                        className={`group relative cursor-pointer aspect-[2/3] rounded-xl overflow-hidden bg-[#1C1916] border shadow-md hover:shadow-xl transition-all ${
+                          isSelected ? 'border-[#C9963F] ring-2 ring-[#C9963F]' : 'border-[#3A332A] hover:border-[#C9963F]'
+                        }`}
+                      >
+                        {book.coverUrl ? (
+                          <img
+                            src={book.coverUrl}
+                            alt={book.title}
+                            loading="lazy"
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div
+                            className="w-full h-full flex flex-col items-center justify-center p-4 text-center"
+                            style={{ backgroundColor: book.spineColor || '#2C251D' }}
+                          >
+                            <span className="font-serif-literata text-[#F4EFE6] font-bold text-sm line-clamp-3">
+                              {book.title}
+                            </span>
+                            <span className="font-mono-ibm text-xs text-[#F4EFE6]/70 mt-2 line-clamp-1">{book.author}</span>
+                          </div>
+                        )}
+                        <div
+                          className={`absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity flex items-end p-3 ${
+                            isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                          }`}
+                        >
+                          <div className="w-full">
+                            <h4 className="text-[#F4EFE6] font-serif-literata text-sm font-semibold line-clamp-1">
+                              {book.title}
+                            </h4>
+                            <p className="text-[#A79C8C] font-mono-ibm text-[10px] line-clamp-1">{book.author}</p>
+                          </div>
                         </div>
-                      )}
-                      <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity flex items-end p-3 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                         <div className="w-full">
-                           <h4 className="text-[#F4EFE6] font-serif-literata text-sm font-semibold line-clamp-1">{book.title}</h4>
-                           <p className="text-[#A79C8C] font-mono-ibm text-[10px] line-clamp-1">{book.author}</p>
-                         </div>
-                      </div>
-                      {isSelected && (
-                        <div className="absolute top-2 right-2 bg-[#C9963F] text-[#12100E] rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
-                          <span className="material-symbols-outlined text-[16px] font-bold">check</span>
-                        </div>
-                      )}
-                    </motion.div>
-                  )})}
+                        {isSelected && (
+                          <div className="absolute top-2 right-2 bg-[#C9963F] text-[#12100E] rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
+                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredBooks.map((book, idx) => (
-                              <div key={book.id} className="relative">
+                    <div key={book.id} className="relative">
                       <BookCard
-                      key={book.id}
-                      book={book}
-                      index={idx}
-                      onClick={() => handleBookClick(book)}
-                      onResolve={(e) => {
-                        e.stopPropagation();
-                        // Open review match for this book
-                        setActiveReviewCandidate({
-                          id: `book-res-${book.id}`,
-                          orderIndex: 0,
-                          bbox: { x: 10, y: 10, width: 20, height: 80 },
-                          rawTextForward: `${book.title} ${book.author}`,
-                          rawTextReverse: `${book.author} ${book.title}`,
-                          dominantColor: book.spineColor,
-                          confidence: 'review',
-                          score: book.score,
-                          cropUrl: book.spineCropUrl,
-                          matchedBook: book,
-                          editions: [
-                            {
-                              id: `ed-r-1`,
-                              title: book.title,
-                              author: book.author,
-                              year: book.publishYear,
-                              publisher: book.publisher,
-                              coverUrl: book.coverUrl,
-                              score: book.score,
-                              isbn: book.isbn,
-                            },
-                            {
-                              id: `ed-r-2`,
-                              title: `${book.title} (Revised Edition)`,
-                              author: book.author,
-                              year: book.publishYear + 5,
-                              publisher: 'Penguin Classics',
-                              coverUrl: book.coverUrl,
-                              score: 0.72,
-                              isbn: '9780140449136',
-                            },
-                          ],
-                        });
-                      }}
-                    />
-                    {isCompareMode && (
-                      <div 
-                        className={`absolute inset-0 rounded-2xl pointer-events-none border-2 transition-colors ${compareQueue.some(b => b.id === book.id) ? 'border-[#C9963F]' : 'border-transparent'}`}
+                        book={book}
+                        index={idx}
+                        onClick={() => handleBookClick(book)}
+                        onResolve={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          setManualSearchCandidateId(null);
+                          setActiveBookDetail(book);
+                        }}
                       />
-                    )}
-                    {isCompareMode && compareQueue.some(b => b.id === book.id) && (
-                      <div className="absolute top-3 right-3 bg-[#C9963F] text-[#12100E] rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10 pointer-events-none">
-                        <span className="material-symbols-outlined text-[16px] font-bold">check</span>
-                      </div>
-                    )}
-                  </div>
+                      {isCompareMode && compareQueue.some((b) => b.id === book.id) && (
+                        <>
+                          <div className="absolute inset-0 rounded-2xl pointer-events-none border-2 border-[#C9963F]" />
+                          <div className="absolute top-3 right-3 bg-[#C9963F] text-[#12100E] rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10 pointer-events-none">
+                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -1218,36 +1376,19 @@ export default function App() {
         )}
       </div>
 
-      {/* Floating Bottom Navigation for Mobile */}
-      <BottomNavBar
-        activeTab={activeTab}
-        onTabChange={(tab) => {
-          if (tab === 'eval') {
-            setIsSpikeDashboardOpen(true);
-          } else {
-            setActiveTab(tab);
-          }
-        }}
-        onOpenScanner={() => setIsScannerOpen(true)}
-      />
+      <BottomNavBar activeTab={activeTab} onTabChange={setActiveTab} onOpenScanner={() => setIsScannerOpen(true)} />
 
-      {/* Scanner Viewport Modal */}
-      <ScanModal
-        isOpen={isScannerOpen}
-        onClose={() => setIsScannerOpen(false)}
-        onCapture={handleCapture}
-      />
+      <ScanModal isOpen={isScannerOpen} onClose={() => setIsScannerOpen(false)} onCapture={handleCapture} />
 
-      {/* Processing Animation View (Image 9) */}
-      {isProcessing && pendingScanData && (
+      {isProcessing && (
         <ProcessingView
-          imageUrl={pendingScanData.imageUrl}
-          candidates={pendingScanData.candidates}
+          imageUrl={pendingScanData?.imageUrl ?? ''}
+          candidates={pendingScanData?.candidates ?? []}
+          label={processingLabel}
           onComplete={handleProcessingComplete}
         />
       )}
 
-      {/* Book Detail Modal (Image 1) */}
       <BookDetailModal
         book={activeBookDetail}
         shelves={shelves}
@@ -1255,6 +1396,8 @@ export default function App() {
         onClose={() => setActiveBookDetail(null)}
         onUpdateStatus={handleUpdateStatus}
         onUpdateProgress={handleUpdateProgress}
+        onUpdateCurrentPage={handleUpdateCurrentPage}
+        onUpdatePageCount={handleUpdatePageCount}
         onUpdateShelf={handleUpdateShelf}
         onUpdateCoordinate={handleUpdateCoordinate}
         onDeleteBook={handleDeleteBook}
@@ -1262,6 +1405,7 @@ export default function App() {
         onUpdateQuotes={handleUpdateQuotes}
         onUpdateLending={handleUpdateLending}
         onUpdateTags={handleUpdateTags}
+        onUpdateRating={handleUpdateRating}
         onAddReadingSession={handleAddReadingSession}
       />
 
@@ -1269,27 +1413,49 @@ export default function App() {
         isOpen={isReadingGoalsModalOpen}
         onClose={() => setIsReadingGoalsModalOpen(false)}
         goals={readingGoals}
-        onSave={(newGoals) => {
-          setReadingGoals(newGoals);
-          if (currentUser) {
-            syncToCloud(currentUser.uid, books, shelves, newGoals).catch(console.error);
-          }
-        }}
+        onSave={(newGoals) => setReadingGoals(newGoals)}
       />
 
       <AIRecommendationsModal
         isOpen={isRecommendationsModalOpen}
         onClose={() => setIsRecommendationsModalOpen(false)}
         books={books}
+        onAddBook={(recommendation) => {
+          const book: Book = {
+            id: `ai-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+            title: recommendation.title,
+            author: recommendation.author,
+            isbn: '',
+            publisher: '',
+            publishYear: recommendation.year ?? 0,
+            pageCount: 0,
+            description: recommendation.reason ?? '',
+            coverUrl: '',
+            spineCropUrl: '',
+            spineColor: '#C9963F',
+            shelfId: targetShelfId,
+            status: 'unread',
+            confidence: 'matched',
+            score: 1,
+            category: recommendation.category ?? 'Recommended',
+            addedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          addBook(book);
+          haptic.success();
+          pushToast({ title: 'Added to library', description: recommendation.title, icon: 'library_add' });
+        }}
       />
 
       <BookComparisonModal
         isOpen={isCompareModalOpen}
-        onClose={() => setIsCompareModalOpen(false)}
+        onClose={() => {
+          setIsCompareModalOpen(false);
+          setCompareQueue([]);
+        }}
         books={compareQueue}
       />
 
-      {/* Share Export Modal (Image 13) */}
       <ShareModal
         shelf={activeShareShelf || undefined}
         books={books}
@@ -1300,18 +1466,23 @@ export default function App() {
         }}
       />
 
-      {/* Phase 0 Spike Accuracy Benchmark Dashboard */}
+      {/* Manual "add by search" flow outside of a scan */}
+      <ManualSearchSheet
+        isOpen={isManualAddOpen}
+        onClose={() => setIsManualAddOpen(false)}
+        onSelectResult={handleSelectManualResult}
+      />
+
       {isSpikeDashboardOpen && (
         <SpikeAccuracyDashboard
           onClose={() => setIsSpikeDashboardOpen(false)}
-          onTestSampleInScanner={(sample) => {
+          onTestSampleInScanner={(sample: SpikeSample) => {
             setIsSpikeDashboardOpen(false);
-            handleCapture(sample.imageUrl, sample);
+            void handleCapture({ imageUrl: sample.imageUrl, mode: 'shelf', sample });
           }}
         />
       )}
 
-      {/* Onboarding & Guide Modal (Images 7, 15, 21, 19) */}
       <OnboardingModal
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}

@@ -1,15 +1,19 @@
-import { SpineCandidate, Book, EditionOption } from '../types';
+import { SpineCandidate, Book, EditionOption, ConfidenceLevel } from '../types';
 import { INITIAL_BOOKS, MOCK_GLOBAL_CATALOG } from '../data/initialLibrary';
 
 // Helper for Turkish character normalization & unaccent
 export function normalizeSpineText(input: string): string {
   if (!input) return '';
   return input
-    .replace(/İ/g, 'i')
-    .replace(/I/g, 'ı')
+    .replace(/İ/g, 'I')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    // `ı` is a distinct letter, not an accented `i`, so NFD leaves it intact and
+    // the ASCII filter below would otherwise shred Turkish words into fragments.
+    .replace(/ı/g, 'i')
+    .replace(/ş/g, 's')
+    .replace(/ğ/g, 'g')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\b(yayinlari|yayin|kitap|roman|cilt|vol|edition|press|books|classics|ed)\b/g, '')
     .replace(/\s+/g, ' ')
@@ -42,7 +46,7 @@ export function calculateSimilarity(s1: string, s2: string): number {
   }
 
   const union = new Set([...t1, ...t2]).size;
-  return union > 0 ? (matchCount / union) * 1.15 : 0;
+  return union > 0 ? Math.min(1, (matchCount / union) * 1.15) : 0;
 }
 
 const DEFAULT_SPINE_COLORS = [
@@ -62,172 +66,301 @@ const DEFAULT_SPINE_COLORS = [
   '#C97A3F',
 ];
 
-export function segmentAndMatchShelf(
+const MATCH_THRESHOLD = 0.82;
+const REVIEW_THRESHOLD = 0.45;
+
+export function scoreToConfidence(score: number): ConfidenceLevel {
+  if (score >= MATCH_THRESHOLD) return 'matched';
+  if (score >= REVIEW_THRESHOLD) return 'review';
+  return 'unknown';
+}
+
+/** One spine as returned by the server-side vision model. */
+export interface RecognizedSpine {
+  rawText?: string;
+  title?: string;
+  author?: string;
+  publisher?: string;
+  year?: number | null;
+  dominantColor?: string;
+  confidence?: number;
+  bbox?: { x?: number; y?: number; width?: number; height?: number };
+}
+
+interface CatalogEntry {
+  title: string;
+  author: string;
+  year: number;
+  publisher: string;
+  isbn: string;
+  coverUrl: string;
+}
+
+/** Local catalog used to resolve a recognized spine into concrete edition options. */
+const LOCAL_CATALOG: CatalogEntry[] = (() => {
+  const entries = new Map<string, CatalogEntry>();
+  const push = (entry: CatalogEntry) => {
+    const key = `${normalizeSpineText(entry.title)}|${normalizeSpineText(entry.author)}`;
+    if (!entries.has(key)) entries.set(key, entry);
+  };
+
+  MOCK_GLOBAL_CATALOG.forEach((item) =>
+    push({
+      title: item.title,
+      author: item.author,
+      year: item.year,
+      publisher: item.publisher,
+      isbn: item.isbn,
+      coverUrl: item.coverUrl,
+    })
+  );
+  INITIAL_BOOKS.forEach((book) =>
+    push({
+      title: book.title,
+      author: book.author,
+      year: book.publishYear,
+      publisher: book.publisher,
+      isbn: book.isbn,
+      coverUrl: book.coverUrl,
+    })
+  );
+
+  return Array.from(entries.values());
+})();
+
+function rankCatalog(query: string, limit: number): Array<{ entry: CatalogEntry; score: number }> {
+  return LOCAL_CATALOG.map((entry) => ({
+    entry,
+    score: Math.max(
+      calculateSimilarity(query, `${entry.title} ${entry.author}`),
+      calculateSimilarity(query, entry.title)
+    ),
+  }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+function clampPercent(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
+  return Math.max(0, Math.min(100, value));
+}
+
+function normalizeHexColor(value: string | undefined, fallbackIndex: number): string {
+  if (value && /^#[0-9a-fA-F]{6}$/.test(value.trim())) return value.trim();
+  return DEFAULT_SPINE_COLORS[fallbackIndex % DEFAULT_SPINE_COLORS.length];
+}
+
+/**
+ * Converts the vision model's spine list into review-ready candidates by matching
+ * the recognized text against the local catalog with trigram similarity.
+ */
+export function buildCandidatesFromRecognition(
   shelfImageUrl: string,
-  sampleGroundTruth?: Array<{ title: string; author: string; year: number; publisher: string; color: string }>
+  spines: RecognizedSpine[]
 ): SpineCandidate[] {
-  // If ground truth is provided from spike sample or presets, build structured candidates
-  if (sampleGroundTruth && sampleGroundTruth.length > 0) {
-    const total = sampleGroundTruth.length;
-    let currentX = 2;
+  return spines.map((spine, idx) => {
+    const rawText = (spine.rawText || `${spine.title ?? ''} ${spine.author ?? ''}`).trim();
+    const modelConfidence = typeof spine.confidence === 'number' ? Math.max(0, Math.min(1, spine.confidence)) : 0.5;
 
-    return sampleGroundTruth.map((item, idx) => {
-      const width = Math.max(5, Math.min(12, (94 / total) * (0.8 + (idx % 3) * 0.2)));
-      const candidateX = currentX;
-      currentX += width + 0.5;
+    const ranked = rankCatalog(rawText || spine.title || '', 3).filter((item) => item.score > 0.2);
+    const bestCatalogScore = ranked[0]?.score ?? 0;
 
-      const isReviewCase = idx === 3 || item.title.toLowerCase().includes('dune') || item.title.toLowerCase().includes('moby');
-      const isUnknownCase = idx === total - 1 && total > 8;
+    // The model's own confidence and the catalog similarity both matter; weight them.
+    const score = Number((modelConfidence * 0.6 + bestCatalogScore * 0.4).toFixed(3));
+    const confidence = scoreToConfidence(score);
+    const dominantColor = normalizeHexColor(spine.dominantColor, idx);
 
-      let score = 0.95 - (idx % 4) * 0.03;
-      let confidence: 'matched' | 'review' | 'unknown' = 'matched';
+    const editions: EditionOption[] = ranked.map((item, rank) => ({
+      id: `ed-${idx}-${rank}`,
+      title: item.entry.title,
+      author: item.entry.author,
+      year: item.entry.year,
+      publisher: item.entry.publisher,
+      coverUrl: item.entry.coverUrl,
+      score: Number(item.score.toFixed(3)),
+      isbn: item.entry.isbn,
+    }));
 
-      if (isUnknownCase) {
-        score = 0.18;
-        confidence = 'unknown';
-      } else if (isReviewCase) {
-        score = 0.68;
-        confidence = 'review';
-      }
+    // Fall back to what the model itself read when the local catalog has nothing.
+    if (editions.length === 0 && spine.title) {
+      editions.push({
+        id: `ed-${idx}-model`,
+        title: spine.title,
+        author: spine.author || 'Unknown Author',
+        year: spine.year ?? new Date().getFullYear(),
+        publisher: spine.publisher || 'Unknown Publisher',
+        coverUrl: '',
+        score: modelConfidence,
+        isbn: '',
+      });
+    }
 
-      // Generate editions
-      const editions: EditionOption[] = [
-        {
-          id: `ed-${idx}-1`,
-          title: item.title,
-          author: item.author,
-          year: item.year,
-          publisher: item.publisher,
-          coverUrl: item.title.includes('Dune')
-            ? 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800&auto=format&fit=crop'
-            : 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?q=80&w=800&auto=format&fit=crop',
-          score: score,
-          isbn: `9780${Math.floor(100000000 + Math.random() * 900000000)}`,
-        },
-        {
-          id: `ed-${idx}-2`,
-          title: `${item.title} (Anniversary Edition)`,
-          author: item.author,
-          year: item.year + 25,
-          publisher: 'Ace Books / Penguin Classics',
-          coverUrl: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=800&auto=format&fit=crop',
-          score: score - 0.08,
-          isbn: `9780${Math.floor(100000000 + Math.random() * 900000000)}`,
-        },
-      ];
+    const primary = editions[0];
+    const matchedBook: Book | undefined =
+      confidence !== 'unknown' && primary
+        ? {
+            id: `scan-${Date.now().toString(36)}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
+            title: primary.title,
+            author: primary.author,
+            isbn: primary.isbn,
+            publisher: primary.publisher,
+            publishYear: primary.year,
+            pageCount: 0,
+            description: '',
+            coverUrl: primary.coverUrl,
+            spineCropUrl: shelfImageUrl,
+            spineColor: dominantColor,
+            shelfId: 'shelf-fiction',
+            status: 'unread',
+            confidence,
+            score,
+            category: 'Physical Scan',
+            addedAt: new Date().toISOString(),
+            proofOfCaptureUrl: shelfImageUrl,
+          }
+        : undefined;
 
-      const matchedBook: Book | undefined =
-        confidence !== 'unknown'
-          ? {
-              id: `scan-book-${idx}`,
-              title: item.title,
-              author: item.author,
-              isbn: editions[0].isbn,
-              publisher: item.publisher,
-              publishYear: item.year,
-              pageCount: 280 + (idx * 37) % 300,
-              description: `Physical archival edition of ${item.title} by ${item.author}, published by ${item.publisher}.`,
-              coverUrl: editions[0].coverUrl,
-              spineCropUrl: shelfImageUrl,
-              spineColor: item.color || DEFAULT_SPINE_COLORS[idx % DEFAULT_SPINE_COLORS.length],
-              shelfId: 'shelf-fiction',
-              status: 'unread',
-              confidence,
-              score,
-              category: 'Catalog Match',
-              addedAt: new Date().toISOString(),
-              proofOfCaptureUrl: shelfImageUrl,
-            }
-          : undefined;
-
-      return {
-        id: `candidate-${idx + 1}`,
-        orderIndex: idx,
-        bbox: {
-          x: candidateX,
-          y: 8 + (idx % 2) * 2,
-          width: width,
-          height: 80 - (idx % 3) * 3,
-        },
-        rawTextForward: `${item.title} ${item.author} ${item.publisher}`,
-        rawTextReverse: `${item.publisher} ${item.author} ${item.title}`,
-        dominantColor: item.color || DEFAULT_SPINE_COLORS[idx % DEFAULT_SPINE_COLORS.length],
-        confidence,
-        score,
-        cropUrl: shelfImageUrl,
-        matchedBook,
-        editions,
-      };
-    });
-  }
-
-  // Default synthetic segmentation for any generic user-uploaded photo
-  const count = 12;
-  const candidates: SpineCandidate[] = [];
-  let currentPos = 3;
-
-  for (let i = 0; i < count; i++) {
-    const width = 6.5 + (i % 3) * 1.5;
-    const isMatched = i !== 3 && i !== 7 && i !== 11;
-    const isReview = i === 3 || i === 7;
-    const isUnknown = i === 11;
-
-    const catalogBook = INITIAL_BOOKS[i % INITIAL_BOOKS.length];
-    const score = isMatched ? 0.94 - (i % 3) * 0.03 : isReview ? 0.58 : 0.14;
-    const confidence: 'matched' | 'review' | 'unknown' = isMatched ? 'matched' : isReview ? 'review' : 'unknown';
-
-    const editions: EditionOption[] = [
-      {
-        id: `ed-gen-${i}-1`,
-        title: isUnknown ? 'Unknown Volume' : catalogBook.title,
-        author: isUnknown ? 'Unknown Author' : catalogBook.author,
-        year: catalogBook.publishYear,
-        publisher: catalogBook.publisher,
-        coverUrl: catalogBook.coverUrl,
-        score: score,
-        isbn: catalogBook.isbn,
-      },
-      {
-        id: `ed-gen-${i}-2`,
-        title: isUnknown ? 'Alternative Reading' : `${catalogBook.title} (Revised Edition)`,
-        author: catalogBook.author,
-        year: catalogBook.publishYear + 10,
-        publisher: 'Penguin Classics',
-        coverUrl: catalogBook.coverUrl,
-        score: Math.max(0.1, score - 0.12),
-        isbn: '9780140449136',
-      },
-    ];
-
-    candidates.push({
-      id: `candidate-${i + 1}`,
-      orderIndex: i,
+    return {
+      id: `candidate-${idx + 1}`,
+      orderIndex: idx,
       bbox: {
-        x: currentPos,
-        y: 10 + (i % 2) * 3,
-        width: width,
-        height: 78 - (i % 4) * 2,
+        x: clampPercent(spine.bbox?.x, (idx * 7) % 90),
+        y: clampPercent(spine.bbox?.y, 10),
+        width: clampPercent(spine.bbox?.width, 7),
+        height: clampPercent(spine.bbox?.height, 78),
       },
-      rawTextForward: isUnknown ? '??? FADED EMBOSS' : `${catalogBook.title} ${catalogBook.author}`,
-      rawTextReverse: isUnknown ? 'UNKNOWN' : `${catalogBook.author} ${catalogBook.title}`,
-      dominantColor: DEFAULT_SPINE_COLORS[i % DEFAULT_SPINE_COLORS.length],
+      rawTextForward: rawText || 'UNREADABLE SPINE',
+      rawTextReverse: rawText.split(' ').reverse().join(' ') || 'UNREADABLE SPINE',
+      dominantColor,
       confidence,
       score,
       cropUrl: shelfImageUrl,
-      matchedBook: isUnknown
-        ? undefined
-        : {
-            ...catalogBook,
-            id: `scan-${Date.now()}-${i}`,
-            confidence,
-            score,
-            proofOfCaptureUrl: shelfImageUrl,
-          },
+      matchedBook,
       editions,
-    });
+    };
+  });
+}
 
-    currentPos += width + 1;
+export class ShelfRecognitionError extends Error {
+  constructor(message: string, readonly detail?: string) {
+    super(message);
+    this.name = 'ShelfRecognitionError';
+  }
+}
+
+/**
+ * Sends the captured shelf photo to the server-side vision endpoint and returns
+ * review-ready spine candidates.
+ */
+export async function recognizeShelf(shelfImageDataUrl: string): Promise<SpineCandidate[]> {
+  const imageBase64 = shelfImageDataUrl.includes(',')
+    ? shelfImageDataUrl.slice(shelfImageDataUrl.indexOf(',') + 1)
+    : shelfImageDataUrl;
+
+  const response = await fetch('/api/gemini/shelf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64 }),
+  });
+
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new ShelfRecognitionError(
+      payload?.error || `Shelf recognition failed with status ${response.status}`,
+      payload?.detail
+    );
   }
 
-  return candidates;
+  const spines = payload?.spines;
+  if (!Array.isArray(spines)) {
+    throw new ShelfRecognitionError('Shelf recognition returned no spine list.', JSON.stringify(payload).slice(0, 300));
+  }
+
+  return buildCandidatesFromRecognition(shelfImageDataUrl, spines as RecognizedSpine[]);
+}
+
+/**
+ * Builds candidates for the bundled demo dataset, whose ground truth is known.
+ * Only used by the clearly-labelled sample shelves in the evaluation view — never
+ * for a real user capture.
+ */
+export function buildDemoCandidates(
+  shelfImageUrl: string,
+  groundTruth: Array<{ title: string; author: string; year: number; publisher: string; color: string }>
+): SpineCandidate[] {
+  const total = groundTruth.length;
+  let currentX = 2;
+
+  return groundTruth.map((item, idx) => {
+    const width = Math.max(5, Math.min(12, (94 / total) * (0.8 + (idx % 3) * 0.2)));
+    const candidateX = currentX;
+    currentX += width + 0.5;
+
+    const ranked = rankCatalog(`${item.title} ${item.author}`, 2);
+    const score = Number(Math.max(0.2, ranked[0]?.score ?? 0.5).toFixed(3));
+    const confidence = scoreToConfidence(score);
+    const dominantColor = normalizeHexColor(item.color, idx);
+
+    const editions: EditionOption[] = [
+      {
+        id: `demo-ed-${idx}-0`,
+        title: item.title,
+        author: item.author,
+        year: item.year,
+        publisher: item.publisher,
+        coverUrl: ranked[0]?.entry.coverUrl ?? '',
+        score,
+        isbn: ranked[0]?.entry.isbn ?? '',
+      },
+      ...ranked.slice(1).map((entry, rank) => ({
+        id: `demo-ed-${idx}-${rank + 1}`,
+        title: entry.entry.title,
+        author: entry.entry.author,
+        year: entry.entry.year,
+        publisher: entry.entry.publisher,
+        coverUrl: entry.entry.coverUrl,
+        score: Number(entry.score.toFixed(3)),
+        isbn: entry.entry.isbn,
+      })),
+    ];
+
+    const matchedBook: Book | undefined =
+      confidence !== 'unknown'
+        ? {
+            id: `demo-${Date.now().toString(36)}-${idx}`,
+            title: item.title,
+            author: item.author,
+            isbn: editions[0].isbn,
+            publisher: item.publisher,
+            publishYear: item.year,
+            pageCount: 0,
+            description: '',
+            coverUrl: editions[0].coverUrl,
+            spineCropUrl: shelfImageUrl,
+            spineColor: dominantColor,
+            shelfId: 'shelf-fiction',
+            status: 'unread',
+            confidence,
+            score,
+            category: 'Demo Sample',
+            addedAt: new Date().toISOString(),
+            proofOfCaptureUrl: shelfImageUrl,
+          }
+        : undefined;
+
+    return {
+      id: `candidate-${idx + 1}`,
+      orderIndex: idx,
+      bbox: { x: candidateX, y: 8 + (idx % 2) * 2, width, height: 80 - (idx % 3) * 3 },
+      rawTextForward: `${item.title} ${item.author} ${item.publisher}`,
+      rawTextReverse: `${item.publisher} ${item.author} ${item.title}`,
+      dominantColor,
+      confidence,
+      score,
+      cropUrl: shelfImageUrl,
+      matchedBook,
+      editions,
+    };
+  });
 }

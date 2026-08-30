@@ -1,8 +1,14 @@
 # SPINE Phase 0 — Spike Doğruluk Raporu
 
+> ⚠️ **Bu rapor sentetik örnek veri üzerinden üretilmiştir.** Buradaki sayılar
+> `src/data/spikeDataset.ts` içindeki, ground truth'u önceden bilinen demo örneklerine
+> aittir; canlı Gemini tanıma hattının ölçümü değildir. Gerçek doğruluk ölçümü için
+> etiketlenmiş gerçek raf fotoğraflarıyla yeniden koşulmalıdır.
+
+
 > **Tarih:** 26 Ağustos 2026  
-> **Veri Seti:** 20 Adet Gerçek Raf Fotoğrafı (4 Ayrı Kategori)  
-> **Toplam Değerlendirilen Fiziksel Kitap:** 206 Cilt  
+> **Veri Seti:** 20 Adet Sentetik Örnek Raf (4 Ayrı Kategori)  
+> **Toplam Örnek Cilt:** 206 (sentetik ground truth)  
 > **Ajan Sorumlusu:** A0 (Spike)  
 > **Durum:** **KABUL EDİLDİ — GO (Faz 1'e Geçilebilir)**
 

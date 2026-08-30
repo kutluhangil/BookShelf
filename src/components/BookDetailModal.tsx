@@ -13,13 +13,16 @@ interface BookDetailModalProps {
   onClose: () => void;
   onUpdateStatus: (bookId: string, status: ReadingStatus) => void;
   onUpdateProgress?: (bookId: string, progress: number) => void;
+  onUpdateCurrentPage?: (bookId: string, page: number) => void;
+  onUpdatePageCount?: (bookId: string, pageCount: number) => void;
   onUpdateShelf: (bookId: string, shelfId: string) => void;
   onUpdateCoordinate?: (bookId: string, shelfId: string, x: number | undefined, y: number | undefined) => void;
   onDeleteBook: (bookId: string) => void;
   onUpdateNotes?: (bookId: string, notes: string) => void;
   onUpdateQuotes?: (bookId: string, quotes: string[]) => void;
-  onUpdateLending?: (bookId: string, lentTo?: string, lentAt?: string) => void;
+  onUpdateLending?: (bookId: string, lentTo?: string, lentAt?: string, lentDueAt?: string) => void;
   onUpdateTags?: (bookId: string, tags: string[]) => void;
+  onUpdateRating?: (bookId: string, rating: number | undefined) => void;
   onAddReadingSession?: (bookId: string, durationSeconds: number) => void;
 }
 
@@ -30,6 +33,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onClose,
   onUpdateStatus,
   onUpdateProgress,
+  onUpdateCurrentPage,
+  onUpdatePageCount,
   onUpdateShelf,
   onUpdateCoordinate,
   onDeleteBook,
@@ -37,6 +42,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onUpdateQuotes,
   onUpdateLending,
   onUpdateTags,
+  onUpdateRating,
   onAddReadingSession,
 }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -47,11 +53,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [isAmbientMode, setIsAmbientMode] = useState(false);
   const [isQuoteScannerOpen, setIsQuoteScannerOpen] = useState(false);
   const [lentToInput, setLentToInput] = useState('');
+  const [lentDueInput, setLentDueInput] = useState('');
+  const [pageCountDraft, setPageCountDraft] = useState('');
 
   // Sync lentToInput when book changes
   useEffect(() => {
     if (book) {
       setLentToInput(book.lentTo || '');
+      setLentDueInput(book.lentDueAt ? book.lentDueAt.slice(0, 10) : '');
+      setPageCountDraft(book.pageCount ? String(book.pageCount) : '');
     }
   }, [book]);
 
@@ -209,11 +219,16 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
               {/* Cover Art with subtle brass edge glow */}
               <div className="w-36 sm:w-40 aspect-[2/3] rounded-lg overflow-hidden shrink-0 hairline-border shadow-[0_8px_24px_rgba(0,0,0,0.7)] brass-glow bg-[#12100E] relative">
-                <img
-                  src={book.coverUrl}
-                  alt={book.title}
-                  className="w-full h-full object-cover"
-                />
+                {book.coverUrl ? (
+                  <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                ) : (
+                  <div
+                    className="w-full h-full flex items-center justify-center p-4 text-center"
+                    style={{ backgroundColor: book.spineColor || '#2C251D' }}
+                  >
+                    <span className="font-serif-literata text-[13px] text-[#F4EFE6] line-clamp-5">{book.title}</span>
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
               </div>
 
@@ -231,9 +246,27 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   <span className="px-2 py-0.5 rounded bg-[#262119] hairline-border">
                     {book.publishYear}
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-[#262119] hairline-border">
-                    {book.pageCount} PAGES
-                  </span>
+                  {onUpdatePageCount ? (
+                    <label className="px-2 py-0.5 rounded bg-[#262119] hairline-border flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        value={pageCountDraft}
+                        onChange={(event) => setPageCountDraft(event.target.value)}
+                        onBlur={() => {
+                          const parsed = Number(pageCountDraft);
+                          if (Number.isFinite(parsed) && parsed >= 0 && parsed !== book.pageCount) {
+                            onUpdatePageCount(book.id, parsed);
+                          }
+                        }}
+                        className="w-12 bg-transparent text-[#F4EFE6] focus:outline-none text-right"
+                        aria-label="Total page count"
+                      />
+                      <span>PAGES</span>
+                    </label>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded bg-[#262119] hairline-border">{book.pageCount} PAGES</span>
+                  )}
                   <span className="px-2 py-0.5 rounded bg-[#262119] hairline-border truncate max-w-[150px]">
                     {book.publisher}
                   </span>
@@ -297,14 +330,36 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                           onUpdateProgress(book.id, parseInt(e.target.value, 10));
                         }}
                         className="w-full accent-[#C9963F] cursor-pointer h-1.5"
+                        aria-label="Reading progress percentage"
                       />
+
+                      {onUpdateCurrentPage && book.pageCount > 0 && (
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#3A332A]/70">
+                          <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">
+                            Current page
+                          </span>
+                          <div className="flex items-center gap-1 font-mono-ibm text-[12px] text-[#F4EFE6]">
+                            <input
+                              type="number"
+                              min={0}
+                              max={book.pageCount}
+                              value={book.currentPage ?? Math.round((book.pageCount * (book.progress ?? 0)) / 100)}
+                              onChange={(event) => onUpdateCurrentPage(book.id, Number(event.target.value))}
+                              className="w-16 bg-[#12100E] border border-[#3A332A] rounded px-2 py-1 text-right focus:outline-none focus:border-[#C9963F]"
+                              aria-label="Current page"
+                            />
+                            <span className="text-[#A79C8C]">/ {book.pageCount}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Proof of Capture Crop (Signature Feature from Image 1) */}
+            {/* Proof of Capture Crop — only meaningful for scanned volumes */}
+            {(book.proofOfCaptureUrl || book.spineCropUrl) && (
             <div className="bg-[#151311] rounded-xl p-3.5 hairline-border space-y-2">
               <div className="flex justify-between items-center text-[11px] font-mono-ibm text-[#A79C8C]">
                 <span className="tracking-wider flex items-center gap-1.5">
@@ -326,6 +381,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 </div>
               </div>
             </div>
+            )}
 
             {/* Shelf Assignment */}
             <div className="flex flex-col gap-1.5">
@@ -501,6 +557,35 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               </div>
             </div>
 
+            {/* Reader Rating */}
+            {onUpdateRating && (
+              <div className="space-y-1.5">
+                <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[14px] text-[#C9963F]">star</span>
+                  YOUR RATING
+                </h3>
+                <div className="bg-[#151311] p-3 rounded-xl hairline-border flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        haptic.selectionClick();
+                        onUpdateRating(book.id, book.rating === value ? undefined : value);
+                      }}
+                      className="text-[26px] leading-none transition-transform hover:scale-110"
+                      title={`${value} star${value > 1 ? 's' : ''}`}
+                      aria-label={`Rate ${value} out of 5`}
+                    >
+                      <span className={(book.rating ?? 0) >= value ? 'text-[#C9963F]' : 'text-[#3A332A]'}>★</span>
+                    </button>
+                  ))}
+                  <span className="ml-2 font-mono-ibm text-[11px] text-[#A79C8C]">
+                    {book.rating ? `${book.rating}/5` : 'Not rated'}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Custom Tags */}
             {onUpdateTags && (
               <div className="space-y-1.5">
@@ -571,38 +656,70 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 </h3>
                 <div className="bg-[#151311] p-4 rounded-xl hairline-border space-y-3">
                   {book.lentTo ? (
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-[13px] text-[#F4EFE6] font-sans-inter">Lent to: <span className="font-bold text-[#C9963F]">{book.lentTo}</span></p>
-                        <p className="text-[11px] text-[#A79C8C] font-mono-ibm mt-0.5">On {new Date(book.lentAt!).toLocaleDateString()}</p>
+                        <p className="text-[13px] text-[#F4EFE6] font-sans-inter">
+                          Lent to: <span className="font-bold text-[#C9963F]">{book.lentTo}</span>
+                        </p>
+                        {book.lentAt && (
+                          <p className="text-[11px] text-[#A79C8C] font-mono-ibm mt-0.5">
+                            On {new Date(book.lentAt).toLocaleDateString()}
+                          </p>
+                        )}
+                        {book.lentDueAt && (
+                          <p
+                            className={`text-[11px] font-mono-ibm mt-0.5 ${
+                              new Date(book.lentDueAt).getTime() < Date.now() ? 'text-[#FF6B6B]' : 'text-[#A79C8C]'
+                            }`}
+                          >
+                            Due {new Date(book.lentDueAt).toLocaleDateString()}
+                            {new Date(book.lentDueAt).getTime() < Date.now() ? ' — overdue' : ''}
+                          </p>
+                        )}
                       </div>
                       <button
-                        onClick={() => onUpdateLending(book.id, undefined, undefined)}
-                        className="px-3 py-1.5 bg-[#3A1D1D] text-[#FF6B6B] hover:bg-[#4A2525] rounded-lg text-[11px] font-mono-ibm font-bold uppercase tracking-wider transition-colors"
+                        onClick={() => onUpdateLending(book.id, undefined, undefined, undefined)}
+                        className="px-3 py-1.5 bg-[#3A1D1D] text-[#FF6B6B] hover:bg-[#4A2525] rounded-lg text-[11px] font-mono-ibm font-bold uppercase tracking-wider transition-colors shrink-0"
                       >
                         Returned
                       </button>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2">
                       <input
                         type="text"
                         value={lentToInput}
                         onChange={(e) => setLentToInput(e.target.value)}
                         placeholder="Friend's name..."
-                        className="flex-1 bg-[#12100E] text-[#F4EFE6] text-[13px] font-sans-inter rounded-lg px-3 py-1.5 border border-[#3A332A] focus:border-[#C9963F] focus:outline-none placeholder:text-[#A79C8C]/50"
+                        className="bg-[#12100E] text-[#F4EFE6] text-[13px] font-sans-inter rounded-lg px-3 py-1.5 border border-[#3A332A] focus:border-[#C9963F] focus:outline-none placeholder:text-[#A79C8C]/50"
                       />
-                      <button
-                        onClick={() => {
-                          if (lentToInput.trim()) {
-                            onUpdateLending(book.id, lentToInput.trim(), new Date().toISOString());
-                          }
-                        }}
-                        disabled={!lentToInput.trim()}
-                        className="bg-[#262119] hover:bg-[#3A332A] text-[#C9963F] px-3 py-1.5 rounded-lg text-[11px] font-mono-ibm font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
-                      >
-                        Lend
-                      </button>
+                      <div className="flex gap-2 items-center">
+                        <label className="flex-1 flex items-center gap-2 bg-[#12100E] border border-[#3A332A] rounded-lg px-3 py-1.5">
+                          <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">Due</span>
+                          <input
+                            type="date"
+                            value={lentDueInput}
+                            onChange={(e) => setLentDueInput(e.target.value)}
+                            className="flex-1 bg-transparent text-[#F4EFE6] text-[12px] font-mono-ibm focus:outline-none"
+                            aria-label="Return due date"
+                          />
+                        </label>
+                        <button
+                          onClick={() => {
+                            if (!lentToInput.trim()) return;
+                            onUpdateLending(
+                              book.id,
+                              lentToInput.trim(),
+                              new Date().toISOString(),
+                              lentDueInput ? new Date(lentDueInput).toISOString() : undefined
+                            );
+                          }}
+                          disabled={!lentToInput.trim()}
+                          className="bg-[#262119] hover:bg-[#3A332A] text-[#C9963F] px-3 py-1.5 rounded-lg text-[11px] font-mono-ibm font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
+                        >
+                          Lend
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

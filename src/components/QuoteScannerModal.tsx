@@ -35,7 +35,14 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
         videoRef.current.srcObject = mediaStream;
       }
     } catch (err) {
-      setError('Camera access denied or unavailable.');
+      const name = err instanceof DOMException ? err.name : '';
+      setError(
+        name === 'NotAllowedError'
+          ? 'Camera permission was denied. Allow camera access in your browser settings.'
+          : name === 'NotFoundError'
+            ? 'No camera was found on this device.'
+            : `Camera could not be started: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   };
 
@@ -69,17 +76,17 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
           body: JSON.stringify({ imageBase64 })
         });
         
-        if (!response.ok) throw new Error('Failed to scan quote');
-        const data = await response.json();
-        
-        if (data.text) {
-          onScanComplete(data.text);
-          onClose();
-        } else {
-          throw new Error('No text detected');
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.detail || payload?.error || `Request failed with status ${response.status}`);
         }
+        if (!payload?.text) {
+          throw new Error('No readable text was found in this frame.');
+        }
+        onScanComplete(payload.text);
+        onClose();
       } catch (err) {
-        setError('Failed to extract text. Please try again.');
+        setError(err instanceof Error ? err.message : String(err));
         setIsScanning(false);
       }
     }
@@ -109,7 +116,19 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
             {/* Camera Viewport */}
             <div className="relative flex-1 bg-black overflow-hidden flex items-center justify-center">
               {error ? (
-                <p className="text-[#FF6B6B] text-center px-6 font-mono-ibm text-[12px]">{error}</p>
+                <div className="flex flex-col items-center gap-3 px-6 text-center">
+                  <p className="text-[#FF6B6B] font-mono-ibm text-[12px] leading-relaxed">{error}</p>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setIsScanning(false);
+                      void startCamera();
+                    }}
+                    className="px-4 py-2 bg-[#262119] hairline-border rounded-xl font-mono-ibm text-[11px] text-[#C9963F] uppercase tracking-wider"
+                  >
+                    Try again
+                  </button>
+                </div>
               ) : (
                 <>
                   <video 

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { haptic } from '../services/haptics';
 import { Book } from '../types';
 
@@ -12,7 +12,11 @@ interface NavigationHeaderProps {
   onOpenOnboarding?: () => void;
   discardMode?: boolean;
   isAuthenticated?: boolean;
+  isCloudAvailable?: boolean;
+  userName?: string;
+  userPhotoUrl?: string;
   onLogin?: () => void;
+  onLogout?: () => void;
   onSync?: () => void;
   isSyncing?: boolean;
 }
@@ -26,10 +30,28 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
   onOpenOnboarding,
   discardMode = false,
   isAuthenticated = false,
+  isCloudAvailable = true,
+  userName,
+  userPhotoUrl,
   onLogin,
+  onLogout,
   onSync,
   isSyncing = false,
 }) => {
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isProfileMenuOpen]);
+
   const readerStats = useMemo(() => {
     if (books.length === 0) return null;
 
@@ -164,11 +186,11 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
                   if (onSync) onSync();
                 }}
                 disabled={isSyncing}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1916] border border-[#3A332A] text-[#C9963F] hover:bg-[#2C251D] transition-colors font-mono-ibm text-[11px]"
-                title="Sync Library to Cloud"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1916] border border-[#3A332A] text-[#C9963F] hover:bg-[#2C251D] transition-colors font-mono-ibm text-[11px] disabled:opacity-60"
+                title="Sync library to cloud"
               >
                 <span className={`material-symbols-outlined text-[16px] ${isSyncing ? 'animate-spin' : ''}`}>sync</span>
-                <span className="hidden sm:inline">SYNC</span>
+                <span className="hidden sm:inline">{isSyncing ? 'SYNCING' : 'SYNC'}</span>
               </button>
             ) : (
               <button
@@ -176,11 +198,12 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
                   haptic.lightImpact();
                   if (onLogin) onLogin();
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1916] border border-[#3A332A] text-[#A79C8C] hover:text-[#C9963F] transition-colors font-mono-ibm text-[11px]"
-                title="Login with Google to Enable Cloud Sync"
+                disabled={!isCloudAvailable}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1916] border border-[#3A332A] text-[#A79C8C] hover:text-[#C9963F] transition-colors font-mono-ibm text-[11px] disabled:opacity-50 disabled:hover:text-[#A79C8C]"
+                title={isCloudAvailable ? 'Sign in with Google to enable cloud sync' : 'Cloud sync is not configured on this deployment'}
               >
                 <span className="material-symbols-outlined text-[16px]">cloud_off</span>
-                <span className="hidden sm:inline">LOGIN</span>
+                <span className="hidden sm:inline">{isCloudAvailable ? 'LOGIN' : 'LOCAL ONLY'}</span>
               </button>
             )
           )}
@@ -209,33 +232,103 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
             </button>
           )}
 
-          <button
-            onClick={() => {
-              haptic.lightImpact();
-              if (onOpenProfile) onOpenProfile();
-            }}
-            className="text-[#A79C8C] hover:text-[#C9963F] hover:bg-[#1C1916] p-2 rounded-full transition-colors flex items-center justify-center relative group"
-            title="User Profile & Settings"
-          >
-            <span className="material-symbols-outlined text-[24px]">account_circle</span>
-            {/* Hover Tooltip for mobile/tablets where the inline stats are hidden */}
-            {!discardMode && readerStats && (
-              <div className="absolute top-full right-0 mt-2 bg-[#1C1916] border border-[#3A332A] rounded-xl p-4 shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 w-48 lg:hidden flex flex-col gap-3">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">Books Read</span>
-                  <span className="font-sans-inter text-[14px] text-[#F4EFE6] font-semibold">{readerStats.readCount}</span>
+          <div className="relative" ref={profileMenuRef}>
+            <button
+              onClick={() => {
+                haptic.lightImpact();
+                setIsProfileMenuOpen((open) => !open);
+              }}
+              className="text-[#A79C8C] hover:text-[#C9963F] hover:bg-[#1C1916] p-1.5 rounded-full transition-colors flex items-center justify-center"
+              title="Profile & settings"
+              aria-haspopup="menu"
+              aria-expanded={isProfileMenuOpen}
+            >
+              {userPhotoUrl ? (
+                <img src={userPhotoUrl} alt="" className="w-7 h-7 rounded-full object-cover border border-[#3A332A]" />
+              ) : (
+                <span className="material-symbols-outlined text-[24px]">account_circle</span>
+              )}
+            </button>
+
+            {isProfileMenuOpen && (
+              <div className="absolute top-full right-0 mt-2 w-60 bg-[#1C1916] border border-[#3A332A] rounded-xl shadow-2xl z-50 overflow-hidden">
+                <div className="px-4 py-3 border-b border-[#3A332A]">
+                  <p className="font-sans-inter text-[13px] text-[#F4EFE6] truncate">
+                    {userName ?? 'Local reader'}
+                  </p>
+                  <p className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider mt-0.5">
+                    {isAuthenticated ? 'Signed in' : isCloudAvailable ? 'Not signed in' : 'Cloud sync disabled'}
+                  </p>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">Avg Session</span>
-                  <span className="font-sans-inter text-[14px] text-[#F4EFE6] font-semibold">{readerStats.avgMinutes}m</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">Active Time</span>
-                  <span className="font-sans-inter text-[13px] text-[#F4EFE6] font-semibold text-right max-w-[80px] leading-tight">{readerStats.mostActiveTime}</span>
-                </div>
+
+                {readerStats && (
+                  <div className="px-4 py-3 space-y-2 border-b border-[#3A332A]">
+                    <div className="flex justify-between items-center">
+                      <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">Books read</span>
+                      <span className="font-sans-inter text-[13px] text-[#F4EFE6] font-semibold">{readerStats.readCount}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">Avg session</span>
+                      <span className="font-sans-inter text-[13px] text-[#F4EFE6] font-semibold">{readerStats.avgMinutes}m</span>
+                    </div>
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">Active time</span>
+                      <span className="font-sans-inter text-[12px] text-[#F4EFE6] font-semibold text-right leading-tight">
+                        {readerStats.mostActiveTime}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    if (onOpenProfile) onOpenProfile();
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-[13px] text-[#D4CDA8] hover:bg-[#262119] flex items-center gap-2 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px] text-[#C9963F]">share</span>
+                  Share & export collection
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    if (onOpenOnboarding) onOpenOnboarding();
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-[13px] text-[#D4CDA8] hover:bg-[#262119] flex items-center gap-2 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px] text-[#C9963F]">menu_book</span>
+                  Guide & onboarding
+                </button>
+
+                {isAuthenticated ? (
+                  <button
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      if (onLogout) onLogout();
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-[13px] text-[#FF6B6B] hover:bg-[#2A1A1A] flex items-center gap-2 transition-colors border-t border-[#3A332A]"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">logout</span>
+                    Sign out
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      if (onLogin) onLogin();
+                    }}
+                    disabled={!isCloudAvailable}
+                    className="w-full text-left px-4 py-2.5 text-[13px] text-[#C9963F] hover:bg-[#262119] flex items-center gap-2 transition-colors border-t border-[#3A332A] disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">login</span>
+                    {isCloudAvailable ? 'Sign in with Google' : 'Cloud sync not configured'}
+                  </button>
+                )}
               </div>
             )}
-          </button>
+          </div>
         </div>
       </div>
     </header>

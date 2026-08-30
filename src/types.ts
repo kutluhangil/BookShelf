@@ -21,8 +21,10 @@ export interface Book {
   shelfId: string;
   status: ReadingStatus;
   progress?: number; // Reader completion percentage (0-100%)
+  currentPage?: number; // Page-level progress, kept in sync with `progress`
   readAt?: string;
   readHistory?: string[];
+  rating?: number; // 1-5 stars, set by the reader
   notes?: string;
   quotes?: string[]; // OCR scanned quotes
   tags?: string[];
@@ -31,10 +33,12 @@ export interface Book {
   // Lending Tracker
   lentTo?: string;
   lentAt?: string; // ISO date string
+  lentDueAt?: string; // ISO date string
   confidence: ConfidenceLevel;
   score: number;
   category: string;
   addedAt: string;
+  updatedAt?: string; // Last local mutation, used to resolve cloud sync conflicts
   isManual?: boolean;
   proofOfCaptureUrl?: string;
 }
@@ -146,6 +150,7 @@ export interface SharedList {
   ownerId: string;
   members: SharedListMember[];
   memberIds: string[]; // For fast queries
+  invitedEmails?: string[]; // Pending invitations, claimed on first sign-in
   books: Book[];
   createdAt: string;
 }

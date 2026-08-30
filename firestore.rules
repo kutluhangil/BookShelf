@@ -1,28 +1,80 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
+
     match /books/{bookId} {
-      allow read, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null 
-                    && resource.data.userId == request.auth.uid 
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn()
+                    && resource.data.userId == request.auth.uid
                     && request.resource.data.userId == request.auth.uid;
     }
+
     match /shelves/{shelfId} {
-      allow read, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null 
-                    && resource.data.userId == request.auth.uid 
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn()
+                    && resource.data.userId == request.auth.uid
                     && request.resource.data.userId == request.auth.uid;
     }
+
     match /sharedLists/{listId} {
-      allow read: if resource.data.isPublic == true || (request.auth != null && (resource.data.ownerId == request.auth.uid || request.auth.uid in resource.data.memberIds));
-      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
-      allow update: if request.auth != null && (resource.data.ownerId == request.auth.uid || request.auth.uid in resource.data.memberIds);
-      allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      function isOwner() {
+        return isSignedIn() && resource.data.ownerId == request.auth.uid;
+      }
+      function isMember() {
+        return isSignedIn() && request.auth.uid in resource.data.memberIds;
+      }
+      function isInvited() {
+        return isSignedIn()
+               && request.auth.token.email != null
+               && request.auth.token.email_verified == true
+               && request.auth.token.email.lower() in resource.data.get('invitedEmails', []);
+      }
+      // Ownership and visibility can never be rewritten by a non-owner.
+      function immutableCore() {
+        return request.resource.data.ownerId == resource.data.ownerId
+               && request.resource.data.isPublic == resource.data.isPublic
+               && request.resource.data.createdAt == resource.data.createdAt;
+      }
+      // A member may only add themselves; they cannot inject or drop other members.
+      function membershipUnchanged() {
+        return request.resource.data.memberIds == resource.data.memberIds
+               && request.resource.data.members == resource.data.members;
+      }
+      function joinsSelfOnly() {
+        return request.resource.data.memberIds.removeAll(resource.data.memberIds) == [request.auth.uid]
+               && resource.data.memberIds.removeAll(request.resource.data.memberIds).size() == 0;
+      }
+
+      allow read: if resource.data.isPublic == true || isOwner() || isMember();
+
+      allow create: if isSignedIn()
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.memberIds == [request.auth.uid];
+
+      // Owner can change anything on their own list (except taking someone else's ownership).
+      allow update: if isOwner() && request.resource.data.ownerId == request.auth.uid;
+
+      // Existing members may curate books but not membership or visibility.
+      allow update: if isMember() && immutableCore() && membershipUnchanged();
+
+      // Joining: public lists anyone signed in, invite-only lists only invited emails.
+      allow update: if isSignedIn()
+                    && (resource.data.isPublic == true || isInvited())
+                    && immutableCore()
+                    && joinsSelfOnly()
+                    && request.resource.data.books == resource.data.books;
+
+      allow delete: if isOwner();
     }
   }
 }

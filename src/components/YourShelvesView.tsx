@@ -39,6 +39,7 @@ interface YourShelvesViewProps {
   onShareShelf: (shelf: Shelf) => void;
   onReorderShelves?: (newShelves: Shelf[]) => void;
   onAutoSort?: () => void;
+  onDeleteShelf?: (shelfId: string) => void;
 }
 
 export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
@@ -50,6 +51,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
   onShareShelf,
   onReorderShelves,
   onAutoSort,
+  onDeleteShelf,
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newShelfName, setNewShelfName] = useState('');
@@ -57,6 +59,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
   const [newShelfTexture, setNewShelfTexture] = useState<string>(SHELF_TEXTURES[0]);
   const [editingColorShelfId, setEditingColorShelfId] = useState<string | null>(null);
 
+  const [pendingDeleteShelfId, setPendingDeleteShelfId] = useState<string | null>(null);
   const [draggedShelfId, setDraggedShelfId] = useState<string | null>(null);
   const [dragOverShelfId, setDragOverShelfId] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
@@ -447,6 +450,45 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                       >
                         <span className="material-symbols-outlined text-[20px]">share</span>
                       </button>
+
+                      {onDeleteShelf && (
+                        pendingDeleteShelfId === shelf.id ? (
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                haptic.heavyImpact();
+                                onDeleteShelf(shelf.id);
+                                setPendingDeleteShelfId(null);
+                              }}
+                              className="px-2 py-1 bg-[#A9503F] text-white rounded text-[10px] font-mono-ibm font-bold uppercase"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPendingDeleteShelfId(null);
+                              }}
+                              className="px-1.5 text-[#A79C8C] text-[10px] font-mono-ibm"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              haptic.lightImpact();
+                              setPendingDeleteShelfId(shelf.id);
+                            }}
+                            className="text-[#A79C8C] hover:text-[#FF6B6B] p-1.5 rounded-lg hover:bg-[#262119] transition-colors"
+                            title={shelfBooks.length > 0 ? `Delete shelf (${shelfBooks.length} books move to another shelf)` : 'Delete empty shelf'}
+                          >
+                            <span className="material-symbols-outlined text-[20px]">delete</span>
+                          </button>
+                        )
+                      )}
                     </div>
                   </div>
 

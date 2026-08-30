@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Book } from '../types';
+import { toLocalDateKey } from '../utils/streak';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface ReadingAnalyticsDashboardProps {
@@ -11,12 +12,13 @@ export const ReadingAnalyticsDashboard: React.FC<ReadingAnalyticsDashboardProps>
     let totalSeconds = 0;
     let totalPagesRead = 0;
     
-    // Group sessions by day for the chart
-    const last7Days: Record<string, number> = {};
+    // Group sessions by actual calendar day; keying on the weekday name alone
+    // would fold sessions from previous weeks into this week's chart.
+    const last7Days = new Map<string, { label: string; minutes: number }>();
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      last7Days[d.toLocaleDateString('en-US', { weekday: 'short' })] = 0;
+      last7Days.set(toLocalDateKey(d), { label: d.toLocaleDateString(undefined, { weekday: 'short' }), minutes: 0 });
     }
 
     const timeBuckets = { Morning: 0, Afternoon: 0, Evening: 0, Night: 0 };
@@ -33,9 +35,9 @@ export const ReadingAnalyticsDashboard: React.FC<ReadingAnalyticsDashboardProps>
         
         // Chart data
         const sessionDate = new Date(session.date);
-        const dayKey = sessionDate.toLocaleDateString('en-US', { weekday: 'short' });
-        if (last7Days[dayKey] !== undefined) {
-          last7Days[dayKey] += Math.round(session.durationSeconds / 60);
+        const entry = last7Days.get(toLocalDateKey(sessionDate));
+        if (entry) {
+          entry.minutes += Math.round(session.durationSeconds / 60);
         }
 
         // Time of day
@@ -53,7 +55,7 @@ export const ReadingAnalyticsDashboard: React.FC<ReadingAnalyticsDashboardProps>
       }
     });
 
-    const chartData = Object.entries(last7Days).map(([day, minutes]) => ({ day, minutes }));
+    const chartData = Array.from(last7Days.values()).map(({ label, minutes }) => ({ day: label, minutes }));
     
     // Speed: pages per hour
     const hoursRead = totalSeconds / 3600;
@@ -112,6 +114,8 @@ export const ReadingAnalyticsDashboard: React.FC<ReadingAnalyticsDashboardProps>
                     itemStyle={{ color: '#F4EFE6' }}
                     labelStyle={{ color: '#A79C8C', marginBottom: '4px' }}
                   />
+                  <XAxis dataKey="day" hide />
+                  <YAxis hide />
                   <Area type="monotone" dataKey="minutes" stroke="#C9963F" fillOpacity={1} fill="url(#colorMins)" />
                 </AreaChart>
               </ResponsiveContainer>

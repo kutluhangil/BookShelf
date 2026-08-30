@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Book } from '../types';
 import { haptic } from '../services/haptics';
+import { AmbientAudioEngine, AMBIENT_TRACKS, AmbientTrackId } from '../services/ambientAudio';
 
 interface AmbientReadingModeProps {
   book: Book;
@@ -10,30 +11,46 @@ interface AmbientReadingModeProps {
   onStop: () => void;
 }
 
-const AUDIO_TRACKS = [
-  { id: 'rain', name: 'Rain on Window', url: 'https://cdn.freesound.org/previews/189/189874_1411923-lq.mp3' },
-  { id: 'fireplace', name: 'Cozy Fireplace', url: 'https://cdn.freesound.org/previews/411/411088_5121236-lq.mp3' },
-  { id: 'library', name: 'Library Ambience', url: 'https://cdn.freesound.org/previews/316/316886_4019029-lq.mp3' },
-  { id: 'brown_noise', name: 'Deep Focus (Brown Noise)', url: 'https://cdn.freesound.org/previews/21/21682_114068-lq.mp3' }
-];
 
 export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, elapsedSeconds, isActive, onStop }) => {
-  const [activeTrack, setActiveTrack] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [activeTrack, setActiveTrack] = useState<AmbientTrackId | null>(null);
+  const [volume, setVolume] = useState(0.35);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const engineRef = useRef<AmbientAudioEngine | null>(null);
+
+  if (engineRef.current === null && typeof window !== 'undefined') {
+    engineRef.current = new AmbientAudioEngine();
+  }
 
   useEffect(() => {
-    if (activeTrack) {
-      const track = AUDIO_TRACKS.find(t => t.id === activeTrack);
-      if (track && audioRef.current) {
-        audioRef.current.src = track.url;
-        audioRef.current.loop = true;
-        audioRef.current.volume = 0.4;
-        audioRef.current.play().catch(e => console.error("Audio play failed:", e));
+    const engine = engineRef.current;
+    if (!engine) return;
+    try {
+      setAudioError(null);
+      if (activeTrack) {
+        engine.play(activeTrack);
+      } else {
+        engine.stop();
       }
-    } else if (audioRef.current) {
-      audioRef.current.pause();
+    } catch (error) {
+      setAudioError(error instanceof Error ? error.message : String(error));
+      setActiveTrack(null);
     }
   }, [activeTrack]);
+
+  useEffect(() => {
+    engineRef.current?.setVolume(volume);
+  }, [volume]);
+
+  // Stop the soundscape when leaving ambient mode or unmounting.
+  useEffect(() => {
+    if (!isActive) {
+      engineRef.current?.stop();
+      setActiveTrack(null);
+    }
+  }, [isActive]);
+
+  useEffect(() => () => engineRef.current?.dispose(), []);
 
   const formatTime = (totalSeconds: number) => {
     const m = Math.floor(totalSeconds / 60);
@@ -58,8 +75,6 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
               background: `radial-gradient(circle at center, ${book.spineColor || '#C9963F'} 0%, transparent 60%)` 
             }}
           />
-
-          <audio ref={audioRef} />
 
           <motion.div 
             initial={{ y: 20, opacity: 0 }}
@@ -99,7 +114,7 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
                   >
                     Off
                   </button>
-                  {AUDIO_TRACKS.map(track => (
+                  {AMBIENT_TRACKS.map(track => (
                     <button
                       key={track.id}
                       onClick={() => {
@@ -112,6 +127,27 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
                     </button>
                   ))}
                 </div>
+
+                {activeTrack && (
+                  <label className="flex items-center gap-3 w-full max-w-xs mt-2">
+                    <span className="material-symbols-outlined text-white/30 text-[16px]">volume_down</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={volume}
+                      onChange={(event) => setVolume(parseFloat(event.target.value))}
+                      className="flex-1 accent-[#C9963F] cursor-pointer"
+                      aria-label="Ambient volume"
+                    />
+                    <span className="material-symbols-outlined text-white/30 text-[16px]">volume_up</span>
+                  </label>
+                )}
+
+                {audioError && (
+                  <p className="text-[11px] font-mono-ibm text-[#C97A3F] text-center max-w-xs">{audioError}</p>
+                )}
               </div>
 
               <div className="flex justify-center pt-8">

@@ -67,14 +67,18 @@ Three more layers sit on top of your library:
 
 | Feature | What it does |
 |---|---|
-| 📸 **Shelf Scanner** | Bulk-imports physical books by analyzing an image of your bookshelf. Detects spines, extracts titles via OCR simulation, and groups them. |
-| 🏷️ **ISBN Scanner** | Single-book rapid entry. Centers a barcode viewfinder and bypasses bulk review for immediate reading. |
+| 📸 **Shelf Scanner** | Captures a live camera frame and sends it to the server-side Gemini vision endpoint, which returns every readable spine. Recognized text is matched against the local catalog with trigram similarity and grouped into three confidence bands. |
+| 🏷️ **ISBN / QR Scanner** | Live barcode decoding via the Barcode Detection API, resolved against the Open Library catalog for real metadata (title, author, publisher, page count, cover). |
+| 🔎 **Catalog Search** | Debounced Open Library search for manual entry and for resolving low-confidence spines. |
 | ⏱️ **Smart Pacing (ETR)** | Calculates exact hours/minutes left to finish a book based on the total seconds logged per percentage point in your Reading Sessions. |
 | 🔥 **Watch Streak & Milestones** | Calculates consecutive reading days. Fires beautifully animated Toast notifications at 7-day intervals and 5-book completion milestones. |
 | 📚 **Library & Shelves** | 3 statuses (Unread, Reading, Read) · Custom visual shelf strips · Filtering by status and sorting (Author, Title, Recent, Physical Order). |
 | 🔮 **Recommendations** | Analyzes your current library to suggest new titles based on matched authors and genres, instantly addable to your backlog. |
 | 📊 **Dashboards** | Includes a Monthly Goal radial chart, Weekly Reading line charts, Library Growth stats, and a Spike Accuracy dashboard for the scanning engine. |
-| 👆 **Haptic Feedback** | Integrated simulated haptics for a tactile, app-like feel on every button press, scan, and milestone achievement. |
+| 👆 **Haptic Feedback** | Web Audio micro-clicks plus the Vibration API for a tactile feel on every button press, scan, and milestone. |
+| 🌙 **Ambient Reading Mode** | Full-screen timer with soundscapes synthesized locally with the Web Audio API (rain, fireplace, library, brown noise) — no external audio requests. |
+| ☁️ **Cloud Sync** | Optional Google sign-in with Firestore sync, including deletion propagation and a timestamp-based merge instead of a blind overwrite. |
+| 🤝 **Shared Lists** | Public or invite-only collaborative lists with email invitations, joining, and per-book curation. |
 
 ---
 
@@ -118,14 +122,17 @@ Book Shelf/
 │   │   ├── RecommendedBooks.tsx# Recommendation engine UI
 │   │   ├── Toast.tsx           # Milestone notification system
 │   │   └── ...                 # Dashboards, Cards, Layouts
-│   ├── data/                   # Initial mock data and recommendation catalogs
-│   ├── services/               # Core business logic (Clustering, Haptics)
-│   ├── utils/                  # Helper functions (e.g., streak calculation)
+│   ├── data/                   # Starter library and recommendation catalog
+│   ├── services/               # bookLookup (Open Library), clusteringEngine (spine matching),
+│   │                           # cloudSync, localStore, ambientAudio, shelfCard, haptics
+│   ├── utils/                  # Helper functions (streak, search parser)
+│   ├── __tests__/              # Vitest unit tests
 │   ├── App.tsx                 # Main application state and router
 │   ├── index.css               # Tailwind & global styles
 │   └── types.ts                # TypeScript interfaces (Book, Shelf, ReadingSession)
+├── server.ts                   # Express server + Gemini endpoints (shelf, quote, recommend)
+├── firestore.rules             # Firestore security rules
 ├── package.json
-├── tailwind.config.js
 └── vite.config.ts
 ```
 
@@ -135,7 +142,9 @@ Book Shelf/
 
 ### Requirements
 - Node.js `>= 18`
-- `npm` or `pnpm`
+- `npm`, `pnpm` or `bun`
+- A Gemini API key (for the scanner, OCR and AI recommendations)
+- Optional: a Firebase project (for Google sign-in, cloud sync and shared lists)
 
 ```bash
 # Clone the repository
@@ -145,17 +154,27 @@ cd bookshelf
 # Install dependencies
 npm install
 
-# Start the development server
+# Configure environment variables
+cp .env.example .env
+# Fill in GEMINI_API_KEY, and the VITE_FIREBASE_* values if you want cloud features.
+
+# Start the development server (Express + Vite middleware on :3000)
 npm run dev
 ```
+
+Without `GEMINI_API_KEY` the server refuses to start and names the missing variable.
+Without the `VITE_FIREBASE_*` values the app runs fully offline against local storage;
+the login button is disabled and says so.
 
 ### Command card
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Starts Vite development server (`localhost:3000` or `5173`) |
-| `npm run build` | Builds the app for production into `dist/` |
-| `npm run preview` | Previews the production build locally |
+| `npm run dev` | Starts the Express + Vite dev server on `localhost:3000` |
+| `npm run build` | Builds the client into `dist/` and bundles the server to `dist/server.cjs` |
+| `npm start` | Runs the production build |
+| `npm test` | Runs the Vitest unit tests |
+| `npm run lint` | Type-checks the project with `tsc --noEmit` |
 
 ---
 
@@ -164,13 +183,22 @@ npm run dev
 | Area | State |
 |---|:-:|
 | Core Library (CRUD, Sorting, Shelves) | ✅ |
-| Scanning Pipeline (Shelf + ISBN modes) | ✅ |
+| Local persistence (survives reload) | ✅ |
+| Shelf recognition (camera + Gemini vision) | ✅ |
+| ISBN / QR scanning (Barcode Detection API + Open Library) | ✅ |
 | Reading Analytics (Sessions, Pace, ETR) | ✅ |
 | Dashboards (Goals, Calendars, Growth) | ✅ |
 | Gamification (Streaks, Milestone Toasts) | ✅ |
 | Local Recommendation Engine | ✅ |
-| Cloud Persistence (Supabase/Firebase) | ⬜ Planned |
+| Gemini AI Recommendations | ✅ |
+| Cloud Persistence (Firebase) | ✅ Optional |
+| Shared Lists (public + invite-only) | ✅ Optional |
+| Unit tests (Vitest) | ✅ |
 | Mobile Native Port (React Native) | ⬜ Planned |
+
+> **Note on the "Phase 0 Eval" screen:** the bundled benchmark dataset is synthetic
+> sample data with known ground truth, used to exercise the review UI. It is not a
+> measurement of the live recognition pipeline, and the screen says so.
 
 ---
 

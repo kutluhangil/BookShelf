@@ -6,47 +6,55 @@ import { haptic } from '../services/haptics';
 interface ProcessingViewProps {
   imageUrl: string;
   candidates: SpineCandidate[];
-  onComplete: () => void;
+  /** What the app is currently waiting on (recognition, ISBN lookup, ...). */
+  label?: string;
+  onComplete?: () => void;
 }
 
 export const ProcessingView: React.FC<ProcessingViewProps> = ({
   imageUrl,
   candidates,
+  label = 'Analyzing',
   onComplete,
 }) => {
-  const [progress, setProgress] = useState(15);
-  const [currentStage, setCurrentStage] = useState('ALIGNING PERSPECTIVE & ROLL (1.2°)');
+  const hasResults = candidates.length > 0;
+  const [progress, setProgress] = useState(12);
+  const [currentStage, setCurrentStage] = useState(`${label.toUpperCase()} — UPLOADING FRAME`);
 
+  // While the request is in flight, creep the progress bar without ever claiming
+  // completion; the real result decides when the view hands over.
   useEffect(() => {
-    const stage1 = setTimeout(() => {
-      setProgress(42);
-      setCurrentStage(`SEGMENTING ${candidates.length} PHYSICAL SPINES (§7.3)`);
-    }, 600);
+    if (hasResults) return;
+    setCurrentStage(`${label.toUpperCase()} — WAITING FOR RESPONSE`);
+    const interval = setInterval(() => {
+      setProgress((prev) => (prev >= 70 ? 70 : prev + 2));
+    }, 180);
+    return () => clearInterval(interval);
+  }, [hasResults, label]);
 
-    const stage2 = setTimeout(() => {
-      setProgress(74);
-      setCurrentStage('EXTRACTING 4-ORIENTATION OCR TEXT & COLOR SIGNATURES');
-    }, 1300);
+  // Results arrived: reveal the detected boxes, then hand over.
+  useEffect(() => {
+    if (!hasResults || !onComplete) return;
 
-    const stage3 = setTimeout(() => {
-      setProgress(95);
+    setProgress(82);
+    setCurrentStage(`SEGMENTED ${candidates.length} PHYSICAL SPINES`);
+
+    const stage = setTimeout(() => {
+      setProgress(96);
       setCurrentStage('RESOLVING CATALOG EDITIONS & CONFIDENCE BANDS');
-    }, 2000);
+    }, 500);
 
-    const stage4 = setTimeout(() => {
+    const done = setTimeout(() => {
       setProgress(100);
-      // Invoke success haptic pattern via haptics service when clustering and matching simulation completes
       haptic.success();
       onComplete();
-    }, 2600);
+    }, 1200);
 
     return () => {
-      clearTimeout(stage1);
-      clearTimeout(stage2);
-      clearTimeout(stage3);
-      clearTimeout(stage4);
+      clearTimeout(stage);
+      clearTimeout(done);
     };
-  }, [candidates.length, onComplete]);
+  }, [hasResults, candidates.length, onComplete]);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#12100E] flex flex-col justify-between overflow-hidden">
@@ -55,7 +63,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-[#C9963F] animate-ping" />
           <span className="font-mono-ibm text-[12px] text-[#C9963F] font-semibold tracking-widest uppercase">
-            LOCAL ENGINE RUNNING
+            {label}
           </span>
         </div>
         <span className="font-mono-ibm text-[11px] text-[#A79C8C] tracking-wider">
@@ -65,11 +73,17 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
 
       {/* Center Image Viewport with Laser Beam and Candidate Bounding Boxes */}
       <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
-        <img
-          src={imageUrl}
-          alt="Processing shelf"
-          className="w-full h-full object-cover opacity-60 filter contrast-125"
-        />
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt="Processing shelf"
+            className="w-full h-full object-cover opacity-60 filter contrast-125"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="w-14 h-14 border-4 border-[#C9963F]/20 border-t-[#C9963F] rounded-full animate-spin" />
+          </div>
+        )}
 
         {/* Moving Laser Line (Image 9) */}
         <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-[#C9963F] to-transparent animate-laser shadow-[0_0_15px_#C9963F]" />
@@ -77,7 +91,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
         {/* Segmented Spine Bounding Boxes (Image 9) */}
         <div className="absolute inset-0 pointer-events-none">
           {candidates.map((cand, idx) => {
-            const isRevealed = progress > 35;
+            const isRevealed = hasResults;
             return (
               <motion.div
                 key={cand.id}
@@ -133,7 +147,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
         </div>
 
         <p className="text-center font-sans-inter text-[12px] text-[#9C8F7E]">
-          Privacy-First Architecture: Raw image crops remain strictly on your device.
+          The captured frame is sent to your own server, which forwards it to Gemini for spine recognition. It is not stored.
         </p>
       </div>
     </div>

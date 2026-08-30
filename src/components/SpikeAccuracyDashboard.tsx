@@ -91,6 +91,17 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
         </button>
       </header>
 
+      {/* The bundled benchmark set is synthetic sample data, not a measurement of
+          the live recognition pipeline. Say so plainly instead of implying otherwise. */}
+      <div className="px-4 sm:px-6 py-2.5 bg-[#3A2412] border-b border-[#C9963F]/40 flex items-start gap-2">
+        <span className="material-symbols-outlined text-[18px] text-[#F5BD62] shrink-0">science</span>
+        <p className="font-sans-inter text-[12px] text-[#F5BD62] leading-relaxed">
+          <strong className="font-semibold">Demo data.</strong> These figures come from the bundled sample dataset with
+          known ground truth. They are fixtures for exercising the review UI, not measurements of the live Gemini
+          recognition pipeline.
+        </p>
+      </div>
+
       {/* Tabs */}
       <div className="bg-[#151311] border-b border-[#3A332A] px-6 flex gap-6 text-[13px] font-mono-ibm">
         <button

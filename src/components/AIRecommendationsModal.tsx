@@ -1,46 +1,66 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Book } from '../types';
+
+export interface AIRecommendation {
+  title: string;
+  author: string;
+  year?: number;
+  category?: string;
+  reason?: string;
+}
 
 interface AIRecommendationsModalProps {
   isOpen: boolean;
   onClose: () => void;
   books: Book[];
+  onAddBook?: (recommendation: AIRecommendation) => void;
 }
 
-export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({ isOpen, onClose, books }) => {
-  const [recommendations, setRecommendations] = useState<any[]>([]);
+export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
+  isOpen,
+  onClose,
+  books,
+  onAddBook,
+}) => {
+  const [recommendations, setRecommendations] = useState<AIRecommendation[]>([]);
+  const [addedTitles, setAddedTitles] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen && recommendations.length === 0 && books.length > 0) {
-      generateRecommendations();
-    }
-  }, [isOpen]);
-
-  const generateRecommendations = async () => {
+  const generateRecommendations = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const response = await fetch('/api/gemini/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ books })
+        body: JSON.stringify({ books }),
       });
-      
-      if (!response.ok) throw new Error('Failed to fetch recommendations');
-      
-      const res = await response.json();
-      const parsed = JSON.parse(res.data);
-      setRecommendations(parsed.recommendations || []);
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.detail || payload?.error || `Request failed with status ${response.status}`);
+      }
+
+      const list = payload?.recommendations;
+      if (!Array.isArray(list)) {
+        throw new Error('The recommendation service returned an unexpected payload.');
+      }
+      setRecommendations(list as AIRecommendation[]);
+      setAddedTitles([]);
     } catch (err) {
-      console.error(err);
-      setError('Failed to generate recommendations. Please try again.');
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [books]);
+
+  useEffect(() => {
+    if (isOpen && recommendations.length === 0 && books.length > 0 && !isLoading && !error) {
+      void generateRecommendations();
+    }
+  }, [isOpen, recommendations.length, books.length, isLoading, error, generateRecommendations]);
 
   return (
     <AnimatePresence>
@@ -79,10 +99,16 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({ 
                   <p className="text-[#C9963F] font-mono-ibm text-[12px] uppercase tracking-widest font-bold">Analyzing Your Taste...</p>
                 </div>
               ) : error ? (
-                <div className="flex flex-col items-center justify-center h-full space-y-4">
+                <div className="flex flex-col items-center justify-center h-full space-y-4 px-6 text-center">
                   <span className="material-symbols-outlined text-[48px] text-[#FF6B6B]">error</span>
-                  <p className="text-[#FF6B6B] font-mono-ibm text-[12px]">{error}</p>
-                  <button onClick={generateRecommendations} className="px-4 py-2 bg-[#2C251D] text-[#C9963F] rounded-lg hover:bg-[#3A332A] transition-colors text-[13px] font-bold">
+                  <p className="text-[#FF6B6B] font-mono-ibm text-[12px] leading-relaxed break-words max-w-sm">{error}</p>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      void generateRecommendations();
+                    }}
+                    className="px-4 py-2 bg-[#2C251D] text-[#C9963F] rounded-lg hover:bg-[#3A332A] transition-colors text-[13px] font-bold"
+                  >
                     Retry
                   </button>
                 </div>
@@ -99,10 +125,30 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({ 
                       <div className="w-12 h-16 bg-[#2C251D] rounded flex-shrink-0 flex items-center justify-center shadow-inner">
                         <span className="material-symbols-outlined text-[#A79C8C]/50 text-[24px]">book</span>
                       </div>
-                      <div className="flex-1 space-y-1">
+                      <div className="flex-1 space-y-1 min-w-0">
                         <h4 className="font-serif-literata text-[15px] font-bold text-[#F4EFE6] leading-tight">{rec.title}</h4>
-                        <p className="font-mono-ibm text-[11px] text-[#A79C8C]">{rec.author}</p>
-                        <p className="font-sans-inter text-[13px] text-[#D4CDA8] mt-2 italic">"{rec.reason}"</p>
+                        <p className="font-mono-ibm text-[11px] text-[#A79C8C]">
+                          {rec.author}
+                          {rec.year ? ` • ${rec.year}` : ''}
+                        </p>
+                        {rec.reason && (
+                          <p className="font-sans-inter text-[13px] text-[#D4CDA8] mt-2 italic">"{rec.reason}"</p>
+                        )}
+                        {onAddBook && (
+                          <button
+                            onClick={() => {
+                              onAddBook(rec);
+                              setAddedTitles((prev) => [...prev, rec.title]);
+                            }}
+                            disabled={addedTitles.includes(rec.title)}
+                            className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#262119] hover:bg-[#3A332A] text-[#C9963F] rounded-lg font-mono-ibm text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">
+                              {addedTitles.includes(rec.title) ? 'check' : 'library_add'}
+                            </span>
+                            {addedTitles.includes(rec.title) ? 'Added' : 'Add to library'}
+                          </button>
+                        )}
                       </div>
                     </motion.div>
                   ))}
@@ -112,7 +158,10 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({ 
 
             <div className="mt-6 pt-4 border-t border-[#3A332A] flex justify-center">
               <button
-                onClick={generateRecommendations}
+                onClick={() => {
+                  setError(null);
+                  void generateRecommendations();
+                }}
                 disabled={isLoading || books.length === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-[#C9963F]/10 text-[#C9963F] rounded-lg hover:bg-[#C9963F]/20 transition-colors text-[13px] font-mono-ibm font-bold uppercase tracking-wider disabled:opacity-50"
               >
