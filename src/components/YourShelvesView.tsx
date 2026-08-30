@@ -1,0 +1,445 @@
+import React, { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Shelf, Book } from '../types';
+import { ShelfStrip } from './ShelfStrip';
+import { haptic } from '../services/haptics';
+
+const SHELF_COLORS = ['#C9963F', '#304E2E', '#2C251D', '#8B2323', '#4A5B69', '#63456B', '#4D4336'];
+
+interface YourShelvesViewProps {
+  shelves: Shelf[];
+  books: Book[];
+  onSelectShelf: (shelfId: string) => void;
+  onCreateShelf: (name: string, color?: string) => void;
+  onUpdateShelf?: (shelfId: string, updates: Partial<Shelf>) => void;
+  onShareShelf: (shelf: Shelf) => void;
+  onReorderShelves?: (newShelves: Shelf[]) => void;
+}
+
+export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
+  shelves,
+  books,
+  onSelectShelf,
+  onCreateShelf,
+  onUpdateShelf,
+  onShareShelf,
+  onReorderShelves,
+}) => {
+  const [isCreating, setIsCreating] = useState(false);
+  const [newShelfName, setNewShelfName] = useState('');
+  const [newShelfColor, setNewShelfColor] = useState<string>(SHELF_COLORS[0]);
+  const [editingColorShelfId, setEditingColorShelfId] = useState<string | null>(null);
+
+  const [draggedShelfId, setDraggedShelfId] = useState<string | null>(null);
+  const [dragOverShelfId, setDragOverShelfId] = useState<string | null>(null);
+  const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
+  const lastOverRef = useRef<string | null>(null);
+
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newShelfName.trim()) {
+      haptic.mediumImpact();
+      onCreateShelf(newShelfName.trim(), newShelfColor);
+      setNewShelfName('');
+      setNewShelfColor(SHELF_COLORS[0]);
+      setIsCreating(false);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, shelfId: string) => {
+    e.dataTransfer.setData('text/plain', shelfId);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedShelfId(shelfId);
+    haptic.selectionClick();
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetShelfId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    if (!draggedShelfId || draggedShelfId === targetShelfId) {
+      return;
+    }
+
+    const targetRect = e.currentTarget.getBoundingClientRect();
+    const midPoint = targetRect.top + targetRect.height / 2;
+    const pos = e.clientY < midPoint ? 'before' : 'after';
+
+    if (dragOverShelfId !== targetShelfId || dropPosition !== pos) {
+      setDragOverShelfId(targetShelfId);
+      setDropPosition(pos);
+      if (lastOverRef.current !== `${targetShelfId}-${pos}`) {
+        haptic.lightImpact();
+        lastOverRef.current = `${targetShelfId}-${pos}`;
+      }
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only reset if leaving the bounding container
+    const currentTarget = e.currentTarget;
+    const relatedTarget = e.relatedTarget as Node | null;
+    if (!currentTarget.contains(relatedTarget)) {
+      setDragOverShelfId(null);
+      setDropPosition(null);
+      lastOverRef.current = null;
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetShelfId: string) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain') || draggedShelfId;
+
+    if (sourceId && sourceId !== targetShelfId && onReorderShelves) {
+      const sourceIndex = shelves.findIndex((s) => s.id === sourceId);
+      const targetIndex = shelves.findIndex((s) => s.id === targetShelfId);
+
+      if (sourceIndex !== -1 && targetIndex !== -1) {
+        const reordered = [...shelves];
+        const [movedItem] = reordered.splice(sourceIndex, 1);
+        
+        let insertIndex = targetIndex;
+        if (dropPosition === 'after') {
+          insertIndex = sourceIndex < targetIndex ? targetIndex : targetIndex + 1;
+        } else {
+          insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        }
+        
+        // Clamp insertion index
+        insertIndex = Math.max(0, Math.min(reordered.length, insertIndex));
+        reordered.splice(insertIndex, 0, movedItem);
+
+        // Update sort order attributes
+        const updated = reordered.map((s, idx) => ({ ...s, sortOrder: idx + 1 }));
+        onReorderShelves(updated);
+        haptic.mediumImpact();
+      }
+    }
+
+    setDraggedShelfId(null);
+    setDragOverShelfId(null);
+    setDropPosition(null);
+    lastOverRef.current = null;
+  };
+
+  const handleDragEnd = () => {
+    setDraggedShelfId(null);
+    setDragOverShelfId(null);
+    setDropPosition(null);
+    lastOverRef.current = null;
+  };
+
+  // Move shelf up or down by 1 index (touch / keyboard accessibility)
+  const handleMoveShelf = (shelfId: string, direction: 'up' | 'down') => {
+    if (!onReorderShelves) return;
+    const currentIndex = shelves.findIndex((s) => s.id === shelfId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= shelves.length) return;
+
+    haptic.selectionClick();
+    const reordered = [...shelves];
+    const [item] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, item);
+
+    const updated = reordered.map((s, idx) => ({ ...s, sortOrder: idx + 1 }));
+    onReorderShelves(updated);
+  };
+
+  return (
+    <div className="max-w-[1000px] mx-auto w-full px-4 sm:px-6 py-8 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#3A332A] pb-4">
+        <div>
+          <h2 className="font-serif-literata text-[26px] sm:text-[30px] text-[#F4EFE6] font-bold">
+            Your Physical Shelves
+          </h2>
+          <p className="font-sans-inter text-[13px] text-[#A79C8C] flex items-center gap-2 mt-0.5">
+            <span>{shelves.length} organized sections • {books.length} cataloged volumes</span>
+            <span className="hidden sm:inline text-[#C9963F]/70">•</span>
+            <span className="hidden sm:inline text-[#C9963F] font-mono-ibm text-[11px]">
+              Drag cards or handles to reorder hierarchy
+            </span>
+          </p>
+        </div>
+
+        <button
+          onClick={() => {
+            haptic.lightImpact();
+            setIsCreating(true);
+          }}
+          className="px-4 py-2 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] font-mono-ibm text-[12px] font-bold rounded-xl tracking-wider transition-all flex items-center gap-1.5 shadow-[0_4px_16px_rgba(201,150,63,0.3)]"
+        >
+          <span className="material-symbols-outlined text-[18px]">add</span>
+          <span>NEW SHELF</span>
+        </button>
+      </div>
+
+      {/* New Shelf Creator Inline Card */}
+      {isCreating && (
+        <form
+          onSubmit={handleCreate}
+          className="bg-[#1C1916] rounded-xl p-4 sm:p-5 hairline-border border-[#C9963F]/50 flex flex-col sm:flex-row gap-3 items-center"
+        >
+          <div className="flex-1 w-full space-y-3">
+            <input
+              type="text"
+              value={newShelfName}
+              onChange={(e) => setNewShelfName(e.target.value)}
+              placeholder="e.g. Vintage Poetry, Swedish Crime, Art History..."
+              autoFocus
+              className="w-full bg-[#12100E] text-[#F4EFE6] hairline-border rounded-xl px-4 py-2.5 text-[14px] font-sans-inter focus:outline-none focus:border-[#C9963F]"
+            />
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider">
+                Theme Color:
+              </span>
+              <div className="flex items-center gap-1.5">
+                {SHELF_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      haptic.selectionClick();
+                      setNewShelfColor(c);
+                    }}
+                    className={`w-6 h-6 rounded-full transition-transform ${newShelfColor === c ? 'scale-110 ring-2 ring-offset-2 ring-offset-[#1C1916] ring-[#C9963F]' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
+                    style={{ backgroundColor: c }}
+                    title={`Select color ${c}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto self-start sm:self-center mt-2 sm:mt-0">
+            <button
+              type="submit"
+              className="flex-1 sm:flex-none px-4 py-2.5 bg-[#C9963F] text-[#12100E] font-mono-ibm text-[11px] font-bold rounded-lg uppercase tracking-wider"
+            >
+              Create
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                haptic.lightImpact();
+                setIsCreating(false);
+              }}
+              className="flex-1 sm:flex-none px-4 py-2.5 hairline-border text-[#A79C8C] hover:text-[#F4EFE6] font-mono-ibm text-[11px] rounded-lg uppercase tracking-wider"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Shelves List with Drag-and-Drop Reordering */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <AnimatePresence>
+          {shelves.map((shelf, index) => {
+            const shelfBooks = books.filter((b) => b.shelfId === shelf.id);
+            const colors =
+              shelfBooks.length > 0
+                ? shelfBooks.map((b) => b.spineColor || '#C9963F')
+                : shelf.dominantColors;
+            const isDragging = draggedShelfId === shelf.id;
+            const isOver = dragOverShelfId === shelf.id;
+
+            return (
+              <motion.div
+                key={shelf.id}
+                layout
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                draggable
+                onDragStart={(e) => handleDragStart(e as unknown as React.DragEvent, shelf.id)}
+                onDragOver={(e) => handleDragOver(e as unknown as React.DragEvent, shelf.id)}
+                onDragLeave={(e) => handleDragLeave(e as unknown as React.DragEvent)}
+                onDrop={(e) => handleDrop(e as unknown as React.DragEvent, shelf.id)}
+                onDragEnd={handleDragEnd}
+                onClick={() => {
+                  haptic.lightImpact();
+                  onSelectShelf(shelf.id);
+                }}
+                className={`bg-[#1C1916] rounded-2xl p-5 sm:p-6 hairline-border paper-glow transition-all duration-200 cursor-pointer group flex flex-col justify-between relative ${
+                  isDragging
+                    ? 'opacity-40 scale-[0.98] border-dashed border-[#C9963F]'
+                    : isOver
+                    ? 'border-[#C9963F] shadow-[0_0_20px_rgba(201,150,63,0.25)] bg-[#221F1D]'
+                    : 'border-[#3A332A] hover:bg-[#221F1D]'
+                }`}
+              >
+                {/* Visual Drop Insertion Indicators */}
+                {isOver && dropPosition === 'before' && (
+                  <div className="absolute -top-2.5 left-4 right-4 h-1 bg-[#C9963F] rounded-full shadow-[0_0_8px_#C9963F] pointer-events-none z-30" />
+                )}
+                {isOver && dropPosition === 'after' && (
+                  <div className="absolute -bottom-2.5 left-4 right-4 h-1 bg-[#C9963F] rounded-full shadow-[0_0_8px_#C9963F] pointer-events-none z-30" />
+                )}
+
+                <div>
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-start gap-2.5">
+                      {/* Drag Handle */}
+                      <div
+                        className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-[#A79C8C] hover:text-[#C9963F] rounded transition-colors touch-none"
+                        title="Drag to reorder shelf"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="material-symbols-outlined text-[20px] select-none">
+                          drag_indicator
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 bg-[#262119] text-[#C9963F] border border-[#3A332A] rounded text-[9px] font-mono-ibm font-bold tracking-wider">
+                            SHELF #{index + 1}
+                          </span>
+                          <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] group-hover:text-[#C9963F] transition-colors font-semibold leading-tight">
+                            {shelf.name}
+                          </h3>
+                        </div>
+                        <p className="font-mono-ibm text-[11px] text-[#A79C8C] mt-1">
+                          {shelfBooks.length > 0 ? shelfBooks.length : shelf.volumeCount} PHYSICAL VOLUMES
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {/* Reorder Stepper Buttons (Up/Down) for Quick / Touch Reordering */}
+                      {onReorderShelves && (
+                        <div className="flex items-center bg-[#262119] rounded-lg border border-[#3A332A] overflow-hidden mr-1">
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveShelf(shelf.id, 'up');
+                            }}
+                            className={`p-1.5 transition-colors ${
+                              index === 0
+                                ? 'text-[#5A5044] cursor-not-allowed'
+                                : 'text-[#A79C8C] hover:text-[#F4EFE6] hover:bg-[#322B22]'
+                            }`}
+                            title="Move Shelf Up"
+                          >
+                            <span className="material-symbols-outlined text-[16px] leading-none">
+                              arrow_upward
+                            </span>
+                          </button>
+                          <div className="w-[1px] h-3.5 bg-[#3A332A]" />
+                          <button
+                            type="button"
+                            disabled={index === shelves.length - 1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveShelf(shelf.id, 'down');
+                            }}
+                            className={`p-1.5 transition-colors ${
+                              index === shelves.length - 1
+                                ? 'text-[#5A5044] cursor-not-allowed'
+                                : 'text-[#A79C8C] hover:text-[#F4EFE6] hover:bg-[#322B22]'
+                            }`}
+                            title="Move Shelf Down"
+                          >
+                            <span className="material-symbols-outlined text-[16px] leading-none">
+                              arrow_downward
+                            </span>
+                          </button>
+                        </div>
+                      )}
+
+                      {onUpdateShelf && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            haptic.lightImpact();
+                            setEditingColorShelfId(editingColorShelfId === shelf.id ? null : shelf.id);
+                          }}
+                          className={`p-1.5 rounded-lg transition-colors ${editingColorShelfId === shelf.id ? 'text-[#C9963F] bg-[#262119]' : 'text-[#A79C8C] hover:text-[#C9963F] hover:bg-[#262119]'}`}
+                          title="Change Shelf Color"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">palette</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          haptic.lightImpact();
+                          onShareShelf(shelf);
+                        }}
+                        className="text-[#A79C8C] hover:text-[#C9963F] p-1.5 rounded-lg hover:bg-[#262119] transition-colors"
+                        title="Export Shelf Card"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">share</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {editingColorShelfId === shelf.id && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                        animate={{ opacity: 1, height: 'auto', marginBottom: 12 }}
+                        exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex items-center gap-2 p-2 bg-[#12100E] rounded-lg border border-[#3A332A]">
+                          <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider ml-1">
+                            Theme:
+                          </span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {SHELF_COLORS.map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => {
+                                  haptic.selectionClick();
+                                  onUpdateShelf?.(shelf.id, { 
+                                    themeColor: c, 
+                                    dominantColors: [c, c, c, c] 
+                                  });
+                                  setEditingColorShelfId(null);
+                                }}
+                                className={`w-5 h-5 rounded-full transition-transform ${shelf.themeColor === c ? 'scale-110 ring-2 ring-offset-2 ring-offset-[#12100E] ring-[#C9963F]' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
+                                style={{ backgroundColor: c }}
+                                title={`Set color ${c}`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* ShelfStrip Signature visualization */}
+                  <div className="my-4">
+                    <ShelfStrip colors={colors} variant="compact" height={44} />
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-[#3A332A]/70 flex justify-between items-center text-[12px] font-mono-ibm text-[#9C8F7E]">
+                  <span className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[15px] text-[#C9963F]">
+                      menu_book
+                    </span>
+                    <span>VIEW ARCHIVE</span>
+                  </span>
+                  <span className="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform text-[#C9963F]">
+                    arrow_forward
+                  </span>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
+

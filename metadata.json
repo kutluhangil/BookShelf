@@ -1,0 +1,6 @@
+{
+  "name": "SPINE — Physical Bookshelf Digitizer & Archive",
+  "description": "Digitize your physical library from a single shelf photograph with device-first spine recognition, 3-tier confidence matching, tactile shelf strips, and nocturnal curation.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
