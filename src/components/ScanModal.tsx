@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SPIKE_DATASET } from '../data/spikeDataset';
 import { SpikeSample } from '../types';
 import { haptic } from '../services/haptics';
+import { createBarcodeReader, type BarcodeReader } from '../services/barcodeScanner';
 
 export type ScanMode = 'shelf' | 'isbn' | 'qr';
 
@@ -24,17 +25,11 @@ interface ScanModalProps {
 /** Longest edge, in pixels, of a frame sent to the server. */
 const MAX_CAPTURE_EDGE = 1280;
 
-const BARCODE_FORMATS: Record<ScanMode, string[]> = {
-  shelf: [],
-  isbn: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'],
-  qr: ['qr_code'],
-};
-
 export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const detectorRef = useRef<BarcodeDetector | null>(null);
+  const readerRef = useRef<BarcodeReader | null>(null);
   const scanLoopRef = useRef<number | null>(null);
   const wasAlignedRef = useRef<boolean>(false);
 
@@ -43,7 +38,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isTorchAvailable, setIsTorchAvailable] = useState(false);
   const [isTorchOn, setIsTorchOn] = useState(false);
-  const [barcodeSupported, setBarcodeSupported] = useState(true);
+  const [barcodeEngine, setBarcodeEngine] = useState<BarcodeReader['engine'] | null>(null);
+  const [barcodeError, setBarcodeError] = useState<string | null>(null);
   const [showDemoShelves, setShowDemoShelves] = useState(false);
   const [roll, setRoll] = useState<number | null>(null);
   const [pitch, setPitch] = useState<number | null>(null);
@@ -199,36 +195,52 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
   useEffect(() => {
     if (!isOpen || scanMode === 'shelf' || !isCameraReady) return;
 
-    const Detector = window.BarcodeDetector;
-    if (!Detector) {
-      setBarcodeSupported(false);
-      return;
-    }
-    setBarcodeSupported(true);
-    detectorRef.current = new Detector({ formats: BARCODE_FORMATS[scanMode] });
-
     let cancelled = false;
+    setBarcodeError(null);
 
-    const tick = async () => {
-      if (cancelled) return;
-      const video = videoRef.current;
-      if (video && video.videoWidth && detectorRef.current) {
-        try {
-          const results = await detectorRef.current.detect(video);
-          const hit = results[0];
-          if (hit?.rawValue) {
-            haptic.success();
-            onCapture({ imageUrl: grabFrame() ?? '', mode: scanMode, barcode: hit.rawValue });
-            return;
-          }
-        } catch {
-          // A single failed frame is not fatal; keep polling.
+    const start = async () => {
+      let reader: BarcodeReader;
+      try {
+        reader = await createBarcodeReader(scanMode);
+      } catch (error) {
+        if (!cancelled) {
+          setBarcodeError(
+            `Barcode scanning is unavailable: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
+        return;
       }
-      scanLoopRef.current = window.setTimeout(tick, 350);
+      if (cancelled) {
+        reader.dispose();
+        return;
+      }
+
+      readerRef.current = reader;
+      setBarcodeEngine(reader.engine);
+
+      const tick = async () => {
+        if (cancelled) return;
+        const video = videoRef.current;
+        if (video && video.videoWidth) {
+          try {
+            const value = await reader.detect(video);
+            if (value) {
+              haptic.success();
+              onCapture({ imageUrl: grabFrame() ?? '', mode: scanMode, barcode: value });
+              return;
+            }
+          } catch {
+            // A single failed frame is not fatal; keep polling.
+          }
+        }
+        // ZXing decodes a whole frame in software, so give it a longer interval.
+        scanLoopRef.current = window.setTimeout(tick, reader.engine === 'native' ? 350 : 600);
+      };
+
+      void tick();
     };
 
-    void tick();
+    void start();
 
     return () => {
       cancelled = true;
@@ -236,6 +248,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
         window.clearTimeout(scanLoopRef.current);
         scanLoopRef.current = null;
       }
+      readerRef.current?.dispose();
+      readerRef.current = null;
     };
   }, [isOpen, scanMode, isCameraReady, grabFrame, onCapture]);
 
@@ -373,10 +387,16 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
           </div>
         )}
 
-        {!cameraError && scanMode !== 'shelf' && !barcodeSupported && (
+        {!cameraError && scanMode !== 'shelf' && barcodeError && (
           <div className="absolute bottom-40 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/80 rounded-xl hairline-border max-w-xs text-center">
-            <p className="font-mono-ibm text-[11px] text-[#F5BD62] leading-relaxed">
-              Live barcode detection is not supported by this browser. Use the shutter to capture, then search manually.
+            <p className="font-mono-ibm text-[11px] text-[#FF6B6B] leading-relaxed">{barcodeError}</p>
+          </div>
+        )}
+
+        {!cameraError && scanMode !== 'shelf' && !barcodeError && barcodeEngine === 'zxing' && (
+          <div className="absolute bottom-40 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-black/70 rounded-full hairline-border">
+            <p className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">
+              Software decoder — hold steady
             </p>
           </div>
         )}
