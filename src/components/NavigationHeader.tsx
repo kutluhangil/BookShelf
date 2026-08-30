@@ -7,6 +7,7 @@ interface NavigationHeaderProps {
   books?: Book[];
   onBack?: () => void;
   onOpenProfile?: () => void;
+  onOpenRecommendations?: () => void;
   onOpenSpikeDashboard?: () => void;
   onOpenOnboarding?: () => void;
   discardMode?: boolean;
@@ -20,6 +21,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
   books = [],
   onBack,
   onOpenProfile,
+  onOpenRecommendations,
   onOpenSpikeDashboard,
   onOpenOnboarding,
   discardMode = false,
@@ -193,6 +195,19 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
           >
             <span className="material-symbols-outlined text-[20px]">analytics</span>
           </button>
+
+          {onOpenRecommendations && (
+            <button
+              onClick={() => {
+                haptic.lightImpact();
+                onOpenRecommendations();
+              }}
+              className="text-[#C9963F] hover:text-[#F4EFE6] hover:bg-[#1C1916] p-2 rounded-full transition-colors flex items-center justify-center"
+              title="AI Recommendations"
+            >
+              <span className="material-symbols-outlined text-[24px]">auto_awesome</span>
+            </button>
+          )}
 
           <button
             onClick={() => {

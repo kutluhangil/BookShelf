@@ -20,6 +20,8 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { YourShelvesView } from './components/YourShelvesView';
 import { SharedListsView } from './components/SharedListsView';
 import { LibraryGrowthDashboard } from './components/LibraryGrowthDashboard';
+import { ReadingAnalyticsDashboard } from './components/ReadingAnalyticsDashboard';
+import { GamificationBadges } from './components/GamificationBadges';
 import { MonthlyGoalDashboard } from './components/MonthlyGoalDashboard';
 import { ReadingGoalsDashboard } from './components/ReadingGoalsDashboard';
 import { DailyQuoteDashboard } from './components/DailyQuoteDashboard';
@@ -30,10 +32,12 @@ import { WeeklyReadingChart } from './components/WeeklyReadingChart';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { ReadingGoalsModal } from './components/ReadingGoalsModal';
 import { BookComparisonModal } from './components/BookComparisonModal';
+import { AIRecommendationsModal } from './components/AIRecommendationsModal';
 import { LibraryAnnualProgressBar } from './components/LibraryAnnualProgressBar';
 import { calculateReadingStreak } from './utils/streak';
 import { parseNLPSearchQuery } from './utils/searchParser';
 import { haptic } from './services/haptics';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   // Primary Store State
@@ -77,6 +81,7 @@ export default function App() {
   const [activeBookDetail, setActiveBookDetail] = useState<Book | null>(null);
   const [activeShareShelf, setActiveShareShelf] = useState<Shelf | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isRecommendationsModalOpen, setIsRecommendationsModalOpen] = useState(false);
   const [isSpikeDashboardOpen, setIsSpikeDashboardOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isReadingGoalsModalOpen, setIsReadingGoalsModalOpen] = useState(false);
@@ -322,6 +327,7 @@ export default function App() {
         pageCount: 368,
         description: "Quick-added via QR Code link. Even the smartest among us can feel inept as we fail to figure out which light switch or oven burner to turn on.",
         coverUrl: "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&q=80&w=300",
+        spineCropUrl: "",
         spineColor: "#F5C71A",
         shelfId: selectedShelfId !== 'all' ? selectedShelfId : 'shelf-design',
         status: 'unread',
@@ -351,7 +357,15 @@ export default function App() {
     }
 
     if (scanMode === 'isbn') {
-      const ed = sampleData?.groundTruth?.[0]?.editions?.[0] || {
+      const gt = sampleData?.groundTruth?.[0];
+      const ed = gt ? {
+        title: gt.title,
+        author: gt.author,
+        isbn: "",
+        publisher: gt.publisher,
+        year: gt.year,
+        coverUrl: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=300"
+      } : {
         title: "The Book of Disquiet",
         author: "Fernando Pessoa",
         isbn: "978-0141183046",
@@ -370,6 +384,7 @@ export default function App() {
         pageCount: 320,
         description: `Rapid ISBN scan of ${ed.title} by ${ed.author}.`,
         coverUrl: ed.coverUrl,
+        spineCropUrl: "",
         spineColor: "#3A2412",
         shelfId: selectedShelfId !== 'all' ? selectedShelfId : 'shelf-fiction',
         status: 'unread',
@@ -648,7 +663,7 @@ export default function App() {
 
   const handleAutoSortGenres = () => {
     setShelves(prevShelves => {
-      const categories = new Set(books.map(b => b.category).filter(Boolean));
+      const categories = new Set<string>(books.map(b => b.category).filter((c): c is string => !!c));
       const newShelves = [...prevShelves];
       let createdCount = 0;
       
@@ -687,6 +702,20 @@ export default function App() {
     setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, notes } : b)));
     if (activeBookDetail && activeBookDetail.id === bookId) {
       setActiveBookDetail({ ...activeBookDetail, notes });
+    }
+  };
+
+  const handleUpdateQuotes = (bookId: string, quotes: string[]) => {
+    setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, quotes } : b)));
+    if (activeBookDetail && activeBookDetail.id === bookId) {
+      setActiveBookDetail({ ...activeBookDetail, quotes });
+    }
+  };
+
+  const handleUpdateLending = (bookId: string, lentTo?: string, lentAt?: string) => {
+    setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, lentTo, lentAt } : b)));
+    if (activeBookDetail && activeBookDetail.id === bookId) {
+      setActiveBookDetail({ ...activeBookDetail, lentTo, lentAt });
     }
   };
 
@@ -769,6 +798,7 @@ export default function App() {
         currentView={activeTab}
         books={books}
         onOpenProfile={() => setIsShareModalOpen(true)}
+        onOpenRecommendations={() => setIsRecommendationsModalOpen(true)}
         onOpenSpikeDashboard={() => setIsSpikeDashboardOpen(true)}
         onOpenOnboarding={() => setIsOnboardingOpen(true)}
         isAuthenticated={!!currentUser}
@@ -890,6 +920,8 @@ export default function App() {
                   onEditGoals={() => setIsReadingGoalsModalOpen(true)}
                 />
                 <LibraryGrowthDashboard books={books} />
+                <ReadingAnalyticsDashboard books={books} />
+                <GamificationBadges books={books} />
               </div>
 
               <RecommendedBooks 
@@ -1227,6 +1259,8 @@ export default function App() {
         onUpdateCoordinate={handleUpdateCoordinate}
         onDeleteBook={handleDeleteBook}
         onUpdateNotes={handleUpdateNotes}
+        onUpdateQuotes={handleUpdateQuotes}
+        onUpdateLending={handleUpdateLending}
         onUpdateTags={handleUpdateTags}
         onAddReadingSession={handleAddReadingSession}
       />
@@ -1241,6 +1275,12 @@ export default function App() {
             syncToCloud(currentUser.uid, books, shelves, newGoals).catch(console.error);
           }
         }}
+      />
+
+      <AIRecommendationsModal
+        isOpen={isRecommendationsModalOpen}
+        onClose={() => setIsRecommendationsModalOpen(false)}
+        books={books}
       />
 
       <BookComparisonModal

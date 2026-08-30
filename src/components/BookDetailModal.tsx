@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Book, Shelf, ReadingStatus } from '../types';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { AmbientReadingMode } from './AmbientReadingMode';
+import { QuoteScannerModal } from './QuoteScannerModal';
 import { haptic } from '../services/haptics';
 
 interface BookDetailModalProps {
@@ -16,6 +17,8 @@ interface BookDetailModalProps {
   onUpdateCoordinate?: (bookId: string, shelfId: string, x: number | undefined, y: number | undefined) => void;
   onDeleteBook: (bookId: string) => void;
   onUpdateNotes?: (bookId: string, notes: string) => void;
+  onUpdateQuotes?: (bookId: string, quotes: string[]) => void;
+  onUpdateLending?: (bookId: string, lentTo?: string, lentAt?: string) => void;
   onUpdateTags?: (bookId: string, tags: string[]) => void;
   onAddReadingSession?: (bookId: string, durationSeconds: number) => void;
 }
@@ -31,6 +34,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onUpdateCoordinate,
   onDeleteBook,
   onUpdateNotes,
+  onUpdateQuotes,
+  onUpdateLending,
   onUpdateTags,
   onAddReadingSession,
 }) => {
@@ -40,6 +45,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isAmbientMode, setIsAmbientMode] = useState(false);
+  const [isQuoteScannerOpen, setIsQuoteScannerOpen] = useState(false);
+  const [lentToInput, setLentToInput] = useState('');
+
+  // Sync lentToInput when book changes
+  useEffect(() => {
+    if (book) {
+      setLentToInput(book.lentTo || '');
+    }
+  }, [book]);
 
   // Auto-save timer when modal closes
   useEffect(() => {
@@ -548,6 +562,98 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               </div>
             )}
 
+            {/* Lending Tracker */}
+            {onUpdateLending && (
+              <div className="space-y-1.5">
+                <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[14px] text-[#C9963F]">handshake</span>
+                  LENDING TRACKER
+                </h3>
+                <div className="bg-[#151311] p-4 rounded-xl hairline-border space-y-3">
+                  {book.lentTo ? (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[13px] text-[#F4EFE6] font-sans-inter">Lent to: <span className="font-bold text-[#C9963F]">{book.lentTo}</span></p>
+                        <p className="text-[11px] text-[#A79C8C] font-mono-ibm mt-0.5">On {new Date(book.lentAt!).toLocaleDateString()}</p>
+                      </div>
+                      <button
+                        onClick={() => onUpdateLending(book.id, undefined, undefined)}
+                        className="px-3 py-1.5 bg-[#3A1D1D] text-[#FF6B6B] hover:bg-[#4A2525] rounded-lg text-[11px] font-mono-ibm font-bold uppercase tracking-wider transition-colors"
+                      >
+                        Returned
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={lentToInput}
+                        onChange={(e) => setLentToInput(e.target.value)}
+                        placeholder="Friend's name..."
+                        className="flex-1 bg-[#12100E] text-[#F4EFE6] text-[13px] font-sans-inter rounded-lg px-3 py-1.5 border border-[#3A332A] focus:border-[#C9963F] focus:outline-none placeholder:text-[#A79C8C]/50"
+                      />
+                      <button
+                        onClick={() => {
+                          if (lentToInput.trim()) {
+                            onUpdateLending(book.id, lentToInput.trim(), new Date().toISOString());
+                          }
+                        }}
+                        disabled={!lentToInput.trim()}
+                        className="bg-[#262119] hover:bg-[#3A332A] text-[#C9963F] px-3 py-1.5 rounded-lg text-[11px] font-mono-ibm font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
+                      >
+                        Lend
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* AI Scanned Quotes */}
+            {onUpdateQuotes && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[14px] text-[#C9963F]">format_quote</span>
+                    SCANNED QUOTES
+                  </h3>
+                  <button
+                    onClick={() => {
+                      haptic.lightImpact();
+                      setIsQuoteScannerOpen(true);
+                    }}
+                    className="flex items-center gap-1 text-[11px] text-[#C9963F] hover:text-[#F4EFE6] transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">document_scanner</span>
+                    Scan New
+                  </button>
+                </div>
+                
+                {book.quotes && book.quotes.length > 0 ? (
+                  <div className="space-y-2">
+                    {book.quotes.map((quote, idx) => (
+                      <div key={idx} className="bg-[#151311] p-4 rounded-xl hairline-border relative group">
+                        <p className="font-serif-literata text-[13px] leading-relaxed text-[#D4CDA8] italic">"{quote}"</p>
+                        <button
+                          onClick={() => {
+                            const newQuotes = book.quotes!.filter((_, i) => i !== idx);
+                            onUpdateQuotes(book.id, newQuotes);
+                          }}
+                          className="absolute top-2 right-2 w-6 h-6 bg-[#2C251D] text-[#A79C8C] hover:text-[#FF6B6B] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">delete</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-[#151311] p-4 rounded-xl hairline-border text-center">
+                    <p className="text-[12px] text-[#A79C8C] font-sans-inter">No quotes saved yet. Use the scanner to digitize text directly from the book pages.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Personal Notes */}
             {onUpdateNotes && (
               <div className="space-y-1.5">
@@ -572,6 +678,18 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           </div>
         </motion.div>
       </div>
+      
+      {/* Modals over modals */}
+      <QuoteScannerModal
+        isOpen={isQuoteScannerOpen}
+        onClose={() => setIsQuoteScannerOpen(false)}
+        onScanComplete={(text) => {
+          if (onUpdateQuotes) {
+            const currentQuotes = book.quotes || [];
+            onUpdateQuotes(book.id, [...currentQuotes, text]);
+          }
+        }}
+      />
     </AnimatePresence>
   );
 };

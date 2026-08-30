@@ -24,8 +24,13 @@ export interface Book {
   readAt?: string;
   readHistory?: string[];
   notes?: string;
+  quotes?: string[]; // OCR scanned quotes
   tags?: string[];
   readingSessions?: ReadingSession[];
+  
+  // Lending Tracker
+  lentTo?: string;
+  lentAt?: string; // ISO date string
   confidence: ConfidenceLevel;
   score: number;
   category: string;
