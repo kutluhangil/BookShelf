@@ -5,9 +5,11 @@ import { haptic } from '../services/haptics';
 interface ShelfStripProps {
   colors: string[];
   height?: number;
-  variant?: 'compact' | 'hero' | 'empty';
+  variant?: 'compact' | 'hero' | 'empty' | 'coordinate';
   onBarClick?: (index: number) => void;
   className?: string;
+  coordinates?: { id: string; coord: string; color: string }[];
+  gridDimensions?: { cols: number; rows: number };
 }
 
 export const ShelfStrip: React.FC<ShelfStripProps> = ({
@@ -16,6 +18,8 @@ export const ShelfStrip: React.FC<ShelfStripProps> = ({
   variant = 'compact',
   onBarClick,
   className = '',
+  coordinates = [],
+  gridDimensions = { cols: 4, rows: 3 },
 }) => {
   if (variant === 'empty') {
     return (
@@ -33,6 +37,54 @@ export const ShelfStrip: React.FC<ShelfStripProps> = ({
             }}
           />
         ))}
+      </div>
+    );
+  }
+
+  if (variant === 'coordinate') {
+    const { cols, rows } = gridDimensions;
+    const gridCells = [];
+    for (let r = 1; r <= rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const colLetter = String.fromCharCode(65 + c);
+        const coord = `${colLetter}${r}`;
+        const match = coordinates.find((item) => item.coord === coord);
+        gridCells.push({ coord, color: match?.color });
+      }
+    }
+
+    return (
+      <div className={`w-full flex flex-col gap-1.5 ${className}`}>
+        <div
+          className="grid gap-1.5 w-full bg-[#100E0C] p-2 rounded-lg border border-[#3A332A]"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        >
+          {gridCells.map((cell, idx) => (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: idx * 0.02 }}
+              key={cell.coord}
+              onClick={() => {
+                haptic.lightImpact();
+              }}
+              className="relative aspect-square rounded-md border border-[#3A332A]/50 flex items-center justify-center overflow-hidden hover:border-[#C9963F] cursor-pointer transition-colors"
+              style={{ backgroundColor: cell.color || 'transparent' }}
+              title={`Bin ${cell.coord}`}
+            >
+              {cell.color && (
+                <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent pointer-events-none" />
+              )}
+              <span
+                className={`text-[10px] sm:text-[11px] font-mono-ibm font-semibold ${
+                  cell.color ? 'text-black/60 mix-blend-overlay' : 'text-[#A79C8C]'
+                }`}
+              >
+                {cell.coord}
+              </span>
+            </motion.div>
+          ))}
+        </div>
       </div>
     );
   }

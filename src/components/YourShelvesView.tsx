@@ -419,7 +419,20 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
 
                   {/* ShelfStrip Signature visualization */}
                   <div className="my-4">
-                    <ShelfStrip colors={colors} variant="compact" height={44} />
+                    {shelf.layout === 'coordinate' ? (
+                      <ShelfStrip 
+                        colors={colors}
+                        variant="coordinate"
+                        gridDimensions={shelf.gridDimensions || { cols: 6, rows: 3 }}
+                        coordinates={shelfBooks.filter(b => b.shelfCoordinate).map(b => ({
+                          id: b.id,
+                          coord: b.shelfCoordinate!,
+                          color: b.spineColor || '#C9963F'
+                        }))}
+                      />
+                    ) : (
+                      <ShelfStrip colors={colors} variant="compact" height={44} />
+                    )}
                   </div>
                 </div>
 

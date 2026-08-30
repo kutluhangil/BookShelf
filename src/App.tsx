@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Book, Shelf, SpineCandidate, EditionOption, ReadingStatus, SpikeSample } from './types';
 import { INITIAL_BOOKS, INITIAL_SHELVES } from './data/initialLibrary';
 import { segmentAndMatchShelf } from './services/clusteringEngine';
@@ -22,6 +22,8 @@ import { DailyQuoteDashboard } from './components/DailyQuoteDashboard';
 import { RecommendedBooks } from './components/RecommendedBooks';
 import { ReadingCalendarWidget } from './components/ReadingCalendarWidget';
 import { WeeklyReadingChart } from './components/WeeklyReadingChart';
+import { ToastContainer, ToastMessage } from './components/Toast';
+import { calculateReadingStreak } from './utils/streak';
 import { haptic } from './services/haptics';
 
 export default function App() {
@@ -56,6 +58,57 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isSpikeDashboardOpen, setIsSpikeDashboardOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+
+  // Toast & Milestone States
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [lastNotifiedCompletedCount, setLastNotifiedCompletedCount] = useState<number>(() => INITIAL_BOOKS.filter(b => b.status === 'read').length);
+  const [lastNotifiedStreak, setLastNotifiedStreak] = useState<number>(() => calculateReadingStreak(INITIAL_BOOKS));
+
+  useEffect(() => {
+    const currentCompletedCount = books.filter(b => b.status === 'read').length;
+    if (currentCompletedCount > lastNotifiedCompletedCount) {
+      if (currentCompletedCount % 5 === 0 && currentCompletedCount > 0) {
+        const id = `books-${currentCompletedCount}-${Date.now()}`;
+        setToasts(prev => [...prev, { 
+          id, 
+          title: 'Milestone Reached!', 
+          description: `You have read ${currentCompletedCount} books. Incredible progress!`, 
+          icon: 'emoji_events' 
+        }]);
+        haptic.success();
+        
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, 5000);
+      }
+      setLastNotifiedCompletedCount(currentCompletedCount);
+    }
+  }, [books, lastNotifiedCompletedCount]);
+
+  useEffect(() => {
+    const streak = calculateReadingStreak(books);
+    if (streak > lastNotifiedStreak) {
+      if (streak % 7 === 0 && streak > 0) {
+        const id = `streak-${streak}-${Date.now()}`;
+        setToasts(prev => [...prev, { 
+          id, 
+          title: 'Reading Streak!', 
+          description: `You have reached a ${streak}-day reading streak! Keep the momentum going.`, 
+          icon: 'local_fire_department' 
+        }]);
+        haptic.success();
+        
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, 5000);
+      }
+      setLastNotifiedStreak(streak);
+    }
+  }, [books, lastNotifiedStreak]);
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
 
   // Filtered books in the current view
   const filteredBooks = useMemo(() => {
@@ -469,6 +522,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#12100E] text-[#F4EFE6] flex flex-col antialiased selection:bg-[#C9963F] selection:text-[#12100E]">
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      
       {/* Top Header */}
       <NavigationHeader
         currentView={activeTab}
