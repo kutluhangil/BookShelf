@@ -101,18 +101,33 @@ export const fetchFromCloud = async (userId: string): Promise<CloudSnapshot> => 
  * Conflicts are resolved per entity: locally deleted ids win, otherwise the copy
  * with the newer `updatedAt`/`addedAt` timestamp wins.
  */
+export interface MergeResult {
+  books: Book[];
+  shelves: Shelf[];
+  /** Records that existed on both sides with different timestamps. */
+  conflicts: Array<{ id: string; title: string; keptSide: 'local' | 'cloud' }>;
+  addedFromCloud: number;
+}
+
 export function mergeLibraries(
   local: { books: Book[]; shelves: Shelf[] },
   cloud: CloudSnapshot,
   deleted: { bookIds: string[]; shelfIds: string[] }
-): { books: Book[]; shelves: Shelf[] } {
+): MergeResult {
   const deletedBooks = new Set(deleted.bookIds);
   const deletedShelves = new Set(deleted.shelfIds);
 
   const bookMap = new Map<string, Book>();
+  const conflicts: MergeResult['conflicts'] = [];
+  const localIds = new Set(local.books.map((book) => book.id));
+  let addedFromCloud = 0;
+
   for (const book of cloud.books) {
-    if (!deletedBooks.has(book.id)) bookMap.set(book.id, book);
+    if (deletedBooks.has(book.id)) continue;
+    bookMap.set(book.id, book);
+    if (!localIds.has(book.id)) addedFromCloud++;
   }
+
   for (const book of local.books) {
     const existing = bookMap.get(book.id);
     if (!existing) {
@@ -121,7 +136,13 @@ export function mergeLibraries(
     }
     const localTime = new Date(book.updatedAt ?? book.addedAt).getTime();
     const cloudTime = new Date(existing.updatedAt ?? existing.addedAt).getTime();
-    bookMap.set(book.id, localTime >= cloudTime ? book : existing);
+    const keepLocal = localTime >= cloudTime;
+
+    // Only a genuine divergence counts: identical timestamps mean the same edit.
+    if (localTime !== cloudTime) {
+      conflicts.push({ id: book.id, title: book.title, keptSide: keepLocal ? 'local' : 'cloud' });
+    }
+    bookMap.set(book.id, keepLocal ? book : existing);
   }
 
   const shelfMap = new Map<string, Shelf>();
@@ -135,5 +156,7 @@ export function mergeLibraries(
   return {
     books: Array.from(bookMap.values()),
     shelves: Array.from(shelfMap.values()).sort((a, b) => a.sortOrder - b.sortOrder),
+    conflicts,
+    addedFromCloud,
   };
 }

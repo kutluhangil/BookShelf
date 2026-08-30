@@ -19,6 +19,8 @@ interface NavigationHeaderProps {
   onLogout?: () => void;
   onSync?: () => void;
   isSyncing?: boolean;
+  hasUnsyncedChanges?: boolean;
+  lastSyncedAt?: string | null;
 }
 
 export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
@@ -37,6 +39,8 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
   onLogout,
   onSync,
   isSyncing = false,
+  hasUnsyncedChanges = false,
+  lastSyncedAt = null,
 }) => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -186,11 +190,30 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
                   if (onSync) onSync();
                 }}
                 disabled={isSyncing}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1916] border border-[#3A332A] text-[#C9963F] hover:bg-[#2C251D] transition-colors font-mono-ibm text-[11px] disabled:opacity-60"
-                title="Sync library to cloud"
+                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-colors font-mono-ibm text-[11px] disabled:opacity-60 ${
+                  hasUnsyncedChanges
+                    ? 'bg-[#3A2412] border-[#C9963F] text-[#F5BD62]'
+                    : 'bg-[#1C1916] border-[#3A332A] text-[#C9963F] hover:bg-[#2C251D]'
+                }`}
+                title={
+                  isSyncing
+                    ? 'Syncing…'
+                    : hasUnsyncedChanges
+                      ? 'You have changes that are not in the cloud yet'
+                      : lastSyncedAt
+                        ? `Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
+                        : 'Sync library to cloud'
+                }
               >
-                <span className={`material-symbols-outlined text-[16px] ${isSyncing ? 'animate-spin' : ''}`}>sync</span>
-                <span className="hidden sm:inline">{isSyncing ? 'SYNCING' : 'SYNC'}</span>
+                <span className={`material-symbols-outlined text-[16px] ${isSyncing ? 'animate-spin' : ''}`}>
+                  {isSyncing ? 'sync' : hasUnsyncedChanges ? 'cloud_upload' : 'cloud_done'}
+                </span>
+                <span className="hidden sm:inline">
+                  {isSyncing ? 'SYNCING' : hasUnsyncedChanges ? 'UNSYNCED' : 'SYNCED'}
+                </span>
+                {hasUnsyncedChanges && !isSyncing && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#C9963F] shadow-[0_0_6px_#C9963F]" />
+                )}
               </button>
             ) : (
               <button

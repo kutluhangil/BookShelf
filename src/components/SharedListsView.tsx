@@ -10,6 +10,7 @@ import {
   inviteByEmail,
   claimInvitations,
   joinPublicList,
+  subscribeToUserLists,
 } from '../services/sharedLists';
 import { isFirebaseConfigured, firebaseConfigError, type User } from '../lib/firebase';
 import { haptic } from '../services/haptics';
@@ -74,6 +75,21 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
   useEffect(() => {
     void loadLists();
   }, [loadLists]);
+
+  // Live updates for the user's own lists, so a collaborator's edit shows up
+  // without a reload. Public lists stay on the one-shot fetch above; they are
+  // browsed, not co-edited.
+  useEffect(() => {
+    if (!isFirebaseConfigured || !currentUser) return;
+    return subscribeToUserLists(
+      currentUser.uid,
+      (lists) => {
+        setMyLists(lists);
+        setIsLoading(false);
+      },
+      (thrown) => setError(thrown.message)
+    );
+  }, [currentUser]);
 
   // Pull in any invitations addressed to this user's email.
   useEffect(() => {
@@ -169,7 +185,9 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
     if (!me) return;
     return run(async () => {
       await joinPublicList(listId, me);
-      await loadLists();
+      // The live subscription picks up the new membership; only the public list
+      // needs a manual refresh so the joined list stops showing as joinable.
+      setPublicLists((prev) => prev.filter((list) => list.id !== listId));
       setScope('mine');
       haptic.success();
     });

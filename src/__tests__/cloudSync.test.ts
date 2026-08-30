@@ -61,6 +61,33 @@ describe('mergeLibraries', () => {
     expect(merged.books[0].title).toBe('local');
   });
 
+  it('reports conflicts and which side was kept', () => {
+    const merged = mergeLibraries(
+      { books: [book('same', { title: 'local', updatedAt: '2025-01-02T00:00:00.000Z' })], shelves: [] },
+      { books: [book('same', { title: 'cloud', updatedAt: '2024-06-01T00:00:00.000Z' })], shelves: [] },
+      { bookIds: [], shelfIds: [] }
+    );
+    expect(merged.conflicts).toEqual([{ id: 'same', title: 'local', keptSide: 'local' }]);
+  });
+
+  it('does not report a conflict when both sides carry the same timestamp', () => {
+    const merged = mergeLibraries(
+      { books: [book('same', { updatedAt: '2025-01-02T00:00:00.000Z' })], shelves: [] },
+      { books: [book('same', { updatedAt: '2025-01-02T00:00:00.000Z' })], shelves: [] },
+      { bookIds: [], shelfIds: [] }
+    );
+    expect(merged.conflicts).toHaveLength(0);
+  });
+
+  it('counts only the books that were genuinely new from the cloud', () => {
+    const merged = mergeLibraries(
+      { books: [book('local'), book('shared')], shelves: [] },
+      { books: [book('shared'), book('remote-only')], shelves: [] },
+      { bookIds: [], shelfIds: [] }
+    );
+    expect(merged.addedFromCloud).toBe(1);
+  });
+
   it('drops deleted shelves and sorts the rest', () => {
     const merged = mergeLibraries(
       { books: [], shelves: [{ ...shelf, id: 'b', sortOrder: 2 }] },

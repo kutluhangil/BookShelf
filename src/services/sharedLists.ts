@@ -131,3 +131,41 @@ export const deleteSharedList = async (listId: string): Promise<void> => {
   const { db, doc, deleteDoc } = await getFirestoreApi();
   await deleteDoc(doc(db, COLLECTION_NAME, listId));
 };
+
+/**
+ * Live subscription to the lists a user belongs to. Collaborators see each
+ * other's edits without reloading, which is the point of a shared list.
+ * Returns a synchronous unsubscribe so it can be used as an effect cleanup.
+ */
+export const subscribeToUserLists = (
+  userId: string,
+  onChange: (lists: SharedList[]) => void,
+  onError: (error: Error) => void
+): (() => void) => {
+  let cancelled = false;
+  let unsubscribe: (() => void) | null = null;
+
+  void (async () => {
+    try {
+      const { db, collection, query, where, onSnapshot } = await getFirestoreApi();
+      if (cancelled) return;
+
+      unsubscribe = onSnapshot(
+        query(collection(db, COLLECTION_NAME), where('memberIds', 'array-contains', userId)),
+        (snapshot) => {
+          const lists: SharedList[] = [];
+          snapshot.forEach((entry) => lists.push(entry.data() as SharedList));
+          onChange(lists.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+        },
+        (error) => onError(error instanceof Error ? error : new Error(String(error)))
+      );
+    } catch (error) {
+      if (!cancelled) onError(error instanceof Error ? error : new Error(String(error)));
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+    unsubscribe?.();
+  };
+};

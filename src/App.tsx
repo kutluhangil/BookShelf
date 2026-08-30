@@ -153,6 +153,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [serverCapabilities, setServerCapabilities] = useState<ServerCapabilities | null>(null);
+  const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   const pushToast = useCallback((toast: Omit<ToastMessage, 'id'> & { id?: string }) => {
     const id = toast.id ?? `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -201,6 +203,17 @@ export default function App() {
     saveLibrary({ books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds });
   }, [books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds]);
 
+  // Flag unsynced work. Skipped on mount so a freshly loaded library is not
+  // reported as dirty before the user has touched anything.
+  const isFirstRenderRef = useRef(true);
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    setHasUnsyncedChanges(true);
+  }, [books, shelves, readingGoals, monthlyGoal]);
+
   // Keep shelf volume counts in sync with the actual books.
   useEffect(() => {
     setShelves((prev) => {
@@ -240,10 +253,24 @@ export default function App() {
         if (typeof cloudData.monthlyGoal === 'number') setMonthlyGoal(cloudData.monthlyGoal);
 
         pushToast({
-          title: 'Library Synced',
-          description: `Merged ${cloudData.books.length} cloud volumes with your local library.`,
+          title: 'Library synced',
+          description: `${merged.addedFromCloud} volume(s) pulled from the cloud.`,
           icon: 'cloud_download',
         });
+
+        // A silent last-write-wins merge can lose an edit made on another
+        // device, so say what happened instead of hiding it.
+        if (merged.conflicts.length > 0) {
+          const keptCloud = merged.conflicts.filter((entry) => entry.keptSide === 'cloud');
+          pushToast({
+            title: `${merged.conflicts.length} conflict(s) resolved`,
+            description:
+              `Newest edit kept for: ${merged.conflicts.slice(0, 3).map((entry) => entry.title).join(', ')}` +
+              (merged.conflicts.length > 3 ? ` and ${merged.conflicts.length - 3} more.` : '.') +
+              (keptCloud.length > 0 ? ` ${keptCloud.length} local change(s) were superseded by the cloud copy.` : ''),
+            icon: 'merge',
+          });
+        }
       } catch (error) {
         pushToast({
           title: 'Cloud fetch failed',
@@ -294,7 +321,7 @@ export default function App() {
     }
   };
 
-  const handleSyncToCloud = async () => {
+  const handleSyncToCloud = useCallback(async () => {
     if (!currentUser) return;
     try {
       setIsSyncing(true);
@@ -309,8 +336,10 @@ export default function App() {
       // Tombstones have been applied remotely; drop them.
       setDeletedBookIds([]);
       setDeletedShelfIds([]);
+      setHasUnsyncedChanges(false);
+      setLastSyncedAt(new Date().toISOString());
       pushToast({
-        title: 'Sync Complete',
+        title: 'Sync complete',
         description: `${books.length} volumes backed up to the cloud.`,
         icon: 'cloud_done',
       });
@@ -323,7 +352,28 @@ export default function App() {
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, [currentUser, books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds, pushToast]);
+
+  // Debounced auto-sync: without it the cloud copy silently goes stale whenever
+  // the user forgets to press Sync.
+  useEffect(() => {
+    if (!currentUser || !hasUnsyncedChanges || isSyncing) return;
+    const timer = window.setTimeout(() => {
+      void handleSyncToCloud();
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [currentUser, hasUnsyncedChanges, isSyncing, handleSyncToCloud]);
+
+  // Best-effort warning if the tab closes with work that never reached the cloud.
+  useEffect(() => {
+    if (!currentUser || !hasUnsyncedChanges) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [currentUser, hasUnsyncedChanges]);
 
   useEffect(() => {
     if (!isReminderEnabled || reminderTriggeredRef.current) return;
@@ -995,6 +1045,8 @@ export default function App() {
         onLogout={handleLogout}
         onSync={handleSyncToCloud}
         isSyncing={isSyncing}
+        hasUnsyncedChanges={hasUnsyncedChanges}
+        lastSyncedAt={lastSyncedAt}
       />
 
       <div className="flex-1 pb-24 md:pb-12">
