@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Book, Shelf, ReadingStatus } from '../types';
 import { ConfidenceBadge } from './ConfidenceBadge';
+import { AmbientReadingMode } from './AmbientReadingMode';
 import { haptic } from '../services/haptics';
 
 interface BookDetailModalProps {
@@ -38,6 +39,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isAmbientMode, setIsAmbientMode] = useState(false);
 
   // Auto-save timer when modal closes
   useEffect(() => {
@@ -47,6 +49,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       }
       setIsTimerActive(false);
       setElapsedSeconds(0);
+      setIsAmbientMode(false);
       setShowDeleteConfirm(false);
     }
   }, [isOpen, isTimerActive, elapsedSeconds, book, onAddReadingSession]);
@@ -432,20 +435,46 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   </div>
                 </div>
                 
-                <button
-                  onClick={handleToggleTimer}
-                  className={`w-full py-2.5 rounded-lg font-mono-ibm text-[12px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${
-                    isTimerActive 
-                      ? 'bg-[#3A1D1D] text-[#FF6B6B] hover:bg-[#4A2525]' 
-                      : 'bg-[#262119] text-[#C9963F] hover:bg-[#3A332A]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[16px]">
-                    {isTimerActive ? 'stop_circle' : 'play_circle'}
-                  </span>
-                  {isTimerActive ? 'Stop & Save Session' : 'Start Reading Session'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleToggleTimer}
+                    className={`flex-1 py-2.5 rounded-lg font-mono-ibm text-[12px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${
+                      isTimerActive 
+                        ? 'bg-[#3A1D1D] text-[#FF6B6B] hover:bg-[#4A2525]' 
+                        : 'bg-[#262119] text-[#C9963F] hover:bg-[#3A332A]'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">
+                      {isTimerActive ? 'stop_circle' : 'play_circle'}
+                    </span>
+                    {isTimerActive ? 'Stop & Save Session' : 'Start Reading Session'}
+                  </button>
+                  {isTimerActive && (
+                    <button
+                      onClick={() => {
+                        haptic.selectionClick();
+                        setIsAmbientMode(true);
+                      }}
+                      className="px-3 py-2.5 bg-[#262119] text-[#A79C8C] hover:text-[#C9963F] hover:bg-[#3A332A] rounded-lg transition-colors flex items-center justify-center"
+                      title="Enter Ambient Mode"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">
+                        dark_mode
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
+            )}
+
+            {/* Ambient Reading Mode Overlay */}
+            {book && (
+              <AmbientReadingMode
+                book={book}
+                elapsedSeconds={elapsedSeconds}
+                isActive={isAmbientMode}
+                onStop={() => setIsAmbientMode(false)}
+              />
             )}
 
             {/* Description / Synopsis in Literata */}

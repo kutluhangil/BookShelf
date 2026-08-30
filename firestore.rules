@@ -18,5 +18,11 @@ service cloud.firestore {
                     && resource.data.userId == request.auth.uid 
                     && request.resource.data.userId == request.auth.uid;
     }
+    match /sharedLists/{listId} {
+      allow read: if resource.data.isPublic == true || (request.auth != null && (resource.data.ownerId == request.auth.uid || request.auth.uid in resource.data.memberIds));
+      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+      allow update: if request.auth != null && (resource.data.ownerId == request.auth.uid || request.auth.uid in resource.data.memberIds);
+      allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+    }
   }
 }

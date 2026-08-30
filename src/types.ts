@@ -124,3 +124,23 @@ export interface ReadingGoals {
   annualBookCount?: number;
   genreMilestones?: GenreMilestone[];
 }
+
+export interface SharedListMember {
+  userId: string;
+  email?: string;
+  displayName?: string;
+  photoURL?: string;
+  role: 'owner' | 'contributor';
+}
+
+export interface SharedList {
+  id: string;
+  name: string;
+  description?: string;
+  isPublic: boolean;
+  ownerId: string;
+  members: SharedListMember[];
+  memberIds: string[]; // For fast queries
+  books: Book[];
+  createdAt: string;
+}

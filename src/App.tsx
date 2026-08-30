@@ -18,15 +18,19 @@ import { ShareModal } from './components/ShareModal';
 import { SpikeAccuracyDashboard } from './components/SpikeAccuracyDashboard';
 import { OnboardingModal } from './components/OnboardingModal';
 import { YourShelvesView } from './components/YourShelvesView';
+import { SharedListsView } from './components/SharedListsView';
 import { LibraryGrowthDashboard } from './components/LibraryGrowthDashboard';
 import { MonthlyGoalDashboard } from './components/MonthlyGoalDashboard';
 import { ReadingGoalsDashboard } from './components/ReadingGoalsDashboard';
 import { DailyQuoteDashboard } from './components/DailyQuoteDashboard';
 import { RecommendedBooks } from './components/RecommendedBooks';
+import { QueuedForReading } from './components/QueuedForReading';
 import { ReadingCalendarWidget } from './components/ReadingCalendarWidget';
 import { WeeklyReadingChart } from './components/WeeklyReadingChart';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { ReadingGoalsModal } from './components/ReadingGoalsModal';
+import { BookComparisonModal } from './components/BookComparisonModal';
+import { LibraryAnnualProgressBar } from './components/LibraryAnnualProgressBar';
 import { calculateReadingStreak } from './utils/streak';
 import { parseNLPSearchQuery } from './utils/searchParser';
 import { haptic } from './services/haptics';
@@ -43,7 +47,7 @@ export default function App() {
   });
 
   // Active View Tabs: 'library' | 'shelves' | 'eval'
-  const [activeTab, setActiveTab] = useState<'library' | 'shelves' | 'eval'>('library');
+  const [activeTab, setActiveTab] = useState<'library' | 'shelves' | 'shared' | 'eval'>('library');
 
   // Filter & Search States
   const [selectedShelfId, setSelectedShelfId] = useState<string>('all');
@@ -52,6 +56,11 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortMode, setSortMode] = useState<'physical' | 'recent' | 'author' | 'title'>('physical');
   const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
+  
+  // Compare Mode States
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [compareQueue, setCompareQueue] = useState<Book[]>([]);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
 
   // Scanning Lifecycle States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -279,6 +288,24 @@ export default function App() {
   const allSpineColors = useMemo(() => {
     return books.map((b) => b.spineColor || '#C9963F');
   }, [books]);
+
+  // Handle Book Click (Normal vs Compare Mode)
+  const handleBookClick = (book: Book) => {
+    haptic.selectionClick();
+    if (isCompareMode) {
+      if (compareQueue.some(b => b.id === book.id)) {
+        setCompareQueue(q => q.filter(b => b.id !== book.id));
+      } else if (compareQueue.length < 2) {
+        const newQueue = [...compareQueue, book];
+        setCompareQueue(newQueue);
+        if (newQueue.length === 2) {
+          setIsCompareModalOpen(true);
+        }
+      }
+    } else {
+      setActiveBookDetail(book);
+    }
+  };
 
   // Handle Capture from Camera or Sample
   const handleCapture = (imageUrl: string, sampleData?: SpikeSample, scanMode?: 'shelf' | 'isbn' | 'qr') => {
@@ -619,6 +646,39 @@ export default function App() {
     setShelves((prev) => [...prev, newShelf]);
   };
 
+  const handleAutoSortGenres = () => {
+    setShelves(prevShelves => {
+      const categories = new Set(books.map(b => b.category).filter(Boolean));
+      const newShelves = [...prevShelves];
+      let createdCount = 0;
+      
+      categories.forEach(category => {
+        if (!newShelves.find(s => s.name.toLowerCase() === category.toLowerCase())) {
+          createdCount++;
+          newShelves.push({
+            id: `shelf-auto-${Date.now()}-${createdCount}`,
+            name: category,
+            volumeCount: 0,
+            dominantColors: ['#C9963F', '#304E2E', '#2C251D', '#8B2323'],
+            sortOrder: newShelves.length + 1,
+          });
+        }
+      });
+      
+      setBooks(prevBooks => prevBooks.map(book => {
+        if (book.category) {
+          const targetShelf = newShelves.find(s => s.name.toLowerCase() === book.category.toLowerCase());
+          if (targetShelf && book.shelfId !== targetShelf.id) {
+            return { ...book, shelfId: targetShelf.id };
+          }
+        }
+        return book;
+      }));
+      
+      return newShelves;
+    });
+  };
+
   const handleUpdateShelfData = (shelfId: string, updates: Partial<Shelf>) => {
     setShelves((prev) => prev.map((s) => (s.id === shelfId ? { ...s, ...updates } : s)));
   };
@@ -730,11 +790,16 @@ export default function App() {
             onCreateShelf={handleCreateShelf}
             onUpdateShelf={handleUpdateShelfData}
             onReorderShelves={handleReorderShelves}
+            onAutoSort={handleAutoSortGenres}
             onShareShelf={(shelf) => {
               setActiveShareShelf(shelf);
               setIsShareModalOpen(true);
             }}
           />
+        ) : activeTab === 'shared' ? (
+          <div className="p-4 sm:p-6 max-w-[1200px] mx-auto w-full">
+            <SharedListsView books={books} currentUser={currentUser} />
+          </div>
         ) : activeTab === 'eval' ? (
           <div className="p-4 sm:p-6 max-w-[1200px] mx-auto w-full">
             <SpikeAccuracyDashboard
@@ -800,8 +865,13 @@ export default function App() {
               />
             </section>
 
+            {/* Annual Progress Bar */}
+            <LibraryAnnualProgressBar books={books} goals={readingGoals} />
+
             {/* Dashboards */}
             <div className="space-y-4">
+              <QueuedForReading books={books} onSelectBook={setActiveBookDetail} />
+              
               <DailyQuoteDashboard />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -936,6 +1006,18 @@ export default function App() {
               <div className="flex justify-between items-center font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
                 <span>CATALOGED VOLUMES ({filteredBooks.length})</span>
                 <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => {
+                      haptic.lightImpact();
+                      setIsCompareMode(!isCompareMode);
+                      if (isCompareMode) setCompareQueue([]);
+                    }}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${isCompareMode ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#12100E] text-[#A79C8C] hover:text-[#F4EFE6] border border-[#3A332A]'}`}
+                    title="Compare Books"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">compare_arrows</span>
+                    <span className="hidden sm:inline">{isCompareMode ? (compareQueue.length > 0 ? `SELECT 2ND (${compareQueue.length}/2)` : 'SELECT 2 BOOKS') : 'COMPARE'}</span>
+                  </button>
                   <div className="flex items-center bg-[#12100E] rounded-lg p-0.5 border border-[#3A332A]">
                     <button
                       onClick={() => {
@@ -1000,17 +1082,16 @@ export default function App() {
                 </div>
               ) : viewMode === 'gallery' ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {filteredBooks.map((book, idx) => (
+                  {filteredBooks.map((book, idx) => {
+                    const isSelected = isCompareMode && compareQueue.some(b => b.id === book.id);
+                    return (
                     <motion.div
                       key={book.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: Math.min(idx * 0.05, 0.5) }}
-                      onClick={() => {
-                        haptic.selectionClick();
-                        setActiveBookDetail(book);
-                      }}
-                      className="group relative cursor-pointer aspect-[2/3] rounded-xl overflow-hidden bg-[#1C1916] border border-[#3A332A] hover:border-[#C9963F] shadow-md hover:shadow-xl transition-all"
+                      onClick={() => handleBookClick(book)}
+                      className={`group relative cursor-pointer aspect-[2/3] rounded-xl overflow-hidden bg-[#1C1916] border shadow-md hover:shadow-xl transition-all ${isSelected ? 'border-[#C9963F] ring-2 ring-[#C9963F]' : 'border-[#3A332A] hover:border-[#C9963F]'}`}
                     >
                       {book.coverUrl ? (
                         <img 
@@ -1024,23 +1105,29 @@ export default function App() {
                           <span className="font-mono-ibm text-xs text-[#F4EFE6]/70 mt-2 line-clamp-1">{book.author}</span>
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+                      <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity flex items-end p-3 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                          <div className="w-full">
                            <h4 className="text-[#F4EFE6] font-serif-literata text-sm font-semibold line-clamp-1">{book.title}</h4>
                            <p className="text-[#A79C8C] font-mono-ibm text-[10px] line-clamp-1">{book.author}</p>
                          </div>
                       </div>
+                      {isSelected && (
+                        <div className="absolute top-2 right-2 bg-[#C9963F] text-[#12100E] rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
+                          <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                        </div>
+                      )}
                     </motion.div>
-                  ))}
+                  )})}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredBooks.map((book, idx) => (
-                    <BookCard
+                              <div key={book.id} className="relative">
+                      <BookCard
                       key={book.id}
                       book={book}
                       index={idx}
-                      onClick={() => setActiveBookDetail(book)}
+                      onClick={() => handleBookClick(book)}
                       onResolve={(e) => {
                         e.stopPropagation();
                         // Open review match for this book
@@ -1080,6 +1167,17 @@ export default function App() {
                         });
                       }}
                     />
+                    {isCompareMode && (
+                      <div 
+                        className={`absolute inset-0 rounded-2xl pointer-events-none border-2 transition-colors ${compareQueue.some(b => b.id === book.id) ? 'border-[#C9963F]' : 'border-transparent'}`}
+                      />
+                    )}
+                    {isCompareMode && compareQueue.some(b => b.id === book.id) && (
+                      <div className="absolute top-3 right-3 bg-[#C9963F] text-[#12100E] rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10 pointer-events-none">
+                        <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                      </div>
+                    )}
+                  </div>
                   ))}
                 </div>
               )}
@@ -1143,6 +1241,12 @@ export default function App() {
             syncToCloud(currentUser.uid, books, shelves, newGoals).catch(console.error);
           }
         }}
+      />
+
+      <BookComparisonModal
+        isOpen={isCompareModalOpen}
+        onClose={() => setIsCompareModalOpen(false)}
+        books={compareQueue}
       />
 
       {/* Share Export Modal (Image 13) */}

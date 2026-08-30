@@ -38,6 +38,7 @@ interface YourShelvesViewProps {
   onUpdateShelf?: (shelfId: string, updates: Partial<Shelf>) => void;
   onShareShelf: (shelf: Shelf) => void;
   onReorderShelves?: (newShelves: Shelf[]) => void;
+  onAutoSort?: () => void;
 }
 
 export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
@@ -48,6 +49,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
   onUpdateShelf,
   onShareShelf,
   onReorderShelves,
+  onAutoSort,
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newShelfName, setNewShelfName] = useState('');
@@ -190,16 +192,30 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            haptic.lightImpact();
-            setIsCreating(true);
-          }}
-          className="px-4 py-2 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] font-mono-ibm text-[12px] font-bold rounded-xl tracking-wider transition-all flex items-center gap-1.5 shadow-[0_4px_16px_rgba(201,150,63,0.3)]"
-        >
-          <span className="material-symbols-outlined text-[18px]">add</span>
-          <span>NEW SHELF</span>
-        </button>
+        <div className="flex gap-2">
+          {onAutoSort && (
+            <button
+              onClick={() => {
+                haptic.mediumImpact();
+                onAutoSort();
+              }}
+              className="px-4 py-2 bg-[#2C251D] hover:bg-[#3A332A] text-[#C9963F] font-mono-ibm text-[12px] font-bold rounded-xl tracking-wider transition-all flex items-center gap-1.5 border border-[#C9963F]/30 hover:border-[#C9963F]"
+            >
+              <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+              <span className="hidden sm:inline">AUTO-SORT</span>
+            </button>
+          )}
+          <button
+            onClick={() => {
+              haptic.lightImpact();
+              setIsCreating(true);
+            }}
+            className="px-4 py-2 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] font-mono-ibm text-[12px] font-bold rounded-xl tracking-wider transition-all flex items-center gap-1.5 shadow-[0_4px_16px_rgba(201,150,63,0.3)]"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            <span>NEW SHELF</span>
+          </button>
+        </div>
       </div>
 
       {/* New Shelf Creator Inline Card */}
@@ -358,19 +374,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                           {shelfBooks.length > 0 ? shelfBooks.length : shelf.volumeCount} PHYSICAL VOLUMES
                         </p>
                         
-                        {/* Capacity Indicator */}
-                        <div className="mt-3 flex flex-col gap-1.5 w-full max-w-[200px]">
-                          <div className="flex justify-between items-center text-[9px] font-mono-ibm tracking-wider">
-                            <span className="text-[#A79C8C]">CAPACITY</span>
-                            <span className={isNearCapacity ? "text-[#E57373]" : "text-[#C9963F]"}>{capacityPercentage}%</span>
-                          </div>
-                          <div className="h-1.5 w-full bg-[#12100E] rounded-full overflow-hidden border border-[#3A332A]">
-                            <div 
-                              className={`h-full rounded-full ${isNearCapacity ? 'bg-[#E57373]' : 'bg-[#C9963F]'}`}
-                              style={{ width: `${capacityPercentage}%` }}
-                            />
-                          </div>
-                        </div>
+                        {/* Capacity Indicator moved to bottom of card */}
                       </div>
                     </div>
 
@@ -528,17 +532,25 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                               const cols = shelf.gridDimensions?.cols || 6;
                               const rows = shelf.gridDimensions?.rows || Math.max(3, Math.ceil(shelfBooks.length / (shelf.gridDimensions?.cols || 6)));
                               const newCoords: Record<string, {x: number, y: number}> = {};
-                              let x = 1; let y = 1;
-                              shelfBooks.forEach(b => {
-                                if (y <= rows) {
-                                  newCoords[b.id] = { x, y };
-                                  x++;
-                                  if (x > cols) {
-                                    x = 1;
-                                    y++;
+                              
+                              const booksPerRow = Math.ceil(shelfBooks.length / rows);
+                              let currentBook = 0;
+
+                              for (let y = 1; y <= rows; y++) {
+                                const booksInThisRow = Math.min(booksPerRow, shelfBooks.length - currentBook);
+                                if (booksInThisRow <= 0) break;
+                                
+                                const step = cols / booksInThisRow;
+                                for (let i = 0; i < booksInThisRow; i++) {
+                                  const x = Math.max(1, Math.min(cols, Math.round((i * step) + (step / 2))));
+                                  const book = shelfBooks[currentBook];
+                                  if (book) {
+                                    newCoords[book.id] = { x, y };
                                   }
+                                  currentBook++;
                                 }
-                              });
+                              }
+
                               onUpdateShelf?.(shelf.id, { 
                                 layout: 'coordinate',
                                 gridDimensions: { cols, rows },
@@ -551,25 +563,51 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                            BULK ARRANGE
                          </button>
                       </div>
-                      {shelf.layout === 'coordinate' ? (
-                        <ShelfStrip 
-                          colors={colors}
-                          variant="coordinate"
-                          themeColor={shelf.themeColor}
-                          texture={shelf.texture}
-                          gridDimensions={shelf.gridDimensions || { cols: 6, rows: 3 }}
-                          coordinates={shelfBooks.filter(b => shelf.coordinates?.[b.id]).map(b => ({
-                            id: b.id,
-                            x: shelf.coordinates![b.id].x,
-                            y: shelf.coordinates![b.id].y,
-                            color: b.spineColor || '#C9963F',
-                            title: b.title,
-                            author: b.author
-                          }))}
+                      <div className="relative">
+                        {/* Ambient Glow */}
+                        <div 
+                          className="absolute inset-0 blur-[32px] opacity-20 group-hover:opacity-40 transition-opacity duration-700 pointer-events-none mix-blend-screen"
+                          style={{ backgroundColor: shelf.themeColor || '#C9963F' }}
                         />
-                      ) : (
-                        <ShelfStrip colors={colors} variant="compact" height={44} themeColor={shelf.themeColor} texture={shelf.texture} />
-                      )}
+                        <div className="relative z-10">
+                          {shelf.layout === 'coordinate' ? (
+                            <ShelfStrip 
+                              colors={colors}
+                              variant="coordinate"
+                              themeColor={shelf.themeColor}
+                              texture={shelf.texture}
+                              gridDimensions={shelf.gridDimensions || { cols: 6, rows: 3 }}
+                              coordinates={shelfBooks.filter(b => shelf.coordinates?.[b.id]).map(b => ({
+                                id: b.id,
+                                x: shelf.coordinates![b.id].x,
+                                y: shelf.coordinates![b.id].y,
+                                color: b.spineColor || '#C9963F',
+                                title: b.title,
+                                author: b.author
+                              }))}
+                            />
+                          ) : (
+                            <ShelfStrip colors={colors} variant="compact" height={44} themeColor={shelf.themeColor} texture={shelf.texture} />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Capacity Progress Bar (Full Width) */}
+                  <div className="mt-5 bg-[#12100E] rounded-xl border border-[#3A332A] p-3.5 flex flex-col gap-2.5">
+                    <div className="flex justify-between items-center text-[10px] font-mono-ibm tracking-wider">
+                      <span className="text-[#A79C8C] flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[14px]">align_horizontal_left</span>
+                        SHELF CAPACITY ({totalPages.toLocaleString()} / {SHELF_MAX_PAGES.toLocaleString()} PAGES)
+                      </span>
+                      <span className={isNearCapacity ? "text-[#E57373] font-bold" : "text-[#C9963F] font-bold"}>{capacityPercentage}%</span>
+                    </div>
+                    <div className="h-2 w-full bg-[#1C1916] rounded-full overflow-hidden border border-[#2C251D]">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-700 ${isNearCapacity ? 'bg-gradient-to-r from-[#8B2323] to-[#E57373]' : 'bg-gradient-to-r from-[#4A5B69] to-[#C9963F]'}`}
+                        style={{ width: `${capacityPercentage}%` }}
+                      />
                     </div>
                   </div>
                 </div>

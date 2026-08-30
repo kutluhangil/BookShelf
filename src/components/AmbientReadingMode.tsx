@@ -1,0 +1,134 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Book } from '../types';
+import { haptic } from '../services/haptics';
+
+interface AmbientReadingModeProps {
+  book: Book;
+  elapsedSeconds: number;
+  isActive: boolean;
+  onStop: () => void;
+}
+
+const AUDIO_TRACKS = [
+  { id: 'rain', name: 'Rain on Window', url: 'https://cdn.freesound.org/previews/189/189874_1411923-lq.mp3' },
+  { id: 'fireplace', name: 'Cozy Fireplace', url: 'https://cdn.freesound.org/previews/411/411088_5121236-lq.mp3' },
+  { id: 'library', name: 'Library Ambience', url: 'https://cdn.freesound.org/previews/316/316886_4019029-lq.mp3' },
+  { id: 'brown_noise', name: 'Deep Focus (Brown Noise)', url: 'https://cdn.freesound.org/previews/21/21682_114068-lq.mp3' }
+];
+
+export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, elapsedSeconds, isActive, onStop }) => {
+  const [activeTrack, setActiveTrack] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (activeTrack) {
+      const track = AUDIO_TRACKS.find(t => t.id === activeTrack);
+      if (track && audioRef.current) {
+        audioRef.current.src = track.url;
+        audioRef.current.loop = true;
+        audioRef.current.volume = 0.4;
+        audioRef.current.play().catch(e => console.error("Audio play failed:", e));
+      }
+    } else if (audioRef.current) {
+      audioRef.current.pause();
+    }
+  }, [activeTrack]);
+
+  const formatTime = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <AnimatePresence>
+      {isActive && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1.5, ease: "easeInOut" }}
+          className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center overflow-hidden"
+        >
+          {/* Subtle glowing background based on book spine color */}
+          <div 
+            className="absolute inset-0 opacity-10 mix-blend-screen pointer-events-none transition-opacity duration-1000"
+            style={{ 
+              background: `radial-gradient(circle at center, ${book.spineColor || '#C9963F'} 0%, transparent 60%)` 
+            }}
+          />
+
+          <audio ref={audioRef} />
+
+          <motion.div 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.5, duration: 1 }}
+            className="relative z-10 flex flex-col items-center max-w-md w-full px-6"
+          >
+            {book.coverUrl ? (
+              <img 
+                src={book.coverUrl} 
+                alt={book.title} 
+                className="w-32 h-48 object-cover rounded shadow-2xl mb-8 border border-white/5 opacity-50"
+              />
+            ) : (
+              <div 
+                className="w-32 h-48 rounded shadow-2xl mb-8 border border-white/5 opacity-50 flex items-center justify-center p-4 text-center"
+                style={{ backgroundColor: book.spineColor || '#2C251D' }}
+              >
+                <span className="font-serif-literata text-xs text-white/70 line-clamp-4">{book.title}</span>
+              </div>
+            )}
+
+            <h2 className="font-serif-literata text-2xl text-white/60 mb-2 text-center tracking-wide">{book.title}</h2>
+            <p className="font-mono-ibm text-sm text-white/40 mb-12 tracking-widest uppercase">{book.author}</p>
+
+            <div className="text-6xl font-mono-ibm text-[#C9963F]/70 tracking-widest font-light mb-16 tabular-nums">
+              {formatTime(elapsedSeconds)}
+            </div>
+
+            <div className="w-full space-y-6">
+              <div className="flex flex-col items-center gap-3">
+                <span className="text-[10px] font-mono-ibm uppercase tracking-widest text-white/30">Ambient Audio</span>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    onClick={() => setActiveTrack(null)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-mono-ibm transition-colors ${!activeTrack ? 'bg-white/10 text-white' : 'bg-transparent text-white/40 border border-white/10 hover:border-white/30'}`}
+                  >
+                    Off
+                  </button>
+                  {AUDIO_TRACKS.map(track => (
+                    <button
+                      key={track.id}
+                      onClick={() => {
+                        haptic.selectionClick();
+                        setActiveTrack(track.id);
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-mono-ibm transition-colors ${activeTrack === track.id ? 'bg-[#C9963F]/20 text-[#C9963F] border border-[#C9963F]/30' : 'bg-transparent text-white/40 border border-white/10 hover:border-white/30'}`}
+                    >
+                      {track.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-center pt-8">
+                <button
+                  onClick={() => {
+                    haptic.lightImpact();
+                    onStop();
+                  }}
+                  className="px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-white/60 font-mono-ibm text-sm uppercase tracking-widest transition-all hover:text-white"
+                >
+                  End Session
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};

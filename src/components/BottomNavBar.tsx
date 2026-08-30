@@ -2,8 +2,8 @@ import React from 'react';
 import { haptic } from '../services/haptics';
 
 interface BottomNavBarProps {
-  activeTab: 'library' | 'shelves' | 'eval';
-  onTabChange: (tab: 'library' | 'shelves' | 'eval') => void;
+  activeTab: 'library' | 'shelves' | 'eval' | 'shared';
+  onTabChange: (tab: 'library' | 'shelves' | 'eval' | 'shared') => void;
   onOpenScanner: () => void;
 }
 
@@ -75,6 +75,30 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         </span>
         <span className="font-mono-ibm text-[10px] font-medium tracking-wider">
           Shelves
+        </span>
+      </button>
+
+      {/* Shared Lists Tab */}
+      <button
+        onClick={() => {
+          haptic.lightImpact();
+          onTabChange('shared');
+        }}
+        className={`flex flex-col items-center justify-center transition-all p-1.5 rounded-xl flex-1 ${
+          activeTab === 'shared'
+            ? 'text-[#C9963F] bg-[#304E2E]/20'
+            : 'text-[#A79C8C] opacity-70 hover:opacity-100'
+        }`}
+      >
+        <span
+          className={`material-symbols-outlined mb-0.5 text-[22px] ${
+            activeTab === 'shared' ? 'fill-1' : ''
+          }`}
+        >
+          group
+        </span>
+        <span className="font-mono-ibm text-[10px] font-medium tracking-wider">
+          Shared
         </span>
       </button>
 
