@@ -6,24 +6,19 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // A library lives entirely under its owner's document, so ownership is the
+    // path itself: one uid comparison covers the profile, every book and every
+    // shelf, and no document can be written with someone else's userId field.
     match /users/{userId} {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
-    }
 
-    match /books/{bookId} {
-      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn()
-                    && resource.data.userId == request.auth.uid
-                    && request.resource.data.userId == request.auth.uid;
-    }
+      match /books/{bookId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
 
-    match /shelves/{shelfId} {
-      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn()
-                    && resource.data.userId == request.auth.uid
-                    && request.resource.data.userId == request.auth.uid;
+      match /shelves/{shelfId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     match /sharedLists/{listId} {

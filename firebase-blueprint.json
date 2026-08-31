@@ -3,7 +3,7 @@
     {
       "name": "users",
       "path": "users/{userId}",
-      "description": "User profile data and settings.",
+      "description": "User profile data and settings. A library lives entirely in this document's subcollections, so ownership is the path itself and no record carries a userId field.",
       "securityRules": {
         "read": "request.auth != null && request.auth.uid == userId",
         "write": "request.auth != null && request.auth.uid == userId"
@@ -11,30 +11,37 @@
     },
     {
       "name": "books",
-      "path": "books/{bookId}",
+      "path": "users/{userId}/books/{bookId}",
       "description": "Library books belonging to a user.",
-      "fields": {
-        "userId": "string"
-      },
       "securityRules": {
-        "read": "request.auth != null && resource.data.userId == request.auth.uid",
-        "create": "request.auth != null && request.resource.data.userId == request.auth.uid",
-        "update": "request.auth != null && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid",
-        "delete": "request.auth != null && resource.data.userId == request.auth.uid"
+        "read": "request.auth != null && request.auth.uid == userId",
+        "write": "request.auth != null && request.auth.uid == userId"
       }
     },
     {
       "name": "shelves",
-      "path": "shelves/{shelfId}",
+      "path": "users/{userId}/shelves/{shelfId}",
       "description": "Library shelves belonging to a user.",
+      "securityRules": {
+        "read": "request.auth != null && request.auth.uid == userId",
+        "write": "request.auth != null && request.auth.uid == userId"
+      }
+    },
+    {
+      "name": "sharedLists",
+      "path": "sharedLists/{listId}",
+      "description": "Collaborative lists. Top-level by design: a list is read and edited by several users, so it cannot live under one owner's document.",
       "fields": {
-        "userId": "string"
+        "ownerId": "string",
+        "memberIds": "string[]",
+        "invitedEmails": "string[]",
+        "isPublic": "boolean"
       },
       "securityRules": {
-        "read": "request.auth != null && resource.data.userId == request.auth.uid",
-        "create": "request.auth != null && request.resource.data.userId == request.auth.uid",
-        "update": "request.auth != null && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid",
-        "delete": "request.auth != null && resource.data.userId == request.auth.uid"
+        "read": "resource.data.isPublic == true || request.auth.uid == resource.data.ownerId || request.auth.uid in resource.data.memberIds",
+        "create": "request.auth != null && request.resource.data.ownerId == request.auth.uid && request.resource.data.memberIds == [request.auth.uid]",
+        "update": "owner: unrestricted; member: books only; invited or public: may add only themselves",
+        "delete": "request.auth != null && resource.data.ownerId == request.auth.uid"
       }
     }
   ]

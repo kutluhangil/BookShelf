@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mergeLibraries } from '../services/cloudSync';
 import { Book, Shelf } from '../types';
 
@@ -95,5 +95,60 @@ describe('mergeLibraries', () => {
       { bookIds: [], shelfIds: ['x'] }
     );
     expect(merged.shelves.map((s) => s.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('firestore layout', () => {
+  it('writes and reads a library under users/{uid}, never a top-level collection', async () => {
+    const setPaths: string[][] = [];
+    const deletePaths: string[][] = [];
+    const readPaths: string[][] = [];
+    const commits: Array<() => void> = [];
+
+    // The module graph already holds the real firebase module from the static
+    // import above; reset it so the dynamic import below picks up the mock.
+    vi.resetModules();
+    vi.doMock('../lib/firebase', () => ({
+      getFirestoreApi: async () => ({
+        db: {},
+        doc: (_db: unknown, ...segments: string[]) => segments,
+        collection: (_db: unknown, ...segments: string[]) => {
+          readPaths.push(segments);
+          return segments;
+        },
+        getDocs: async () => ({ forEach: () => undefined }),
+        getDoc: async () => ({ exists: () => false }),
+        writeBatch: () => ({
+          set: (path: string[]) => setPaths.push(path),
+          delete: (path: string[]) => deletePaths.push(path),
+          commit: async () => commits.push(() => undefined),
+        }),
+      }),
+    }));
+
+    const { syncToCloud: sync, fetchFromCloud: fetch } = await import('../services/cloudSync');
+
+    await sync('uid-1', {
+      books: [book('b1')],
+      shelves: [shelf],
+      deletedBookIds: ['gone-book'],
+      deletedShelfIds: ['gone-shelf'],
+    });
+
+    expect(setPaths).toContainEqual(['users', 'uid-1', 'shelves', 'shelf-1']);
+    expect(setPaths).toContainEqual(['users', 'uid-1', 'books', 'b1']);
+    expect(setPaths).toContainEqual(['users', 'uid-1']);
+    expect(deletePaths).toEqual([
+      ['users', 'uid-1', 'books', 'gone-book'],
+      ['users', 'uid-1', 'shelves', 'gone-shelf'],
+    ]);
+
+    await fetch('uid-1');
+    expect(readPaths).toEqual([
+      ['users', 'uid-1', 'shelves'],
+      ['users', 'uid-1', 'books'],
+    ]);
+
+    vi.doUnmock('../lib/firebase');
   });
 });
