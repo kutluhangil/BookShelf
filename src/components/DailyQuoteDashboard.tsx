@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useT } from '../i18n/I18nProvider';
 
 const QUOTES = [
   { text: "A reader lives a thousand lives before he dies. The man who never reads lives only one.", author: "George R.R. Martin", book: "A Dance with Dragons" },
@@ -14,6 +15,8 @@ const QUOTES = [
 ];
 
 export const DailyQuoteDashboard: React.FC = () => {
+  const t = useT();
+
   const quote = useMemo(() => {
     const today = new Date();
     // Use day of year to ensure it changes exactly once per day
@@ -36,7 +39,7 @@ export const DailyQuoteDashboard: React.FC = () => {
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-[14px] text-[#C9963F]">auto_awesome</span>
           <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
-            Daily Literary Quote
+            {t.dailyQuote.title}
           </h3>
         </div>
         

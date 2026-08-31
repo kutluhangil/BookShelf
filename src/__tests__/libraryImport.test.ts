@@ -58,13 +58,13 @@ describe('parseLibraryCsv', () => {
     const csv = 'Title,Author\n,No Title Here\nDune,Herbert';
     const result = parseLibraryCsv(csv);
     expect(result.rows).toHaveLength(1);
-    expect(result.skipped).toEqual([{ line: 2, reason: 'Missing title.' }]);
+    expect(result.skipped).toEqual([{ line: 2, reason: 'missing-title' }]);
   });
 
   it('explains itself when the file has no Title column', () => {
     const result = parseLibraryCsv('Foo,Bar\n1,2');
     expect(result.rows).toHaveLength(0);
-    expect(result.skipped[0].reason).toMatch(/No "Title" column/);
+    expect(result.skipped[0].reason).toBe('no-title-column');
   });
 });
 

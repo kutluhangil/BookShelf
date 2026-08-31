@@ -5,6 +5,7 @@ import { ConfidenceBadge } from './ConfidenceBadge';
 import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
 import { ModalShell } from './ModalShell';
+import { useT } from '../i18n/I18nProvider';
 
 interface ReviewMatchSheetProps {
   candidate: SpineCandidate | null;
@@ -25,6 +26,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
   onMarkNotBook,
   onEnhanceWithAI,
 }) => {
+  const t = useT();
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [aiResult, setAiResult] = useState<string | null>(null);
 
@@ -37,10 +39,10 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
     try {
       await onEnhanceWithAI(candidate.id);
       haptic.success();
-      setAiResult('AI VLM Analysis: Extracted high-confidence title & author from typography structures.');
+      setAiResult(t.reviewMatch.aiSuccess);
     } catch {
       haptic.error();
-      setAiResult('Unable to enhance via AI. You can manually search or assign an edition.');
+      setAiResult(t.reviewMatch.aiFailure);
     } finally {
       setIsEnhancing(false);
     }
@@ -48,7 +50,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
 
   return (
     <AnimatePresence>
-      <ModalShell isOpen={isOpen} onClose={onClose} label="Review spine match" closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-end justify-center">
+      <ModalShell isOpen={isOpen} onClose={onClose} label={t.reviewMatch.dialogLabel} closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-end justify-center">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -76,10 +78,10 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
             <div className="flex justify-between items-start mt-2 mb-4 gap-3">
               <div>
                 <h2 className="font-serif-literata text-[22px] sm:text-[24px] text-[#F4EFE6] leading-snug">
-                  Review Match
+                  {t.reviewMatch.title}
                 </h2>
                 <p className="font-sans-inter text-[13px] text-[#A79C8C] mt-0.5">
-                  We found multiple candidate editions for this spine segment.
+                  {t.reviewMatch.subtitle}
                 </p>
               </div>
 
@@ -90,7 +92,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
             <div className="relative w-full h-44 sm:h-48 mb-5 rounded-lg overflow-hidden hairline-border bg-[#100E0C]">
               <img
                 src={candidate.cropUrl}
-                alt="Captured spine"
+                alt={t.reviewMatch.spineAlt}
                 className="w-full h-full object-cover grayscale-[30%] opacity-90 transition-all duration-500"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#262119] via-transparent to-transparent pointer-events-none" />
@@ -103,8 +105,8 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
 
               {/* Spine OCR Raw Text Pill */}
               <div className="absolute bottom-2 left-3 right-3 bg-[#12100E]/80 backdrop-blur-md px-2.5 py-1 rounded hairline-border flex items-center justify-between text-[11px] font-mono-ibm text-[#F4EFE6]">
-                <span className="truncate text-[#C9963F]">OCR: {candidate.rawTextForward}</span>
-                <span className="text-[#A79C8C] shrink-0 ml-2">CONF: {candidate.score.toFixed(2)}</span>
+                <span className="truncate text-[#C9963F]">{t.reviewMatch.ocr(candidate.rawTextForward)}</span>
+                <span className="text-[#A79C8C] shrink-0 ml-2">{t.confidence.score(candidate.score.toFixed(2))}</span>
               </div>
             </div>
 
@@ -115,10 +117,10 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
                   <span className="material-symbols-outlined text-[#C9963F] text-[20px]">psychology</span>
                   <div className="min-w-0">
                     <p className="font-sans-inter text-[12px] text-[#F4EFE6] font-medium truncate">
-                      VLM Typography Enhancement
+                      {t.reviewMatch.vlmTitle}
                     </p>
                     <p className="font-sans-inter text-[11px] text-[#A79C8C] truncate">
-                      Deep AI spine crop character recognition
+                      {t.reviewMatch.vlmSubtitle}
                     </p>
                   </div>
                 </div>
@@ -131,10 +133,10 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
                   {isEnhancing ? (
                     <>
                       <span className="w-3 h-3 border-2 border-[#C9963F] border-t-transparent rounded-full animate-spin" />
-                      <span>READING...</span>
+                      <span>{t.reviewMatch.reading}</span>
                     </>
                   ) : (
-                    <span>ENHANCE</span>
+                    <span>{t.reviewMatch.enhance}</span>
                   )}
                 </button>
               </div>
@@ -148,8 +150,8 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
 
             {/* Edition Selection Header */}
             <h3 className="font-mono-ibm text-[11px] font-semibold text-[#A79C8C] uppercase tracking-widest mb-3 border-b border-[#3A332A] pb-1.5 flex justify-between items-center">
-              <span>SELECT CORRECT EDITION</span>
-              <span className="text-[#9C8F7E] text-[10px]">{candidate.editions.length} MATCHES</span>
+              <span>{t.reviewMatch.selectEdition}</span>
+              <span className="text-[#9C8F7E] text-[10px]">{t.reviewMatch.matchCount(candidate.editions.length)}</span>
             </h3>
 
             {/* Candidate Edition Cards */}
@@ -184,7 +186,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
                     </p>
 
                     <div className="flex items-center gap-2 mt-auto font-mono-ibm text-[11px] text-[#9C8F7E]">
-                      <span>{edition.year} Ed.</span>
+                      <span>{t.reviewMatch.editionYear(edition.year)}</span>
                       <span className="w-1 h-1 rounded-full bg-[#4F4537]" />
                       <span className="truncate">{edition.publisher}</span>
                     </div>
@@ -208,7 +210,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
                 className="w-full py-3 px-4 bg-transparent hairline-border rounded-lg font-sans-inter text-[14px] font-medium text-[#C9963F] hover:bg-[#1C1916] transition-colors flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-[19px]">search</span>
-                <span>Search Manually</span>
+                <span>{t.reviewMatch.searchManually}</span>
               </button>
 
               <div className="flex gap-2">
@@ -219,7 +221,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
                   }}
                   className="flex-1 py-2.5 px-3 bg-transparent rounded font-sans-inter text-[13px] text-[#A79C8C] hover:text-[#FFB4AB] hover:bg-[#93000A]/10 transition-colors"
                 >
-                  Not a book / Noise
+                  {t.reviewMatch.notABook}
                 </button>
                 <button
                   onClick={() => {
@@ -228,7 +230,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
                   }}
                   className="flex-1 py-2.5 px-3 bg-transparent rounded font-sans-inter text-[13px] text-[#A79C8C] hover:text-[#F4EFE6] transition-colors"
                 >
-                  Cancel
+                  {t.common.cancel}
                 </button>
               </div>
             </div>

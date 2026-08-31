@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { SpineCandidate } from '../types';
 import { haptic } from '../services/haptics';
+import { useT } from '../i18n/I18nProvider';
 
 interface ProcessingViewProps {
   imageUrl: string;
@@ -14,34 +15,36 @@ interface ProcessingViewProps {
 export const ProcessingView: React.FC<ProcessingViewProps> = ({
   imageUrl,
   candidates,
-  label = 'Analyzing',
+  label,
   onComplete,
 }) => {
+  const t = useT();
+  const stageLabel = label ?? t.processing.defaultLabel;
   const hasResults = candidates.length > 0;
   const [progress, setProgress] = useState(12);
-  const [currentStage, setCurrentStage] = useState(`${label.toUpperCase()} — UPLOADING FRAME`);
+  const [currentStage, setCurrentStage] = useState(t.processing.uploadingFrame(stageLabel));
 
   // While the request is in flight, creep the progress bar without ever claiming
   // completion; the real result decides when the view hands over.
   useEffect(() => {
     if (hasResults) return;
-    setCurrentStage(`${label.toUpperCase()} — WAITING FOR RESPONSE`);
+    setCurrentStage(t.processing.waitingForResponse(stageLabel));
     const interval = setInterval(() => {
       setProgress((prev) => (prev >= 70 ? 70 : prev + 2));
     }, 180);
     return () => clearInterval(interval);
-  }, [hasResults, label]);
+  }, [hasResults, stageLabel, t]);
 
   // Results arrived: reveal the detected boxes, then hand over.
   useEffect(() => {
     if (!hasResults || !onComplete) return;
 
     setProgress(82);
-    setCurrentStage(`SEGMENTED ${candidates.length} PHYSICAL SPINES`);
+    setCurrentStage(t.processing.segmented(candidates.length));
 
     const stage = setTimeout(() => {
       setProgress(96);
-      setCurrentStage('RESOLVING CATALOG EDITIONS & CONFIDENCE BANDS');
+      setCurrentStage(t.processing.resolvingEditions);
     }, 500);
 
     const done = setTimeout(() => {
@@ -54,7 +57,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
       clearTimeout(stage);
       clearTimeout(done);
     };
-  }, [hasResults, candidates.length, onComplete]);
+  }, [hasResults, candidates.length, onComplete, t]);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#12100E] flex flex-col justify-between overflow-hidden">
@@ -63,11 +66,11 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-[#C9963F] animate-ping" />
           <span className="font-mono-ibm text-[12px] text-[#C9963F] font-semibold tracking-widest uppercase">
-            {label}
+            {stageLabel}
           </span>
         </div>
         <span className="font-mono-ibm text-[11px] text-[#A79C8C] tracking-wider">
-          {progress}% PROCESSED
+          {t.processing.processed(progress)}
         </span>
       </div>
 
@@ -76,7 +79,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
         {imageUrl ? (
           <img
             src={imageUrl}
-            alt="Processing shelf"
+            alt={t.processing.imageAlt}
             className="w-full h-full object-cover opacity-60 filter contrast-125"
           />
         ) : (
@@ -147,7 +150,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
         </div>
 
         <p className="text-center font-sans-inter text-[12px] text-[#9C8F7E]">
-          The captured frame is sent to your own server, which forwards it to Gemini for spine recognition. It is not stored.
+          {t.processing.privacyNote}
         </p>
       </div>
     </div>

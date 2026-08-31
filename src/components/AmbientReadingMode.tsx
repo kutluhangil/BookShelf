@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Book } from '../types';
 import { haptic } from '../services/haptics';
-import { AmbientAudioEngine, AMBIENT_TRACKS, AmbientTrackId } from '../services/ambientAudio';
+import { AmbientAudioEngine, AMBIENT_TRACK_IDS, AmbientTrackId } from '../services/ambientAudio';
 import { BookCover } from './BookCover';
+import { useT } from '../i18n/I18nProvider';
 
 interface AmbientReadingModeProps {
   book: Book;
@@ -14,6 +15,7 @@ interface AmbientReadingModeProps {
 
 
 export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, elapsedSeconds, isActive, onStop }) => {
+  const t = useT();
   const [activeTrack, setActiveTrack] = useState<AmbientTrackId | null>(null);
   const [volume, setVolume] = useState(0.35);
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -100,24 +102,24 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
 
             <div className="w-full space-y-6">
               <div className="flex flex-col items-center gap-3">
-                <span className="text-[10px] font-mono-ibm uppercase tracking-widest text-white/30">Ambient Audio</span>
+                <span className="text-[10px] font-mono-ibm uppercase tracking-widest text-white/30">{t.ambient.audioLabel}</span>
                 <div className="flex flex-wrap justify-center gap-2">
                   <button
                     onClick={() => setActiveTrack(null)}
                     className={`px-3 py-1.5 rounded-full text-xs font-mono-ibm transition-colors ${!activeTrack ? 'bg-white/10 text-white' : 'bg-transparent text-white/40 border border-white/10 hover:border-white/30'}`}
                   >
-                    Off
+                    {t.ambient.off}
                   </button>
-                  {AMBIENT_TRACKS.map(track => (
+                  {AMBIENT_TRACK_IDS.map(trackId => (
                     <button
-                      key={track.id}
+                      key={trackId}
                       onClick={() => {
                         haptic.selectionClick();
-                        setActiveTrack(track.id);
+                        setActiveTrack(trackId);
                       }}
-                      className={`px-3 py-1.5 rounded-full text-xs font-mono-ibm transition-colors ${activeTrack === track.id ? 'bg-[#C9963F]/20 text-[#C9963F] border border-[#C9963F]/30' : 'bg-transparent text-white/40 border border-white/10 hover:border-white/30'}`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-mono-ibm transition-colors ${activeTrack === trackId ? 'bg-[#C9963F]/20 text-[#C9963F] border border-[#C9963F]/30' : 'bg-transparent text-white/40 border border-white/10 hover:border-white/30'}`}
                     >
-                      {track.name}
+                      {t.ambient.tracks[trackId]}
                     </button>
                   ))}
                 </div>
@@ -133,7 +135,7 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
                       value={volume}
                       onChange={(event) => setVolume(parseFloat(event.target.value))}
                       className="flex-1 accent-[#C9963F] cursor-pointer"
-                      aria-label="Ambient volume"
+                      aria-label={t.ambient.volumeLabel}
                     />
                     <span className="material-symbols-outlined text-white/30 text-[16px]">volume_up</span>
                   </label>
@@ -152,7 +154,7 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
                   }}
                   className="px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-white/60 font-mono-ibm text-sm uppercase tracking-widest transition-all hover:text-white"
                 >
-                  End Session
+                  {t.ambient.endSession}
                 </button>
               </div>
             </div>

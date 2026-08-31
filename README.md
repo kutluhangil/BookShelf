@@ -77,7 +77,8 @@ Three more layers sit on top of your library:
 | 📊 **Dashboards** | Includes a Monthly Goal radial chart, Weekly Reading line charts, Library Growth stats, and a Spike Accuracy dashboard for the scanning engine. |
 | 👆 **Haptic Feedback** | Web Audio micro-clicks plus the Vibration API for a tactile feel on every button press, scan, and milestone. |
 | 🌙 **Ambient Reading Mode** | Full-screen timer with soundscapes synthesized locally with the Web Audio API (rain, fireplace, library, brown noise) — no external audio requests. |
-| ☁️ **Cloud Sync** | Optional Google sign-in with Firestore sync, including deletion propagation and a timestamp-based merge instead of a blind overwrite. |
+| ☁️ **Cloud Sync** | Optional Google sign-in with Firestore sync, including deletion propagation and a timestamp-based merge instead of a blind overwrite. A library is stored under `users/{uid}/books` and `users/{uid}/shelves`, so ownership is the document path. |
+| 🌍 **Turkish & English** | The interface ships in both languages with a TR/EN switch in the profile menu. The first load follows the browser language; an explicit choice is remembered. Errors thrown by the service layer (HTTP status, response bodies, SDK failures) stay in English as technical diagnostics. |
 | 🤝 **Shared Lists** | Public or invite-only collaborative lists with email invitations, joining, and per-book curation. |
 
 ---
@@ -123,6 +124,7 @@ Book Shelf/
 │   │   ├── Toast.tsx           # Milestone notification system
 │   │   └── ...                 # Dashboards, Cards, Layouts
 │   ├── data/                   # Starter library and recommendation catalog
+│   ├── i18n/                   # Locale detection, provider, and the tr/en message catalogs
 │   ├── services/               # bookLookup (Open Library), clusteringEngine (spine matching),
 │   │                           # cloudSync, localStore, ambientAudio, shelfCard, haptics
 │   ├── utils/                  # Helper functions (streak, search parser)

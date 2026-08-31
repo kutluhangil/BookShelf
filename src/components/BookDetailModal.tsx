@@ -7,6 +7,7 @@ import { QuoteScannerModal } from './QuoteScannerModal';
 import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
 import { ModalShell } from './ModalShell';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface BookDetailModalProps {
   book: Book | null;
@@ -47,6 +48,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onUpdateRating,
   onAddReadingSession,
 }) => {
+  const { t, locale } = useI18n();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [newTag, setNewTag] = useState('');
   
@@ -129,8 +131,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const formatEstimatedTime = (totalSeconds: number) => {
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
-    if (h > 0) return `~${h}h ${m}m left`;
-    return `~${m}m left`;
+    return h > 0 ? t.bookDetail.timeLeftHours(h, m) : t.bookDetail.timeLeftMinutes(m);
   };
 
   if (!isOpen || !book) return null;
@@ -140,7 +141,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   return (
     <>
       <AnimatePresence>
-      <ModalShell isOpen={isOpen} onClose={onClose} label={`Details for ${book.title}`} closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <ModalShell isOpen={isOpen} onClose={onClose} label={t.bookDetail.dialogLabel(book.title)} closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -170,7 +171,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   setShowDeleteConfirm(!showDeleteConfirm);
                 }}
                 className="text-[#A79C8C] hover:text-[#FFB4AB] p-1.5 rounded-lg hover:bg-[#93000A]/20 transition-colors"
-                title="Remove Volume"
+                title={t.bookDetail.removeVolume}
               >
                 <span className="material-symbols-outlined text-[20px]">delete</span>
               </button>
@@ -180,7 +181,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   onClose();
                 }}
                 className="text-[#A79C8C] hover:text-[#F4EFE6] p-1.5 rounded-lg hover:bg-[#262119] transition-colors"
-                title="Close"
+                title={t.common.close}
               >
                 <span className="material-symbols-outlined text-[22px]">close</span>
               </button>
@@ -191,7 +192,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           {showDeleteConfirm && (
             <div className="bg-[#93000A]/30 border-b border-[#A9503F]/50 p-3 px-6 flex items-center justify-between">
               <span className="text-[12px] font-sans-inter text-[#FFB4AB]">
-                Remove "{book.title}" from library?
+                {t.bookDetail.removeConfirm(book.title)}
               </span>
               <div className="flex gap-2">
                 <button
@@ -201,7 +202,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   }}
                   className="px-2.5 py-1 bg-[#A9503F] text-white rounded text-[11px] font-mono-ibm font-semibold uppercase"
                 >
-                  Confirm Delete
+                  {t.bookDetail.confirmDelete}
                 </button>
                 <button
                   onClick={() => {
@@ -210,7 +211,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   }}
                   className="px-2.5 py-1 text-[#A79C8C] text-[11px] font-mono-ibm"
                 >
-                  Cancel
+                  {t.common.cancel}
                 </button>
               </div>
             </div>
@@ -261,12 +262,12 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                           }
                         }}
                         className="w-12 bg-transparent text-[#F4EFE6] focus:outline-none text-right"
-                        aria-label="Total page count"
+                        aria-label={t.bookDetail.totalPageCount}
                       />
-                      <span>PAGES</span>
+                      <span>{t.bookDetail.pages}</span>
                     </label>
                   ) : (
-                    <span className="px-2 py-0.5 rounded bg-[#262119] hairline-border">{book.pageCount} PAGES</span>
+                    <span className="px-2 py-0.5 rounded bg-[#262119] hairline-border">{t.bookDetail.pageCount(book.pageCount)}</span>
                   )}
                   <span className="px-2 py-0.5 rounded bg-[#262119] hairline-border truncate max-w-[150px]">
                     {book.publisher}
@@ -277,7 +278,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 <div className="mt-4 pt-3 border-t border-[#3A332A]/70 flex flex-col gap-3">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
                     <span className="font-mono-ibm text-[10px] text-[#9C8F7E] uppercase tracking-wider">
-                      STATUS:
+                      {t.bookDetail.statusLabel}
                     </span>
                     <select
                       value={book.status}
@@ -287,9 +288,9 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       }}
                       className="bg-[#262119] text-[#F4EFE6] hairline-border text-[12px] font-mono-ibm rounded px-2.5 py-1 focus:outline-none focus:border-[#C9963F]"
                     >
-                      <option value="unread">Unread</option>
-                      <option value="reading">Currently Reading</option>
-                      <option value="read">Finished / Read</option>
+                      <option value="unread">{t.bookDetail.statusOptions.unread}</option>
+                      <option value="reading">{t.bookDetail.statusOptions.reading}</option>
+                      <option value="read">{t.bookDetail.statusOptions.read}</option>
                     </select>
                   </div>
 
@@ -298,11 +299,11 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <div className="bg-[#151311] p-3 rounded-lg border border-[#3A332A]/70 flex flex-col gap-2">
                       <div className="flex justify-between items-center text-[11px] font-mono-ibm">
                         <span className="text-[#A79C8C] uppercase tracking-wider text-[10px]">
-                          COMPLETION PROGRESS
+                          {t.bookDetail.completionProgress}
                         </span>
                         <div className="flex items-center gap-2">
                           {estimatedSecondsRemaining && (
-                            <span className="text-[#9C8F7E] text-[10px] bg-[#262119] px-1.5 py-0.5 rounded border border-[#3A332A]" title="Estimated Time Remaining based on your reading pace">
+                            <span className="text-[#9C8F7E] text-[10px] bg-[#262119] px-1.5 py-0.5 rounded border border-[#3A332A]" title={t.bookDetail.estimateTooltip}>
                               {formatEstimatedTime(estimatedSecondsRemaining)}
                             </span>
                           )}
@@ -331,13 +332,13 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                           onUpdateProgress(book.id, parseInt(e.target.value, 10));
                         }}
                         className="w-full accent-[#C9963F] cursor-pointer h-1.5"
-                        aria-label="Reading progress percentage"
+                        aria-label={t.bookDetail.progressAria}
                       />
 
                       {onUpdateCurrentPage && book.pageCount > 0 && (
                         <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#3A332A]/70">
                           <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">
-                            Current page
+                            {t.bookDetail.currentPage}
                           </span>
                           <div className="flex items-center gap-1 font-mono-ibm text-[12px] text-[#F4EFE6]">
                             <input
@@ -347,7 +348,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                               value={book.currentPage ?? Math.round((book.pageCount * (book.progress ?? 0)) / 100)}
                               onChange={(event) => onUpdateCurrentPage(book.id, Number(event.target.value))}
                               className="w-16 bg-[#12100E] border border-[#3A332A] rounded px-2 py-1 text-right focus:outline-none focus:border-[#C9963F]"
-                              aria-label="Current page"
+                              aria-label={t.bookDetail.currentPage}
                             />
                             <span className="text-[#A79C8C]">/ {book.pageCount}</span>
                           </div>
@@ -365,20 +366,20 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="flex justify-between items-center text-[11px] font-mono-ibm text-[#A79C8C]">
                 <span className="tracking-wider flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[15px] text-[#C9963F]">camera_alt</span>
-                  <span>PROOF OF CAPTURE (SHELF CROP)</span>
+                  <span>{t.bookDetail.proofOfCapture}</span>
                 </span>
-                <span className="text-[#9C8F7E]">LOCAL RAW</span>
+                <span className="text-[#9C8F7E]">{t.bookDetail.localRaw}</span>
               </div>
 
               <div className="w-full h-24 rounded-lg overflow-hidden relative bg-[#100E0C] border border-[#3A332A]">
                 <img
                   src={book.proofOfCaptureUrl || book.spineCropUrl}
-                  alt="Proof of capture"
+                  alt={t.bookDetail.proofAlt}
                   className="w-full h-full object-cover grayscale-[30%]"
                 />
                 <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-transparent to-black/30 pointer-events-none" />
                 <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/70 backdrop-blur-sm rounded text-[9px] font-mono-ibm text-[#C9963F] border border-[#C9963F]/40">
-                  ORIGINAL PHYSICAL BBOX
+                  {t.bookDetail.originalBbox}
                 </div>
               </div>
             </div>
@@ -387,7 +388,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             {/* Shelf Assignment */}
             <div className="flex flex-col gap-1.5">
               <label className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
-                ASSIGNED SHELF
+                {t.bookDetail.assignedShelf}
               </label>
               <select
                 value={book.shelfId}
@@ -399,7 +400,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               >
                 {shelves.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name} ({s.volumeCount} vols)
+                    {t.bookDetail.shelfOption(s.name, s.volumeCount)}
                   </option>
                 ))}
               </select>
@@ -408,11 +409,11 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             {currentShelf?.layout === 'coordinate' && (
               <div className="flex flex-col gap-1.5">
                 <label className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
-                  BIN COORDINATES (X, Y)
+                  {t.bookDetail.binCoordinates}
                 </label>
                 <div className="flex gap-3">
                   <div className="flex-1 flex items-center gap-2 bg-[#262119] hairline-border rounded-lg p-1.5 px-3">
-                    <span className="font-mono-ibm text-[11px] text-[#A79C8C]">X (COL)</span>
+                    <span className="font-mono-ibm text-[11px] text-[#A79C8C]">{t.bookDetail.colLabel}</span>
                     <input
                       type="number"
                       min={1}
@@ -431,11 +432,11 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         }
                       }}
                       className="w-full bg-transparent text-[#F4EFE6] text-[13px] font-sans-inter focus:outline-none text-right"
-                      placeholder="e.g. 1"
+                      placeholder={t.bookDetail.coordinatePlaceholder}
                     />
                   </div>
                   <div className="flex-1 flex items-center gap-2 bg-[#262119] hairline-border rounded-lg p-1.5 px-3">
-                    <span className="font-mono-ibm text-[11px] text-[#A79C8C]">Y (ROW)</span>
+                    <span className="font-mono-ibm text-[11px] text-[#A79C8C]">{t.bookDetail.rowLabel}</span>
                     <input
                       type="number"
                       min={1}
@@ -454,12 +455,12 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         }
                       }}
                       className="w-full bg-transparent text-[#F4EFE6] text-[13px] font-sans-inter focus:outline-none text-right"
-                      placeholder="e.g. 1"
+                      placeholder={t.bookDetail.coordinatePlaceholder}
                     />
                   </div>
                 </div>
                 <p className="text-[#A79C8C] text-[11px] mt-1 leading-snug">
-                  Map this book to a specific physical coordinate bin (e.g. X:1, Y:1).
+                  {t.bookDetail.coordinateHint}
                 </p>
               </div>
             )}
@@ -468,7 +469,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             {(book.readHistory?.length || book.readingSessions?.length) ? (
               <div className="space-y-2">
                 <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
-                  Reading History & Sessions
+                  {t.bookDetail.readingHistory}
                 </h3>
                 <div className="bg-[#151311] rounded-xl p-3.5 hairline-border">
                   <div className="relative pl-3 space-y-4 before:absolute before:inset-y-0 before:left-[5px] before:w-[2px] before:bg-[#3A332A]">
@@ -476,7 +477,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       <div key={`hist-${idx}`} className="relative flex items-center gap-3">
                         <div className="absolute -left-[14px] w-2.5 h-2.5 rounded-full bg-[#C9963F] border-2 border-[#151311]" />
                         <span className="font-mono-ibm text-[12px] text-[#D4CDA8]">
-                          Completed on {new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                          {t.bookDetail.completedOn(new Date(dateStr).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' }))}
                         </span>
                       </div>
                     ))}
@@ -484,7 +485,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       <div key={`sess-${idx}`} className="relative flex items-center gap-3">
                         <div className="absolute -left-[14px] w-2.5 h-2.5 rounded-full bg-[#6B8E23] border-2 border-[#151311]" />
                         <span className="font-mono-ibm text-[12px] text-[#D4CDA8]">
-                          Read for {Math.round(session.durationSeconds / 60)} mins on {new Date(session.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                          {t.bookDetail.readSession(
+                            Math.round(session.durationSeconds / 60),
+                            new Date(session.date).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })
+                          )}
                         </span>
                       </div>
                     ))}
@@ -499,7 +503,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 <div className="flex justify-between items-center">
                   <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-[14px] text-[#C9963F]">timer</span>
-                    CURRENT SITTING
+                    {t.bookDetail.currentSitting}
                   </h3>
                   <div className={`font-mono-ibm text-[16px] font-bold ${isTimerActive ? 'text-[#C9963F] animate-pulse' : 'text-[#F4EFE6]'}`}>
                     {formatTime(elapsedSeconds)}
@@ -518,7 +522,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <span className="material-symbols-outlined text-[16px]">
                       {isTimerActive ? 'stop_circle' : 'play_circle'}
                     </span>
-                    {isTimerActive ? 'Stop & Save Session' : 'Start Reading Session'}
+                    {isTimerActive ? t.bookDetail.stopSession : t.bookDetail.startSession}
                   </button>
                   {isTimerActive && (
                     <button
@@ -527,7 +531,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         setIsAmbientMode(true);
                       }}
                       className="px-3 py-2.5 bg-[#262119] text-[#A79C8C] hover:text-[#C9963F] hover:bg-[#3A332A] rounded-lg transition-colors flex items-center justify-center"
-                      title="Enter Ambient Mode"
+                      title={t.bookDetail.enterAmbient}
                     >
                       <span className="material-symbols-outlined text-[18px]">
                         dark_mode
@@ -551,10 +555,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             {/* Description / Synopsis in Literata */}
             <div className="space-y-1.5">
               <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
-                SYNOPSIS & ARCHIVAL NOTES
+                {t.bookDetail.synopsis}
               </h3>
               <div className="font-serif-literata text-[14px] leading-relaxed text-[#D4CDA8] bg-[#151311] p-4 rounded-xl hairline-border">
-                {book.description || 'No description available for this volume.'}
+                {book.description || t.bookDetail.noDescription}
               </div>
             </div>
 
@@ -563,7 +567,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="space-y-1.5">
                 <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[14px] text-[#C9963F]">star</span>
-                  YOUR RATING
+                  {t.bookDetail.yourRating}
                 </h3>
                 <div className="bg-[#151311] p-3 rounded-xl hairline-border flex items-center gap-2">
                   {[1, 2, 3, 4, 5].map((value) => (
@@ -574,14 +578,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         onUpdateRating(book.id, book.rating === value ? undefined : value);
                       }}
                       className="text-[26px] leading-none transition-transform hover:scale-110"
-                      title={`${value} star${value > 1 ? 's' : ''}`}
-                      aria-label={`Rate ${value} out of 5`}
+                      title={t.bookDetail.starTitle(value)}
+                      aria-label={t.bookDetail.rateAria(value)}
                     >
                       <span className={(book.rating ?? 0) >= value ? 'text-[#C9963F]' : 'text-[#3A332A]'}>★</span>
                     </button>
                   ))}
                   <span className="ml-2 font-mono-ibm text-[11px] text-[#A79C8C]">
-                    {book.rating ? `${book.rating}/5` : 'Not rated'}
+                    {book.rating ? t.bookDetail.ratingValue(book.rating) : t.bookDetail.notRated}
                   </span>
                 </div>
               </div>
@@ -592,7 +596,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="space-y-1.5">
                 <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[14px] text-[#C9963F]">sell</span>
-                  CUSTOM TAGS
+                  {t.bookDetail.customTags}
                 </h3>
                 <div className="bg-[#151311] p-3 rounded-xl hairline-border space-y-3">
                   <div className="flex flex-wrap gap-2">
@@ -612,7 +616,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         </span>
                       ))
                     ) : (
-                      <span className="text-[12px] font-sans-inter text-[#A79C8C] italic">No tags assigned.</span>
+                      <span className="text-[12px] font-sans-inter text-[#A79C8C] italic">{t.bookDetail.noTags}</span>
                     )}
                   </div>
                   <form 
@@ -633,7 +637,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       type="text"
                       value={newTag}
                       onChange={(e) => setNewTag(e.target.value)}
-                      placeholder="Add new tag..."
+                      placeholder={t.bookDetail.addTagPlaceholder}
                       className="flex-1 bg-[#12100E] text-[#F4EFE6] text-[13px] font-sans-inter rounded-lg px-3 py-1.5 border border-[#3A332A] focus:border-[#C9963F] focus:outline-none placeholder:text-[#A79C8C]/50"
                     />
                     <button
@@ -641,7 +645,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       disabled={!newTag.trim()}
                       className="bg-[#262119] hover:bg-[#3A332A] text-[#C9963F] px-3 py-1.5 rounded-lg text-[11px] font-mono-ibm font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
                     >
-                      Add
+                      {t.bookDetail.add}
                     </button>
                   </form>
                 </div>
@@ -653,18 +657,18 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="space-y-1.5">
                 <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[14px] text-[#C9963F]">handshake</span>
-                  LENDING TRACKER
+                  {t.bookDetail.lendingTracker}
                 </h3>
                 <div className="bg-[#151311] p-4 rounded-xl hairline-border space-y-3">
                   {book.lentTo ? (
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-[13px] text-[#F4EFE6] font-sans-inter">
-                          Lent to: <span className="font-bold text-[#C9963F]">{book.lentTo}</span>
+                          {t.bookDetail.lentTo} <span className="font-bold text-[#C9963F]">{book.lentTo}</span>
                         </p>
                         {book.lentAt && (
                           <p className="text-[11px] text-[#A79C8C] font-mono-ibm mt-0.5">
-                            On {new Date(book.lentAt).toLocaleDateString()}
+                            {t.bookDetail.lentOn(new Date(book.lentAt).toLocaleDateString(locale))}
                           </p>
                         )}
                         {book.lentDueAt && (
@@ -673,8 +677,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                               new Date(book.lentDueAt).getTime() < Date.now() ? 'text-[#FF6B6B]' : 'text-[#A79C8C]'
                             }`}
                           >
-                            Due {new Date(book.lentDueAt).toLocaleDateString()}
-                            {new Date(book.lentDueAt).getTime() < Date.now() ? ' — overdue' : ''}
+                            {t.bookDetail.dueOn(new Date(book.lentDueAt).toLocaleDateString(locale))}
+                            {new Date(book.lentDueAt).getTime() < Date.now() ? t.bookDetail.overdueSuffix : ''}
                           </p>
                         )}
                       </div>
@@ -682,7 +686,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         onClick={() => onUpdateLending(book.id, undefined, undefined, undefined)}
                         className="px-3 py-1.5 bg-[#3A1D1D] text-[#FF6B6B] hover:bg-[#4A2525] rounded-lg text-[11px] font-mono-ibm font-bold uppercase tracking-wider transition-colors shrink-0"
                       >
-                        Returned
+                        {t.bookDetail.returned}
                       </button>
                     </div>
                   ) : (
@@ -691,18 +695,18 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         type="text"
                         value={lentToInput}
                         onChange={(e) => setLentToInput(e.target.value)}
-                        placeholder="Friend's name..."
+                        placeholder={t.bookDetail.friendPlaceholder}
                         className="bg-[#12100E] text-[#F4EFE6] text-[13px] font-sans-inter rounded-lg px-3 py-1.5 border border-[#3A332A] focus:border-[#C9963F] focus:outline-none placeholder:text-[#A79C8C]/50"
                       />
                       <div className="flex gap-2 items-center">
                         <label className="flex-1 flex items-center gap-2 bg-[#12100E] border border-[#3A332A] rounded-lg px-3 py-1.5">
-                          <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">Due</span>
+                          <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">{t.bookDetail.due}</span>
                           <input
                             type="date"
                             value={lentDueInput}
                             onChange={(e) => setLentDueInput(e.target.value)}
                             className="flex-1 bg-transparent text-[#F4EFE6] text-[12px] font-mono-ibm focus:outline-none"
-                            aria-label="Return due date"
+                            aria-label={t.bookDetail.dueDateAria}
                           />
                         </label>
                         <button
@@ -718,7 +722,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                           disabled={!lentToInput.trim()}
                           className="bg-[#262119] hover:bg-[#3A332A] text-[#C9963F] px-3 py-1.5 rounded-lg text-[11px] font-mono-ibm font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
                         >
-                          Lend
+                          {t.bookDetail.lend}
                         </button>
                       </div>
                     </div>
@@ -733,7 +737,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 <div className="flex items-center justify-between">
                   <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-[14px] text-[#C9963F]">format_quote</span>
-                    SCANNED QUOTES
+                    {t.bookDetail.scannedQuotes}
                   </h3>
                   <button
                     onClick={() => {
@@ -743,7 +747,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     className="flex items-center gap-1 text-[11px] text-[#C9963F] hover:text-[#F4EFE6] transition-colors"
                   >
                     <span className="material-symbols-outlined text-[14px]">document_scanner</span>
-                    Scan New
+                    {t.bookDetail.scanNew}
                   </button>
                 </div>
                 
@@ -766,7 +770,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   </div>
                 ) : (
                   <div className="bg-[#151311] p-4 rounded-xl hairline-border text-center">
-                    <p className="text-[12px] text-[#A79C8C] font-sans-inter">No quotes saved yet. Use the scanner to digitize text directly from the book pages.</p>
+                    <p className="text-[12px] text-[#A79C8C] font-sans-inter">{t.bookDetail.noQuotes}</p>
                   </div>
                 )}
               </div>
@@ -777,12 +781,12 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="space-y-1.5">
                 <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[14px] text-[#C9963F]">edit_note</span>
-                  PERSONAL NOTES
+                  {t.bookDetail.personalNotes}
                 </h3>
                 <textarea
                   value={book.notes || ''}
                   onChange={(e) => onUpdateNotes(book.id, e.target.value)}
-                  placeholder="Add your thoughts, favorite quotes, or reading notes here..."
+                  placeholder={t.bookDetail.notesPlaceholder}
                   className="w-full bg-[#151311] text-[#F4EFE6] font-sans-inter text-[13px] leading-relaxed rounded-xl p-4 hairline-border focus:outline-none focus:border-[#C9963F] min-h-[120px] resize-y placeholder:text-[#A79C8C]/50"
                 />
               </div>
@@ -790,8 +794,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
             {/* Archival Identifier Footer */}
             <div className="pt-2 border-t border-[#3A332A] flex justify-between items-center text-[10px] font-mono-ibm text-[#9C8F7E]">
-              <span>ISBN: {book.isbn || 'N/A'}</span>
-              <span>ADDED: {new Date(book.addedAt).toLocaleDateString()}</span>
+              <span>{t.bookDetail.isbn(book.isbn || t.common.notAvailable)}</span>
+              <span>{t.bookDetail.added(new Date(book.addedAt).toLocaleDateString(locale))}</span>
             </div>
           </div>
         </motion.div>

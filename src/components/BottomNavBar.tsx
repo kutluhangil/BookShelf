@@ -1,5 +1,6 @@
 import React from 'react';
 import { haptic } from '../services/haptics';
+import { useT } from '../i18n/I18nProvider';
 
 interface BottomNavBarProps {
   activeTab: 'library' | 'shelves' | 'eval' | 'shared';
@@ -12,6 +13,8 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   onTabChange,
   onOpenScanner,
 }) => {
+  const t = useT();
+
   return (
     <nav className="fixed bottom-0 left-0 w-full z-50 h-20 bg-[#100E0C] border-t border-[#3A332A] flex justify-around items-center px-4 pb-safe md:hidden">
       {/* Library Tab */}
@@ -34,7 +37,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
           library_books
         </span>
         <span className="font-mono-ibm text-[10px] font-medium tracking-wider">
-          Library
+          {t.nav.library}
         </span>
       </button>
 
@@ -46,7 +49,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
             onOpenScanner();
           }}
           className="w-16 h-16 rounded-full bg-[#C9963F] text-[#12100E] shadow-[0_4px_24px_rgba(201,150,63,0.4)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-200 border-2 border-[#12100E]"
-          title="Scan Bookshelf"
+          title={t.nav.scanShelf}
         >
           <span className="material-symbols-outlined text-[30px] font-bold">
             photo_camera
@@ -74,7 +77,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
           shelves
         </span>
         <span className="font-mono-ibm text-[10px] font-medium tracking-wider">
-          Shelves
+          {t.nav.shelves}
         </span>
       </button>
 
@@ -98,7 +101,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
           group
         </span>
         <span className="font-mono-ibm text-[10px] font-medium tracking-wider">
-          Shared
+          {t.nav.shared}
         </span>
       </button>
 
@@ -122,7 +125,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
           verified
         </span>
         <span className="font-mono-ibm text-[10px] font-medium tracking-wider">
-          Phase 0
+          {t.nav.eval}
         </span>
       </button>
     </nav>

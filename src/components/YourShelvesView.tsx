@@ -3,9 +3,16 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Shelf, Book } from '../types';
 import { ShelfStrip } from './ShelfStrip';
 import { haptic } from '../services/haptics';
+import { useT } from '../i18n/I18nProvider';
 
 const SHELF_COLORS = ['#C9963F', '#304E2E', '#2C251D', '#8B2323', '#4A5B69', '#63456B', '#4D4336', '#3E5C76', '#E29578'];
-const SHELF_TEXTURES = ['Solid', 'Oak', 'Minimalist Metal', 'Dark Walnut'];
+/**
+ * Texture identifiers are persisted on the shelf record, so they stay in
+ * English; only their labels come from the catalog.
+ */
+const SHELF_TEXTURES = ['Solid', 'Oak', 'Minimalist Metal', 'Dark Walnut'] as const;
+
+type ShelfTexture = (typeof SHELF_TEXTURES)[number];
 const SHELF_MAX_PAGES = 5000; // Estimated linear capacity per shelf
 
 const getShelfBackgroundStyle = (themeColor?: string, texture?: string): React.CSSProperties => {
@@ -53,10 +60,11 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
   onAutoSort,
   onDeleteShelf,
 }) => {
+  const t = useT();
   const [isCreating, setIsCreating] = useState(false);
   const [newShelfName, setNewShelfName] = useState('');
   const [newShelfColor, setNewShelfColor] = useState<string>(SHELF_COLORS[0]);
-  const [newShelfTexture, setNewShelfTexture] = useState<string>(SHELF_TEXTURES[0]);
+  const [newShelfTexture, setNewShelfTexture] = useState<ShelfTexture>(SHELF_TEXTURES[0]);
   const [editingColorShelfId, setEditingColorShelfId] = useState<string | null>(null);
 
   const [pendingDeleteShelfId, setPendingDeleteShelfId] = useState<string | null>(null);
@@ -184,13 +192,13 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#3A332A] pb-4">
         <div>
           <h2 className="font-serif-literata text-[26px] sm:text-[30px] text-[#F4EFE6] font-bold">
-            Your Physical Shelves
+            {t.shelves.title}
           </h2>
           <p className="font-sans-inter text-[13px] text-[#A79C8C] flex items-center gap-2 mt-0.5">
-            <span>{shelves.length} organized sections • {books.length} cataloged volumes</span>
+            <span>{t.shelves.summary(shelves.length, books.length)}</span>
             <span className="hidden sm:inline text-[#C9963F]/70">•</span>
             <span className="hidden sm:inline text-[#C9963F] font-mono-ibm text-[11px]">
-              Drag cards or handles to reorder hierarchy
+              {t.shelves.dragHint}
             </span>
           </p>
         </div>
@@ -205,7 +213,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
               className="px-4 py-2 bg-[#2C251D] hover:bg-[#3A332A] text-[#C9963F] font-mono-ibm text-[12px] font-bold rounded-xl tracking-wider transition-all flex items-center gap-1.5 border border-[#C9963F]/30 hover:border-[#C9963F]"
             >
               <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
-              <span className="hidden sm:inline">AUTO-SORT</span>
+              <span className="hidden sm:inline">{t.shelves.autoSort}</span>
             </button>
           )}
           <button
@@ -216,7 +224,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
             className="px-4 py-2 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] font-mono-ibm text-[12px] font-bold rounded-xl tracking-wider transition-all flex items-center gap-1.5 shadow-[0_4px_16px_rgba(201,150,63,0.3)]"
           >
             <span className="material-symbols-outlined text-[18px]">add</span>
-            <span>NEW SHELF</span>
+            <span>{t.shelves.newShelf}</span>
           </button>
         </div>
       </div>
@@ -232,13 +240,13 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
               type="text"
               value={newShelfName}
               onChange={(e) => setNewShelfName(e.target.value)}
-              placeholder="e.g. Vintage Poetry, Swedish Crime, Art History..."
+              placeholder={t.shelves.namePlaceholder}
               autoFocus
               className="w-full bg-[#12100E] text-[#F4EFE6] hairline-border rounded-xl px-4 py-2.5 text-[14px] font-sans-inter focus:outline-none focus:border-[#C9963F]"
             />
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider">
-                Theme Color:
+                {t.shelves.themeColor}
               </span>
               <div className="flex items-center gap-1.5 flex-wrap">
                 {SHELF_COLORS.map((c) => (
@@ -251,7 +259,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                     }}
                     className={`w-6 h-6 rounded-full transition-transform ${newShelfColor === c ? 'scale-110 ring-2 ring-offset-2 ring-offset-[#1C1916] ring-[#C9963F]' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
                     style={{ backgroundColor: c }}
-                    title={`Select color ${c}`}
+                    title={t.shelves.selectColor(c)}
                   />
                 ))}
               </div>
@@ -259,20 +267,20 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
             
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider">
-                Texture:
+                {t.shelves.texture}
               </span>
               <div className="flex items-center gap-1.5 flex-wrap">
-                {SHELF_TEXTURES.map((t) => (
+                {SHELF_TEXTURES.map((texture) => (
                   <button
-                    key={t}
+                    key={texture}
                     type="button"
                     onClick={() => {
                       haptic.selectionClick();
-                      setNewShelfTexture(t);
+                      setNewShelfTexture(texture);
                     }}
-                    className={`px-3 py-1 rounded-lg text-[10px] uppercase font-mono-ibm transition-colors ${newShelfTexture === t ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#12100E] text-[#A79C8C] border border-[#3A332A] hover:text-[#F4EFE6]'}`}
+                    className={`px-3 py-1 rounded-lg text-[10px] uppercase font-mono-ibm transition-colors ${newShelfTexture === texture ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#12100E] text-[#A79C8C] border border-[#3A332A] hover:text-[#F4EFE6]'}`}
                   >
-                    {t}
+                    {t.shelves.textures[texture]}
                   </button>
                 ))}
               </div>
@@ -283,7 +291,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
               type="submit"
               className="flex-1 sm:flex-none px-4 py-2.5 bg-[#C9963F] text-[#12100E] font-mono-ibm text-[11px] font-bold rounded-lg uppercase tracking-wider"
             >
-              Create
+              {t.shelves.create}
             </button>
             <button
               type="button"
@@ -293,7 +301,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
               }}
               className="flex-1 sm:flex-none px-4 py-2.5 hairline-border text-[#A79C8C] hover:text-[#F4EFE6] font-mono-ibm text-[11px] rounded-lg uppercase tracking-wider"
             >
-              Cancel
+              {t.common.cancel}
             </button>
           </div>
         </form>
@@ -356,7 +364,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                       {/* Drag Handle */}
                       <div
                         className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-[#A79C8C] hover:text-[#C9963F] rounded transition-colors touch-none"
-                        title="Drag to reorder shelf"
+                        title={t.shelves.dragHandle}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <span className="material-symbols-outlined text-[20px] select-none">
@@ -367,14 +375,14 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="px-1.5 py-0.5 bg-[#262119] text-[#C9963F] border border-[#3A332A] rounded text-[9px] font-mono-ibm font-bold tracking-wider">
-                            SHELF #{index + 1}
+                            {t.shelves.shelfIndex(index + 1)}
                           </span>
                           <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] group-hover:text-[#C9963F] transition-colors font-semibold leading-tight">
                             {shelf.name}
                           </h3>
                         </div>
                         <p className="font-mono-ibm text-[11px] text-[#A79C8C] mt-1">
-                          {shelfBooks.length > 0 ? shelfBooks.length : shelf.volumeCount} PHYSICAL VOLUMES
+                          {t.shelves.physicalVolumes(shelfBooks.length > 0 ? shelfBooks.length : shelf.volumeCount)}
                         </p>
                         
                         {/* Capacity Indicator moved to bottom of card */}
@@ -397,7 +405,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                                 ? 'text-[#5A5044] cursor-not-allowed'
                                 : 'text-[#A79C8C] hover:text-[#F4EFE6] hover:bg-[#322B22]'
                             }`}
-                            title="Move Shelf Up"
+                            title={t.shelves.moveUp}
                           >
                             <span className="material-symbols-outlined text-[16px] leading-none">
                               arrow_upward
@@ -416,7 +424,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                                 ? 'text-[#5A5044] cursor-not-allowed'
                                 : 'text-[#A79C8C] hover:text-[#F4EFE6] hover:bg-[#322B22]'
                             }`}
-                            title="Move Shelf Down"
+                            title={t.shelves.moveDown}
                           >
                             <span className="material-symbols-outlined text-[16px] leading-none">
                               arrow_downward
@@ -433,7 +441,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                             setEditingColorShelfId(editingColorShelfId === shelf.id ? null : shelf.id);
                           }}
                           className={`p-1.5 rounded-lg transition-colors ${editingColorShelfId === shelf.id ? 'text-[#C9963F] bg-[#262119]' : 'text-[#A79C8C] hover:text-[#C9963F] hover:bg-[#262119]'}`}
-                          title="Change Shelf Color"
+                          title={t.shelves.changeColor}
                         >
                           <span className="material-symbols-outlined text-[20px]">palette</span>
                         </button>
@@ -446,7 +454,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                           onShareShelf(shelf);
                         }}
                         className="text-[#A79C8C] hover:text-[#C9963F] p-1.5 rounded-lg hover:bg-[#262119] transition-colors"
-                        title="Export Shelf Card"
+                        title={t.shelves.exportCard}
                       >
                         <span className="material-symbols-outlined text-[20px]">share</span>
                       </button>
@@ -463,7 +471,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                               }}
                               className="px-2 py-1 bg-[#A9503F] text-white rounded text-[10px] font-mono-ibm font-bold uppercase"
                             >
-                              Delete
+                              {t.common.delete}
                             </button>
                             <button
                               onClick={(e) => {
@@ -472,7 +480,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                               }}
                               className="px-1.5 text-[#A79C8C] text-[10px] font-mono-ibm"
                             >
-                              Cancel
+                              {t.common.cancel}
                             </button>
                           </div>
                         ) : (
@@ -483,7 +491,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                               setPendingDeleteShelfId(shelf.id);
                             }}
                             className="text-[#A79C8C] hover:text-[#FF6B6B] p-1.5 rounded-lg hover:bg-[#262119] transition-colors"
-                            title={shelfBooks.length > 0 ? `Delete shelf (${shelfBooks.length} books move to another shelf)` : 'Delete empty shelf'}
+                            title={shelfBooks.length > 0 ? t.shelves.deleteWithBooks(shelfBooks.length) : t.shelves.deleteEmpty}
                           >
                             <span className="material-symbols-outlined text-[20px]">delete</span>
                           </button>
@@ -504,7 +512,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                         <div className="flex flex-col gap-2 p-3 bg-[#12100E] rounded-lg border border-[#3A332A]">
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider min-w-[50px]">
-                              Color:
+                              {t.shelves.color}
                             </span>
                             <div className="flex flex-wrap items-center gap-2">
                               {SHELF_COLORS.map((c) => (
@@ -520,7 +528,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                                   }}
                                   className={`w-5 h-5 rounded-full transition-transform ${shelf.themeColor === c ? 'scale-110 ring-2 ring-offset-2 ring-offset-[#12100E] ring-[#C9963F]' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
                                   style={{ backgroundColor: c }}
-                                  title={`Set color ${c}`}
+                                  title={t.shelves.setColor(c)}
                                 />
                               ))}
                             </div>
@@ -528,20 +536,20 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                           
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider min-w-[50px]">
-                              Texture:
+                              {t.shelves.texture}
                             </span>
                             <div className="flex flex-wrap items-center gap-1.5">
-                              {SHELF_TEXTURES.map((t) => (
+                              {SHELF_TEXTURES.map((texture) => (
                                 <button
-                                  key={t}
+                                  key={texture}
                                   type="button"
                                   onClick={() => {
                                     haptic.selectionClick();
-                                    onUpdateShelf?.(shelf.id, { texture: t });
+                                    onUpdateShelf?.(shelf.id, { texture });
                                   }}
-                                  className={`px-2 py-1 rounded text-[10px] uppercase font-mono-ibm transition-colors ${(shelf.texture || 'Solid') === t ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#1C1916] text-[#A79C8C] border border-[#3A332A] hover:text-[#F4EFE6]'}`}
+                                  className={`px-2 py-1 rounded text-[10px] uppercase font-mono-ibm transition-colors ${(shelf.texture || 'Solid') === texture ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#1C1916] text-[#A79C8C] border border-[#3A332A] hover:text-[#F4EFE6]'}`}
                                 >
-                                  {t}
+                                  {t.shelves.textures[texture]}
                                 </button>
                               ))}
                             </div>
@@ -552,7 +560,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                                onClick={() => setEditingColorShelfId(null)}
                                className="text-[10px] font-mono-ibm text-[#C9963F] hover:text-[#E8B660] transition-colors"
                             >
-                               DONE
+                               {t.shelves.done}
                             </button>
                           </div>
                         </div>
@@ -565,7 +573,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                     <div className="flex flex-col gap-3">
                       <div className="flex justify-between items-end">
                          <span className="text-[10px] text-[#A79C8C] font-mono-ibm uppercase tracking-wider">
-                           {shelf.layout === 'coordinate' ? 'Coordinate Grid Layout' : 'Compact Layout'}
+                           {shelf.layout === 'coordinate' ? t.shelves.coordinateLayout : t.shelves.compactLayout}
                          </span>
                          <button
                             onClick={(e) => {
@@ -602,7 +610,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                             className="text-[10px] font-mono-ibm text-[#C9963F] hover:text-[#E8B660] transition-colors border border-[#C9963F]/30 hover:border-[#C9963F] rounded px-2 py-1 bg-[#100E0C] flex items-center gap-1"
                          >
                            <span className="material-symbols-outlined text-[12px]">grid_view</span>
-                           BULK ARRANGE
+                           {t.shelves.bulkArrange}
                          </button>
                       </div>
                       <div className="relative">
@@ -641,7 +649,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                     <div className="flex justify-between items-center text-[10px] font-mono-ibm tracking-wider">
                       <span className="text-[#A79C8C] flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-[14px]">align_horizontal_left</span>
-                        SHELF CAPACITY ({totalPages.toLocaleString()} / {SHELF_MAX_PAGES.toLocaleString()} PAGES)
+                        {t.shelves.capacity(totalPages.toLocaleString(), SHELF_MAX_PAGES.toLocaleString())}
                       </span>
                       <span className={isNearCapacity ? "text-[#E57373] font-bold" : "text-[#C9963F] font-bold"}>{capacityPercentage}%</span>
                     </div>
@@ -659,7 +667,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                     <span className="material-symbols-outlined text-[15px] text-[#C9963F]">
                       menu_book
                     </span>
-                    <span>VIEW ARCHIVE</span>
+                    <span>{t.shelves.viewArchive}</span>
                   </span>
                   <span className="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform text-[#C9963F]">
                     arrow_forward

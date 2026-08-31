@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Book } from '../types';
 import { postJson } from '../services/apiClient';
 import { ModalShell } from './ModalShell';
+import { useT } from '../i18n/I18nProvider';
 
 export interface AIRecommendation {
   title: string;
@@ -25,6 +26,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
   books,
   onAddBook,
 }) => {
+  const t = useT();
   const [recommendations, setRecommendations] = useState<AIRecommendation[]>([]);
   const [addedTitles, setAddedTitles] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -37,7 +39,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
       const payload = await postJson<{ recommendations?: unknown }>('/api/gemini/recommend', { books });
       const list = payload?.recommendations;
       if (!Array.isArray(list)) {
-        throw new Error('The recommendation service returned an unexpected payload.');
+        throw new Error(t.aiRecommendations.badPayload);
       }
       setRecommendations(list as AIRecommendation[]);
       setAddedTitles([]);
@@ -46,7 +48,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [books]);
+  }, [books, t]);
 
   useEffect(() => {
     if (isOpen && recommendations.length === 0 && books.length > 0 && !isLoading && !error) {
@@ -57,7 +59,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <ModalShell isOpen onClose={onClose} label="AI recommendations" closeOnBackdrop={false} className="contents">
+        <ModalShell isOpen onClose={onClose} label={t.aiRecommendations.dialogLabel} closeOnBackdrop={false} className="contents">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -73,7 +75,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-serif-literata text-[20px] text-[#F4EFE6] font-bold flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#C9963F]">auto_awesome</span>
-                Discover Next
+                {t.aiRecommendations.title}
               </h2>
               <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C251D] text-[#A79C8C] hover:text-[#FF6B6B] transition-colors">
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -84,12 +86,12 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
               {books.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
                   <span className="material-symbols-outlined text-[48px] text-[#3A332A]">library_books</span>
-                  <p className="text-[#A79C8C] font-sans-inter text-[14px]">Your library is empty. Add some books first so Gemini can learn your tastes.</p>
+                  <p className="text-[#A79C8C] font-sans-inter text-[14px]">{t.aiRecommendations.emptyLibrary}</p>
                 </div>
               ) : isLoading ? (
                 <div className="flex flex-col items-center justify-center h-full space-y-4">
                   <div className="w-12 h-12 border-4 border-[#C9963F]/20 border-t-[#C9963F] rounded-full animate-spin" />
-                  <p className="text-[#C9963F] font-mono-ibm text-[12px] uppercase tracking-widest font-bold">Analyzing Your Taste...</p>
+                  <p className="text-[#C9963F] font-mono-ibm text-[12px] uppercase tracking-widest font-bold">{t.aiRecommendations.analyzing}</p>
                 </div>
               ) : error ? (
                 <div className="flex flex-col items-center justify-center h-full space-y-4 px-6 text-center">
@@ -102,7 +104,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
                     }}
                     className="px-4 py-2 bg-[#2C251D] text-[#C9963F] rounded-lg hover:bg-[#3A332A] transition-colors text-[13px] font-bold"
                   >
-                    Retry
+                    {t.common.retry}
                   </button>
                 </div>
               ) : (
@@ -139,7 +141,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
                             <span className="material-symbols-outlined text-[15px]">
                               {addedTitles.includes(rec.title) ? 'check' : 'library_add'}
                             </span>
-                            {addedTitles.includes(rec.title) ? 'Added' : 'Add to library'}
+                            {addedTitles.includes(rec.title) ? t.aiRecommendations.added : t.aiRecommendations.addToLibrary}
                           </button>
                         )}
                       </div>
@@ -159,7 +161,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
                 className="flex items-center gap-2 px-4 py-2 bg-[#C9963F]/10 text-[#C9963F] rounded-lg hover:bg-[#C9963F]/20 transition-colors text-[13px] font-mono-ibm font-bold uppercase tracking-wider disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-[18px]">refresh</span>
-                Refresh Suggestions
+                {t.aiRecommendations.refresh}
               </button>
             </div>
           </motion.div>

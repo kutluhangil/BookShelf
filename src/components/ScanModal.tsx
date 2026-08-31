@@ -4,6 +4,7 @@ import { SPIKE_DATASET } from '../data/spikeDataset';
 import { SpikeSample } from '../types';
 import { haptic } from '../services/haptics';
 import { createBarcodeReader, type BarcodeReader } from '../services/barcodeScanner';
+import { useT } from '../i18n/I18nProvider';
 
 export type ScanMode = 'shelf' | 'isbn' | 'qr';
 
@@ -26,6 +27,7 @@ interface ScanModalProps {
 const MAX_CAPTURE_EDGE = 1280;
 
 export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture }) => {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -67,7 +69,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
   const startCamera = useCallback(async () => {
     setCameraError(null);
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError('This browser does not expose a camera API. Use the photo upload button instead.');
+      setCameraError(t.scanner.noCameraApi);
       return;
     }
     try {
@@ -88,13 +90,13 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
       const name = error instanceof DOMException ? error.name : '';
       setCameraError(
         name === 'NotAllowedError'
-          ? 'Camera permission was denied. Allow camera access in your browser settings, or upload a photo instead.'
+          ? t.scanner.permissionDenied
           : name === 'NotFoundError'
-            ? 'No camera was found on this device. Use the photo upload button instead.'
-            : `Camera could not be started: ${error instanceof Error ? error.message : String(error)}`
+            ? t.scanner.notFound
+            : t.camera.startFailed(error instanceof Error ? error.message : String(error))
       );
     }
-  }, []);
+  }, [t]);
 
   // Camera lifecycle
   useEffect(() => {
@@ -204,9 +206,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
         reader = await createBarcodeReader(scanMode);
       } catch (error) {
         if (!cancelled) {
-          setBarcodeError(
-            `Barcode scanning is unavailable: ${error instanceof Error ? error.message : String(error)}`
-          );
+          setBarcodeError(t.scanner.barcodeUnavailable(error instanceof Error ? error.message : String(error)));
         }
         return;
       }
@@ -251,7 +251,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
       readerRef.current?.dispose();
       readerRef.current = null;
     };
-  }, [isOpen, scanMode, isCameraReady, grabFrame, onCapture]);
+  }, [isOpen, scanMode, isCameraReady, grabFrame, onCapture, t]);
 
   if (!isOpen) return null;
 
@@ -272,17 +272,18 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
     haptic.mediumImpact();
     const frame = grabFrame();
     if (!frame) {
-      setCameraError('Could not read a frame from the camera. Try again or upload a photo.');
+      setCameraError(t.scanner.frameFailed);
       return;
     }
     onCapture({ imageUrl: frame, mode: scanMode });
   };
 
+  const signedRoll = roll === null ? '' : `${roll > 0 ? '+' : ''}${roll.toFixed(1)}`;
   const alignmentLabel = !hasOrientation
-    ? 'GYRO UNAVAILABLE'
+    ? t.scanner.gyroUnavailable
     : isAligned
-      ? `LEVEL LOCKED (${roll! > 0 ? '+' : ''}${roll!.toFixed(1)}° ROLL / ${pitch!.toFixed(0)}° PITCH)`
-      : `TILTED: ROLL ${roll! > 0 ? '+' : ''}${roll!.toFixed(1)}° — HOLD PARALLEL`;
+      ? t.scanner.levelLocked(signedRoll, pitch!.toFixed(0))
+      : t.scanner.tilted(signedRoll);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#12100E] flex flex-col justify-between overflow-hidden">
@@ -295,7 +296,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
               onClose();
             }}
             className="text-[#F4EFE6] bg-black/40 backdrop-blur-md p-2 rounded-full hairline-border hover:bg-black/70 transition-colors"
-            aria-label="Close scanner"
+            aria-label={t.scanner.closeLabel}
           >
             <span className="material-symbols-outlined text-[24px]">close</span>
           </button>
@@ -322,7 +323,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
               <button
                 onClick={enableOrientation}
                 className="p-2 rounded-full backdrop-blur-md hairline-border bg-black/40 text-[#F4EFE6] hover:bg-black/70 transition-colors"
-                title="Enable level indicator"
+                title={t.scanner.enableLevel}
               >
                 <span className="material-symbols-outlined text-[20px]">screen_rotation</span>
               </button>
@@ -336,7 +337,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
                 className={`p-2 rounded-full backdrop-blur-md hairline-border transition-colors ${
                   isTorchOn ? 'bg-[#C9963F] text-[#12100E]' : 'bg-black/40 text-[#F4EFE6] hover:bg-black/70'
                 }`}
-                title="Toggle torch"
+                title={t.scanner.toggleTorch}
               >
                 <span className="material-symbols-outlined text-[22px]">{isTorchOn ? 'flash_on' : 'flash_off'}</span>
               </button>
@@ -357,7 +358,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
                 scanMode === mode ? 'bg-[#C9963F] text-[#12100E] shadow-sm' : 'text-[#A79C8C] hover:text-[#F4EFE6]'
               }`}
             >
-              {mode === 'qr' ? 'QR CODE' : mode.toUpperCase()}
+              {t.scanner.modes[mode]}
             </button>
           ))}
         </div>
@@ -382,7 +383,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
               onClick={() => void startCamera()}
               className="px-4 py-2 bg-[#262119] hairline-border rounded-xl font-mono-ibm text-[11px] text-[#C9963F] uppercase tracking-wider"
             >
-              Retry camera
+              {t.scanner.retryCamera}
             </button>
           </div>
         )}
@@ -396,7 +397,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
         {!cameraError && scanMode !== 'shelf' && !barcodeError && barcodeEngine === 'zxing' && (
           <div className="absolute bottom-40 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-black/70 rounded-full hairline-border">
             <p className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">
-              Software decoder — hold steady
+              {t.scanner.softwareDecoder}
             </p>
           </div>
         )}
@@ -445,11 +446,11 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
               >
                 {scanMode === 'shelf'
                   ? isAligned
-                    ? 'ALIGN SPINES • READY'
-                    : 'ALIGN SPINES PARALLEL TO GRID'
+                    ? t.scanner.alignReady
+                    : t.scanner.alignSpines
                   : scanMode === 'isbn'
-                    ? 'FRAME THE ISBN BARCODE'
-                    : 'FRAME THE QR CODE'}
+                    ? t.scanner.frameIsbn
+                    : t.scanner.frameQr}
               </span>
             </div>
 
@@ -468,7 +469,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
           className="self-center font-mono-ibm text-[10px] text-[#A79C8C] hover:text-[#C9963F] uppercase tracking-widest flex items-center gap-1"
         >
           <span className="material-symbols-outlined text-[14px]">science</span>
-          {showDemoShelves ? 'Hide demo shelves' : 'Try a demo shelf (no camera needed)'}
+          {showDemoShelves ? t.scanner.hideDemo : t.scanner.tryDemo}
         </button>
 
         <AnimatePresence>
@@ -480,7 +481,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
               className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1"
             >
               <span className="font-mono-ibm text-[10px] text-[#C97A3F] shrink-0 uppercase tracking-widest">
-                DEMO DATA:
+                {t.scanner.demoData}
               </span>
               {SPIKE_DATASET.slice(0, 8).map((sample, index) => (
                 <button
@@ -507,7 +508,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
                 fileInputRef.current?.click();
               }}
               className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md hairline-border text-[#F4EFE6] flex items-center justify-center hover:bg-black/90 transition-colors"
-              title="Upload from photo library"
+              title={t.scanner.uploadPhoto}
             >
               <span className="material-symbols-outlined text-[24px]">photo_library</span>
             </button>
@@ -520,7 +521,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
             className={`w-20 h-20 rounded-full border-4 p-1.5 flex items-center justify-center transition-all bg-black/40 disabled:opacity-40 ${
               isAligned ? 'border-[#6E8F6A] shadow-[0_0_28px_rgba(110,143,106,0.6)]' : 'border-[#C9963F] shadow-[0_0_24px_rgba(201,150,63,0.5)]'
             }`}
-            title="Capture"
+            title={t.scanner.capture}
           >
             <div
               className={`w-full h-full rounded-full flex items-center justify-center text-[#12100E] ${
@@ -537,7 +538,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
               onClose();
             }}
             className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md hairline-border text-[#F4EFE6] flex items-center justify-center hover:bg-black/90 transition-colors"
-            title="Cancel"
+            title={t.common.cancel}
           >
             <span className="material-symbols-outlined text-[24px]">close</span>
           </button>

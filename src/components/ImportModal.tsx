@@ -5,6 +5,7 @@ import { parseLibraryCsv, rowsToBooks, type ImportResult } from '../services/lib
 import { lookupByIsbn } from '../services/bookLookup';
 import { haptic } from '../services/haptics';
 import { ModalShell } from './ModalShell';
+import { useT } from '../i18n/I18nProvider';
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   targetShelfId,
   onImport,
 }) => {
+  const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<Stage>('pick');
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -56,7 +58,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       const text = await file.text();
       const parsed = parseLibraryCsv(text);
       if (parsed.rows.length === 0) {
-        setError(parsed.skipped[0]?.reason ?? 'No importable rows were found in that file.');
+        const reason = parsed.skipped[0]?.reason;
+        setError(reason ? t.importModal.skipReasons[reason] : t.importModal.noImportableRows);
         return;
       }
       setResult(parsed);
@@ -72,7 +75,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     const { books, duplicates } = rowsToBooks(result.rows, existingBooks, targetShelfId);
 
     if (books.length === 0) {
-      setError(`Every row is already in your library (${duplicates} duplicate${duplicates === 1 ? '' : 's'}).`);
+      setError(t.importModal.allDuplicates(duplicates));
       return;
     }
 
@@ -112,7 +115,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <ModalShell isOpen onClose={onClose} label="Import library" closeOnBackdrop={false} className="contents">
+        <ModalShell isOpen onClose={onClose} label={t.importModal.dialogLabel} closeOnBackdrop={false} className="contents">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -129,16 +132,16 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               <div>
                 <h2 className="font-serif-literata text-[20px] text-[#F4EFE6] font-bold flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#C9963F]">upload_file</span>
-                  Import library
+                  {t.importModal.title}
                 </h2>
                 <p className="font-mono-ibm text-[10px] text-[#8C8273] uppercase tracking-widest mt-0.5">
-                  Bookshelf or Goodreads CSV export
+                  {t.importModal.subtitle}
                 </p>
               </div>
               <button
                 onClick={handleClose}
                 className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C251D] text-[#A79C8C] hover:text-[#C9963F] transition-colors"
-                aria-label="Close import"
+                aria-label={t.importModal.closeLabel}
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
@@ -154,9 +157,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               {stage === 'pick' && (
                 <div className="space-y-4">
                   <p className="font-sans-inter text-[14px] text-[#A79C8C] leading-relaxed">
-                    Pick a CSV file. A Goodreads export works as is — download it from{' '}
-                    <span className="text-[#D4CDA8]">Goodreads → My Books → Import and export</span>. The columns for
-                    title, author, ISBN, shelf, rating and review are read automatically.
+                    {t.importModal.pickIntroBefore}{' '}
+                    <span className="text-[#D4CDA8]">{t.importModal.goodreadsPath}</span>
+                    {t.importModal.pickIntroAfter}
                   </p>
 
                   <input type="file" accept=".csv,text/csv" ref={fileInputRef} className="hidden" onChange={handleFile} />
@@ -165,7 +168,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                     className="w-full py-8 border-2 border-dashed border-[#3A332A] hover:border-[#C9963F] rounded-xl flex flex-col items-center gap-2 text-[#A79C8C] hover:text-[#C9963F] transition-colors"
                   >
                     <span className="material-symbols-outlined text-[32px]">description</span>
-                    <span className="font-mono-ibm text-[12px] uppercase tracking-wider">Choose CSV file</span>
+                    <span className="font-mono-ibm text-[12px] uppercase tracking-wider">{t.importModal.chooseFile}</span>
                   </button>
                 </div>
               )}
@@ -174,14 +177,14 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 <div className="space-y-4">
                   <div className="flex flex-wrap gap-3 text-[12px] font-mono-ibm">
                     <span className="px-2.5 py-1 rounded bg-[#262119] text-[#85E07D]">
-                      {result.rows.length} rows read
+                      {t.importModal.rowsRead(result.rows.length)}
                     </span>
                     <span className="px-2.5 py-1 rounded bg-[#262119] text-[#A79C8C]">
-                      format: {result.detectedFormat}
+                      {t.importModal.format(result.detectedFormat)}
                     </span>
                     {result.skipped.length > 0 && (
                       <span className="px-2.5 py-1 rounded bg-[#3A2412] text-[#F5BD62]">
-                        {result.skipped.length} skipped
+                        {t.importModal.skippedCount(result.skipped.length)}
                       </span>
                     )}
                     <span className="px-2.5 py-1 rounded bg-[#262119] text-[#8C8273] truncate max-w-[220px]">
@@ -193,9 +196,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                     <table className="w-full text-left text-[12px]">
                       <thead className="bg-[#12100E] text-[#8C8273] font-mono-ibm uppercase text-[10px] tracking-wider">
                         <tr>
-                          <th className="px-3 py-2">Title</th>
-                          <th className="px-3 py-2">Author</th>
-                          <th className="px-3 py-2">Status</th>
+                          <th className="px-3 py-2">{t.importModal.columnTitle}</th>
+                          <th className="px-3 py-2">{t.importModal.columnAuthor}</th>
+                          <th className="px-3 py-2">{t.importModal.columnStatus}</th>
                         </tr>
                       </thead>
                       <tbody className="font-sans-inter text-[#D4CDA8]">
@@ -203,14 +206,14 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                           <tr key={index} className="border-t border-[#3A332A]/60">
                             <td className="px-3 py-2 truncate max-w-[260px]">{row.title}</td>
                             <td className="px-3 py-2 truncate max-w-[160px] text-[#A79C8C]">{row.author}</td>
-                            <td className="px-3 py-2 text-[#A79C8C]">{row.status}</td>
+                            <td className="px-3 py-2 text-[#A79C8C]">{t.bookStatus[row.status]}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                     {result.rows.length > previewRows.length && (
                       <p className="px-3 py-2 bg-[#12100E] text-[11px] font-mono-ibm text-[#8C8273] border-t border-[#3A332A]/60">
-                        + {result.rows.length - previewRows.length} more
+                        {t.importModal.andMore(result.rows.length - previewRows.length)}
                       </p>
                     )}
                   </div>
@@ -218,12 +221,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                   {result.skipped.length > 0 && (
                     <details className="bg-[#12100E] border border-[#3A332A] rounded-xl px-4 py-3">
                       <summary className="cursor-pointer font-mono-ibm text-[11px] text-[#F5BD62] uppercase tracking-wider">
-                        {result.skipped.length} rows skipped
+                        {t.importModal.rowsSkipped(result.skipped.length)}
                       </summary>
                       <ul className="mt-2 space-y-1 text-[11px] font-mono-ibm text-[#8C8273] max-h-32 overflow-y-auto">
                         {result.skipped.map((entry, index) => (
                           <li key={index}>
-                            line {entry.line}: {entry.reason}
+                            {t.importModal.skippedLine(entry.line, t.importModal.skipReasons[entry.reason])}
                           </li>
                         ))}
                       </ul>
@@ -237,7 +240,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                       onChange={(event) => setFetchCovers(event.target.checked)}
                       className="accent-[#C9963F]"
                     />
-                    Fetch covers and missing metadata from Open Library (slower, one request per ISBN)
+                    {t.importModal.fetchCovers}
                   </label>
                 </div>
               )}
@@ -246,7 +249,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 <div className="py-10 flex flex-col items-center gap-4">
                   <div className="w-10 h-10 border-4 border-[#C9963F]/20 border-t-[#C9963F] rounded-full animate-spin" />
                   <p className="font-mono-ibm text-[12px] text-[#C9963F] uppercase tracking-widest">
-                    Fetching covers {enrichProgress.done}/{enrichProgress.total}
+                    {t.importModal.fetchingCovers(enrichProgress.done, enrichProgress.total)}
                   </p>
                   <div className="w-full max-w-xs h-1.5 bg-[#262119] rounded-full overflow-hidden">
                     <div
@@ -263,13 +266,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             {stage === 'preview' && (
               <div className="p-5 border-t border-[#3A332A] flex justify-end gap-2">
                 <button onClick={reset} className="px-4 py-2 text-[#A79C8C] hover:text-[#F4EFE6] text-[13px]">
-                  Choose another file
+                  {t.importModal.chooseAnother}
                 </button>
                 <button
                   onClick={() => void handleImport()}
                   className="px-5 py-2.5 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] rounded-xl font-mono-ibm text-[11px] font-bold uppercase tracking-wider"
                 >
-                  Import {result?.rows.length} books
+                  {t.importModal.importCount(result?.rows.length ?? 0)}
                 </button>
               </div>
             )}

@@ -5,6 +5,7 @@ import { ShelfStrip } from './ShelfStrip';
 import { haptic } from '../services/haptics';
 import { renderShelfCard, canvasToBlob, downloadBlob } from '../services/shelfCard';
 import { ModalShell } from './ModalShell';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface ShareModalProps {
   shelf?: Shelf;
@@ -19,6 +20,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const { t, locale } = useI18n();
   const [copied, setCopied] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   if (!isOpen) return null;
 
   const totalCount = booksInScope.length;
-  const shelfName = shelf ? shelf.name : 'Physical Library';
+  const shelfName = shelf ? shelf.name : t.share.wholeLibrary;
   const colors = (shelf ? shelf.dominantColors : booksInScope.map((b) => b.spineColor || '#C9963F')).slice(0, 60);
 
   const flash = (message: string) => {
@@ -60,16 +62,16 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const buildCard = (format: 'card' | 'story') =>
     renderShelfCard({
       title: shelfName,
-      subtitle: `${totalCount} books • physical archive`,
+      subtitle: t.share.cardSubtitle(totalCount),
       colors: colors.length > 0 ? colors : ['#C9963F'],
-      footnote: new Date().toLocaleDateString(),
+      footnote: new Date().toLocaleDateString(locale),
       format,
     });
 
   const handleCopyLink = async () => {
     haptic.selectionClick();
     try {
-      if (!navigator.clipboard) throw new Error('Clipboard access is not available in this browser.');
+      if (!navigator.clipboard) throw new Error(t.share.clipboardUnavailable);
       await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
@@ -83,7 +85,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     try {
       const blob = await canvasToBlob(buildCard(format));
       downloadBlob(blob, `${shelfName.replace(/\s+/g, '_').toLowerCase()}_${format}.png`);
-      flash(format === 'story' ? 'Story image saved' : 'Shelf card saved');
+      flash(format === 'story' ? t.share.storySaved : t.share.cardSaved);
     } catch (thrown) {
       fail(thrown);
     }
@@ -91,24 +93,24 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   const handleShare = async () => {
     haptic.lightImpact();
-    const text = `${shelfName} — ${totalCount} books in my physical library.`;
+    const text = t.share.shareText(shelfName, totalCount);
     try {
       const blob = await canvasToBlob(buildCard('card'));
       const file = new File([blob], 'shelf-card.png', { type: 'image/png' });
 
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ title: shelfName, text, files: [file] });
-        flash('Shared');
+        flash(t.share.shared);
         return;
       }
       if (navigator.share) {
         await navigator.share({ title: shelfName, text, url: window.location.href });
-        flash('Shared');
+        flash(t.share.shared);
         return;
       }
-      if (!navigator.clipboard) throw new Error('Sharing and clipboard are both unavailable in this browser.');
+      if (!navigator.clipboard) throw new Error(t.share.shareUnavailable);
       await navigator.clipboard.writeText(`${text} ${window.location.href}`);
-      flash('Summary copied to clipboard');
+      flash(t.share.summaryCopied);
     } catch (thrown) {
       if (thrown instanceof DOMException && thrown.name === 'AbortError') return;
       fail(thrown);
@@ -120,6 +122,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     
     const booksToExport = booksInScope;
     
+    // Header names are the import format's contract, not display copy: they stay
+    // in English so an export can be re-imported regardless of the UI language.
     const headers = ['Title', 'Author', 'ISBN', 'Publisher', 'Publish Year', 'Page Count', 'Status', 'Progress (%)', 'Tags', 'Notes'];
     
     const rows = booksToExport.map(b => [
@@ -146,12 +150,12 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     link.click();
     document.body.removeChild(link);
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    flash(`Exported ${booksToExport.length} volumes as CSV`);
+    flash(t.share.exported(booksToExport.length));
   };
 
   return (
     <AnimatePresence>
-      <ModalShell isOpen={isOpen} onClose={onClose} label="Export and share collection" closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <ModalShell isOpen={isOpen} onClose={onClose} label={t.share.dialogLabel} closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -172,7 +176,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           {/* Top Bar */}
           <div className="p-4 px-6 border-b border-[#3A332A] flex justify-between items-center bg-[#181512]">
             <span className="font-mono-ibm text-[11px] font-semibold text-[#A79C8C] tracking-widest uppercase">
-              EXPORT & SHARE SHELF
+              {t.share.headerTitle}
             </span>
             <button
               onClick={() => {
@@ -193,7 +197,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
               {/* Title & Volume Tag */}
               <p className="font-mono-ibm text-[11px] text-[#C9963F] font-semibold tracking-widest uppercase mb-1">
-                {totalCount} BOOKS • PHYSICAL ARCHIVE
+                {t.share.cardBadge(totalCount)}
               </p>
               <h3 className="font-serif-literata text-[24px] sm:text-[26px] text-[#F4EFE6] font-bold mb-4">
                 {shelfName}
@@ -225,8 +229,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
               {/* Book Shelf Watermark Branding */}
               <div className="mt-6 pt-4 border-t border-[#3A332A]/50 w-full flex justify-between items-center font-mono-ibm text-[10px] text-[#9C8F7E]">
-                <span className="text-[#C9963F] font-serif-literata font-bold text-[14px]">Book Shelf</span>
-                <span>{new Date().toLocaleDateString()}</span>
+                <span className="text-[#C9963F] font-serif-literata font-bold text-[14px]">{t.app.title}</span>
+                <span>{new Date().toLocaleDateString(locale)}</span>
               </div>
             </div>
 
@@ -238,7 +242,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               >
                 <span className="material-symbols-outlined text-[#C9963F] text-[22px]">link</span>
                 <span className="font-mono-ibm text-[10px] tracking-wider uppercase">
-                  {copied ? 'Copied!' : 'Copy Link'}
+                  {copied ? t.share.copied : t.share.copyLink}
                 </span>
               </button>
 
@@ -247,7 +251,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
                 <span className="material-symbols-outlined text-[#C9963F] text-[22px]">download</span>
-                <span className="font-mono-ibm text-[10px] tracking-wider uppercase">Save Image</span>
+                <span className="font-mono-ibm text-[10px] tracking-wider uppercase">{t.share.saveImage}</span>
               </button>
 
               <button
@@ -255,7 +259,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
                 <span className="material-symbols-outlined text-[#C9963F] text-[22px]">auto_stories</span>
-                <span className="font-mono-ibm text-[10px] tracking-wider uppercase">Story 9:16</span>
+                <span className="font-mono-ibm text-[10px] tracking-wider uppercase">{t.share.story}</span>
               </button>
 
               <button
@@ -263,7 +267,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
                 <span className="material-symbols-outlined text-[#C9963F] text-[22px]">send</span>
-                <span className="font-mono-ibm text-[10px] tracking-wider uppercase">Share</span>
+                <span className="font-mono-ibm text-[10px] tracking-wider uppercase">{t.share.share}</span>
               </button>
             </div>
 
@@ -284,7 +288,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             >
               <span className="material-symbols-outlined text-[18px]">table_view</span>
               <span className="font-mono-ibm text-[11px] font-bold tracking-widest uppercase">
-                Export Collection as CSV
+                {t.share.exportCsv}
               </span>
             </button>
           </div>

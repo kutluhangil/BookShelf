@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Book, ReadingGoals } from '../types';
+import { useT } from '../i18n/I18nProvider';
 
 interface LibraryAnnualProgressBarProps {
   books: Book[];
@@ -7,6 +8,7 @@ interface LibraryAnnualProgressBarProps {
 }
 
 export const LibraryAnnualProgressBar: React.FC<LibraryAnnualProgressBarProps> = ({ books, goals }) => {
+  const t = useT();
   const currentYear = new Date().getFullYear();
 
   const { totalBooks, totalPages } = useMemo(() => {
@@ -36,7 +38,7 @@ export const LibraryAnnualProgressBar: React.FC<LibraryAnnualProgressBarProps> =
           <div className="flex justify-between items-end">
             <span className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[14px]">menu_book</span>
-              {currentYear} Books Goal
+              {t.annualProgress.booksGoal(currentYear)}
             </span>
             <span className="font-serif-literata text-[15px] text-[#F4EFE6] font-bold leading-none">
               {totalBooks} <span className="text-[12px] text-[#5A5044] font-normal">/ {goals.annualBookCount}</span>
@@ -56,7 +58,7 @@ export const LibraryAnnualProgressBar: React.FC<LibraryAnnualProgressBarProps> =
           <div className="flex justify-between items-end">
             <span className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[14px]">auto_stories</span>
-              {currentYear} Pages Goal
+              {t.annualProgress.pagesGoal(currentYear)}
             </span>
             <span className="font-serif-literata text-[15px] text-[#F4EFE6] font-bold leading-none">
               {totalPages.toLocaleString()} <span className="text-[12px] text-[#5A5044] font-normal">/ {goals.annualPageCount.toLocaleString()}</span>

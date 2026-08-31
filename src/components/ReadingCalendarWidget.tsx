@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Book } from '../types';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface ReadingCalendarWidgetProps {
   books: Book[];
@@ -8,6 +9,8 @@ interface ReadingCalendarWidgetProps {
 }
 
 export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ books, reminderEnabled = false, onToggleReminder }) => {
+  const { t, locale } = useI18n();
+
   const { activityMap, cells, currentStreak, maxStreak, activeDays } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -87,9 +90,8 @@ export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ bo
   };
 
   const getLabel = (durationSeconds: number) => {
-    if (durationSeconds === 0) return 'No reading';
-    const m = Math.round(durationSeconds / 60);
-    return `${m} min${m !== 1 ? 's' : ''}`;
+    if (durationSeconds === 0) return t.calendar.noReading;
+    return t.calendar.minutes(Math.round(durationSeconds / 60));
   };
 
   return (
@@ -99,7 +101,7 @@ export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ bo
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-[16px] text-[#C9963F]">calendar_month</span>
           <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold flex items-center gap-3">
-            Reading Habit
+            {t.calendar.title}
             {onToggleReminder && (
               <button
                 onClick={() => onToggleReminder(!reminderEnabled)}
@@ -108,31 +110,31 @@ export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ bo
                     ? 'border-[#C9963F] bg-[#C9963F]/10 text-[#C9963F]' 
                     : 'border-[#3A332A] bg-transparent text-[#A79C8C] hover:text-[#F4EFE6] hover:border-[#4F4537]'
                 }`}
-                title={reminderEnabled ? "48h Reminder Active" : "Enable 48h Reminder"}
+                title={reminderEnabled ? t.calendar.reminderActiveTooltip : t.calendar.reminderEnableTooltip}
               >
                 <span className="material-symbols-outlined text-[12px]">{reminderEnabled ? 'notifications_active' : 'notifications_off'}</span>
-                <span className="text-[9px] font-mono-ibm uppercase tracking-wider">{reminderEnabled ? 'Reminder On' : 'Reminder Off'}</span>
+                <span className="text-[9px] font-mono-ibm uppercase tracking-wider">{reminderEnabled ? t.calendar.reminderOn : t.calendar.reminderOff}</span>
               </button>
             )}
           </h3>
         </div>
         <div className="flex gap-4 sm:gap-6 text-left sm:text-right w-full sm:w-auto overflow-hidden">
           <div>
-            <p className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider mb-0.5">Current Streak</p>
+            <p className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider mb-0.5">{t.calendar.currentStreak}</p>
             <p className="font-sans-inter text-[18px] text-[#F4EFE6] font-bold leading-none">
-              {currentStreak} <span className="text-[12px] font-normal text-[#A79C8C]">Days</span>
+              {currentStreak} <span className="text-[12px] font-normal text-[#A79C8C]">{t.calendar.days}</span>
             </p>
           </div>
           <div className="w-[1px] h-8 bg-[#3A332A]" />
           <div>
-            <p className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider mb-0.5">Max Streak</p>
+            <p className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider mb-0.5">{t.calendar.maxStreak}</p>
             <p className="font-sans-inter text-[18px] text-[#F4EFE6] font-bold leading-none">
-              {maxStreak} <span className="text-[12px] font-normal text-[#A79C8C]">Days</span>
+              {maxStreak} <span className="text-[12px] font-normal text-[#A79C8C]">{t.calendar.days}</span>
             </p>
           </div>
           <div className="w-[1px] h-8 bg-[#3A332A]" />
           <div>
-            <p className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider mb-0.5">Total Days</p>
+            <p className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider mb-0.5">{t.calendar.totalDays}</p>
             <p className="font-sans-inter text-[18px] text-[#F4EFE6] font-bold leading-none">
               {activeDays}
             </p>
@@ -154,7 +156,10 @@ export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ bo
             <div 
               key={cell.key}
               className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-[3px] sm:rounded-sm transition-colors cursor-default hover:border hover:border-[#F4EFE6]/30 ${getColor(cell.duration)}`}
-              title={`${getLabel(cell.duration)} on ${cell.date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}`}
+              title={t.calendar.cellTooltip(
+                getLabel(cell.duration),
+                cell.date.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })
+              )}
             />
           ))}
         </div>

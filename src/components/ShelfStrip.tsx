@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { haptic } from '../services/haptics';
+import { useT } from '../i18n/I18nProvider';
 
 interface ShelfStripProps {
   colors: string[];
@@ -47,6 +48,8 @@ export const ShelfStrip: React.FC<ShelfStripProps> = ({
   themeColor,
   texture,
 }) => {
+  const t = useT();
+
   if (variant === 'empty') {
     return (
       <div
@@ -93,7 +96,7 @@ export const ShelfStrip: React.FC<ShelfStripProps> = ({
                   haptic.lightImpact();
                 }}
                 className="relative aspect-square rounded-md border border-[#3A332A]/50 flex items-center justify-center overflow-hidden hover:border-[#C9963F] cursor-pointer transition-colors bg-transparent"
-                title={`Bin ${cell.coord}`}
+                title={t.shelfStrip.bin(cell.coord)}
               >
                 {/* Empty cell text layer (always rendered) */}
                 <span className="text-[10px] sm:text-[11px] font-mono-ibm font-semibold text-[#A79C8C]">
@@ -183,7 +186,7 @@ export const ShelfStrip: React.FC<ShelfStripProps> = ({
               backgroundColor: color,
               flex: flexVal,
             }}
-            title={`Spine volume #${idx + 1}`}
+            title={t.shelfStrip.spineVolume(idx + 1)}
           >
             {/* Subtle inner spine highlight */}
             <div className="absolute inset-x-0 top-0 h-1 bg-white/10" />

@@ -19,10 +19,16 @@ export interface ImportRow {
   notes?: string;
 }
 
+/**
+ * Why a row was dropped. A code rather than a sentence: the message the reader
+ * sees belongs to the i18n catalog, not to the parser.
+ */
+export type SkipReason = 'no-data-rows' | 'no-title-column' | 'missing-title';
+
 export interface ImportResult {
   rows: ImportRow[];
   /** Rows that could not be read, with the reason, so nothing fails silently. */
-  skipped: Array<{ line: number; reason: string }>;
+  skipped: Array<{ line: number; reason: SkipReason }>;
   detectedFormat: 'bookshelf' | 'goodreads' | 'generic';
 }
 
@@ -106,7 +112,7 @@ function ownStatus(value: string | undefined): ReadingStatus {
 export function parseLibraryCsv(text: string): ImportResult {
   const rows = parseCsv(text);
   if (rows.length < 2) {
-    return { rows: [], skipped: [{ line: 1, reason: 'The file has no data rows.' }], detectedFormat: 'generic' };
+    return { rows: [], skipped: [{ line: 1, reason: 'no-data-rows' }], detectedFormat: 'generic' };
   }
 
   const headers = rows[0].map(normalizeHeader);
@@ -123,7 +129,7 @@ export function parseLibraryCsv(text: string): ImportResult {
   if (titleIdx === -1) {
     return {
       rows: [],
-      skipped: [{ line: 1, reason: 'No "Title" column found. Expected a Bookshelf or Goodreads CSV export.' }],
+      skipped: [{ line: 1, reason: 'no-title-column' }],
       detectedFormat: 'generic',
     };
   }
@@ -152,7 +158,7 @@ export function parseLibraryCsv(text: string): ImportResult {
     const title = cells[titleIdx]?.trim();
 
     if (!title) {
-      skipped.push({ line: i + 1, reason: 'Missing title.' });
+      skipped.push({ line: i + 1, reason: 'missing-title' });
       continue;
     }
 

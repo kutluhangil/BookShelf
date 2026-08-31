@@ -1,5 +1,6 @@
 import React from 'react';
 import { ConfidenceLevel } from '../types';
+import { useT } from '../i18n/I18nProvider';
 
 interface ConfidenceBadgeProps {
   level: ConfidenceLevel | 'failed';
@@ -14,25 +15,26 @@ export const ConfidenceBadge: React.FC<ConfidenceBadgeProps> = ({
   showScore = false,
   className = '',
 }) => {
+  const t = useT();
   const normalizedLevel = level === 'failed' ? 'unknown' : level;
 
   const config = {
     matched: {
-      label: 'MATCHED',
+      label: t.confidence.matched,
       barColor: 'bg-[#6E8F6A]',
       textColor: 'text-[#C8ECC1]',
       bgTint: 'bg-[#304E2E]/30',
       borderTint: 'border-[#6E8F6A]/40',
     },
     review: {
-      label: 'REVIEW',
+      label: t.confidence.review,
       barColor: 'bg-[#C9963F]',
       textColor: 'text-[#F5BD62]',
       bgTint: 'bg-[#C9963F]/20',
       borderTint: 'border-[#C9963F]/40',
     },
     unknown: {
-      label: level === 'failed' ? 'FAILED' : 'UNKNOWN',
+      label: level === 'failed' ? t.confidence.failed : t.confidence.unknown,
       barColor: 'bg-[#A9503F]',
       textColor: 'text-[#FFB4AB]',
       bgTint: 'bg-[#93000A]/20',
@@ -51,7 +53,7 @@ export const ConfidenceBadge: React.FC<ConfidenceBadgeProps> = ({
 
       {showScore && score !== undefined && (
         <span className="font-mono-ibm text-[11px] text-[#A79C8C] tracking-wider">
-          CONF: {score.toFixed(2)}
+          {t.confidence.score(score.toFixed(2))}
         </span>
       )}
     </div>

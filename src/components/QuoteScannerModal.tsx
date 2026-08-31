@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { haptic } from '../services/haptics';
 import { postJson } from '../services/apiClient';
 import { ModalShell } from './ModalShell';
+import { useT } from '../i18n/I18nProvider';
 
 interface QuoteScannerModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface QuoteScannerModalProps {
 }
 
 export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, onClose, onScanComplete }) => {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -26,7 +28,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
     return () => stopCamera();
   }, [isOpen]);
 
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
     setError(null);
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
@@ -40,13 +42,13 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
       const name = err instanceof DOMException ? err.name : '';
       setError(
         name === 'NotAllowedError'
-          ? 'Camera permission was denied. Allow camera access in your browser settings.'
+          ? t.camera.permissionDenied
           : name === 'NotFoundError'
-            ? 'No camera was found on this device.'
-            : `Camera could not be started: ${err instanceof Error ? err.message : String(err)}`
+            ? t.camera.notFound
+            : t.camera.startFailed(err instanceof Error ? err.message : String(err))
       );
     }
-  };
+  }, [t]);
 
   const stopCamera = () => {
     if (stream) {
@@ -74,7 +76,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
       try {
         const payload = await postJson<{ text?: string }>('/api/gemini/quote', { imageBase64 });
         if (!payload?.text) {
-          throw new Error('No readable text was found in this frame.');
+          throw new Error(t.quoteScanner.noText);
         }
         onScanComplete(payload.text);
         onClose();
@@ -88,7 +90,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
   return (
     <AnimatePresence>
       {isOpen && (
-        <ModalShell isOpen onClose={onClose} label="Scan a quote" closeOnBackdrop={false} className="contents">
+        <ModalShell isOpen onClose={onClose} label={t.quoteScanner.dialogLabel} closeOnBackdrop={false} className="contents">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -100,7 +102,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
             <div className="flex justify-between items-center p-4 border-b border-[#3A332A] bg-[#12100E]">
               <h2 className="font-serif-literata text-[18px] text-[#F4EFE6] font-bold flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#C9963F]">document_scanner</span>
-                Scan Quote
+                {t.quoteScanner.title}
               </h2>
               <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C251D] text-[#A79C8C] hover:text-[#C9963F] transition-colors">
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -120,7 +122,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
                     }}
                     className="px-4 py-2 bg-[#262119] hairline-border rounded-xl font-mono-ibm text-[11px] text-[#C9963F] uppercase tracking-wider"
                   >
-                    Try again
+                    {t.common.retry}
                   </button>
                 </div>
               ) : (
@@ -142,7 +144,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
               {isScanning && (
                 <div className="absolute inset-0 bg-[#C9963F]/10 flex flex-col items-center justify-center backdrop-blur-sm z-10">
                   <div className="w-12 h-12 border-4 border-[#C9963F]/20 border-t-[#C9963F] rounded-full animate-spin mb-4" />
-                  <p className="text-[#C9963F] font-mono-ibm text-[12px] uppercase tracking-widest font-bold">Extracting Text...</p>
+                  <p className="text-[#C9963F] font-mono-ibm text-[12px] uppercase tracking-widest font-bold">{t.quoteScanner.extracting}</p>
                 </div>
               )}
             </div>
@@ -150,7 +152,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
             {/* Actions */}
             <div className="p-6 bg-[#12100E] border-t border-[#3A332A] flex flex-col items-center gap-4">
               <p className="text-[#A79C8C] text-[12px] text-center font-sans-inter">
-                Align the text within the frame and ensure good lighting.
+                {t.quoteScanner.hint}
               </p>
               <button
                 onClick={captureAndScan}

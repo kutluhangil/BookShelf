@@ -9,12 +9,15 @@ import {
   AreaChart,
 } from 'recharts';
 import { Book } from '../types';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface LibraryGrowthDashboardProps {
   books: Book[];
 }
 
 export const LibraryGrowthDashboard: React.FC<LibraryGrowthDashboardProps> = ({ books }) => {
+  const { t, locale } = useI18n();
+
   const chartData = useMemo(() => {
     // Sort books by addedAt date
     const sortedBooks = [...books].sort(
@@ -28,7 +31,7 @@ export const LibraryGrowthDashboard: React.FC<LibraryGrowthDashboardProps> = ({ 
     sortedBooks.forEach((book) => {
       if (!book.addedAt) return;
       const dateObj = new Date(book.addedAt);
-      const dateStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const dateStr = dateObj.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
       grouped[dateStr] = (grouped[dateStr] || 0) + 1;
     });
 
@@ -44,23 +47,23 @@ export const LibraryGrowthDashboard: React.FC<LibraryGrowthDashboardProps> = ({ 
 
     // Ensure we have some data even if empty or single point
     if (data.length === 1) {
-      data.unshift({ date: 'Start', total: 0, added: 0 });
+      data.unshift({ date: t.growth.start, total: 0, added: 0 });
     } else if (data.length === 0) {
-      data.push({ date: 'No Data', total: 0, added: 0 });
+      data.push({ date: t.growth.noData, total: 0, added: 0 });
     }
 
     return data;
-  }, [books]);
+  }, [books, locale, t]);
 
   return (
     <section className="bg-[#1C1916] rounded-2xl hairline-border p-5 sm:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold">
-            Library Growth
+            {t.growth.title}
           </h3>
           <p className="font-mono-ibm text-[11px] text-[#A79C8C] mt-0.5">
-            CUMULATIVE ARCHIVE VOLUME OVER TIME
+            {t.growth.subtitle}
           </p>
         </div>
         <div className="text-right">
@@ -68,7 +71,7 @@ export const LibraryGrowthDashboard: React.FC<LibraryGrowthDashboardProps> = ({ 
             {books.length}
           </span>
           <p className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider">
-            Total Volumes
+            {t.growth.totalVolumes}
           </p>
         </div>
       </div>
@@ -114,7 +117,7 @@ export const LibraryGrowthDashboard: React.FC<LibraryGrowthDashboardProps> = ({ 
             <Area
               type="monotone"
               dataKey="total"
-              name="Books Cataloged"
+              name={t.growth.seriesName}
               stroke="#C9963F"
               strokeWidth={3}
               fillOpacity={1}

@@ -43,6 +43,7 @@ import { useIncrementalList } from './hooks/useIncrementalList';
 import { LazyPanel } from './components/LazyPanel';
 import { motion } from 'motion/react';
 import { BookCover } from './components/BookCover';
+import { useT } from './i18n/I18nProvider';
 
 // Recharts is ~390KB and none of these panels are above the fold, so they load
 // on demand instead of blocking first paint.
@@ -108,6 +109,8 @@ function readInitialState() {
 const initialState = readInitialState();
 
 export default function App() {
+  const t = useT();
+
   // Primary Store State
   const [books, setBooks] = useState<Book[]>(initialState.books);
   const [shelves, setShelves] = useState<Shelf[]>(initialState.shelves);
@@ -136,7 +139,7 @@ export default function App() {
   // Scanning Lifecycle States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingLabel, setProcessingLabel] = useState<string>('Analyzing shelf');
+  const [processingLabel, setProcessingLabel] = useState<string>('');
   const [pendingScanData, setPendingScanData] = useState<{ imageUrl: string; candidates: SpineCandidate[] } | null>(null);
   const [scanResultsMode, setScanResultsMode] = useState(false);
 
@@ -185,31 +188,29 @@ export default function App() {
       .then(setServerCapabilities)
       .catch((error) =>
         pushToast({
-          title: 'Server unreachable',
-          description: `Scanning and AI features are unavailable: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          title: t.toasts.serverUnreachable,
+          description: t.toasts.serverUnreachableDetail(error instanceof Error ? error.message : String(error)),
           icon: 'cloud_off',
         })
       );
-  }, [pushToast]);
+  }, [pushToast, t]);
 
   // Surface a storage problem instead of silently losing data.
   useEffect(() => {
     if (initialState.error) {
       pushToast({
-        title: 'Stored library could not be read',
+        title: t.toasts.storedLibraryUnreadable,
         description: initialState.error,
         icon: 'error',
       });
     } else if (!isPersistenceAvailable()) {
       pushToast({
-        title: 'Local storage unavailable',
-        description: 'Your browser blocks local storage, so changes will be lost on reload. Sign in to keep a cloud copy.',
+        title: t.toasts.storageUnavailable,
+        description: t.toasts.storageUnavailableDetail,
         icon: 'warning',
       });
     }
-  }, [pushToast]);
+  }, [pushToast, t]);
 
   // Persist every mutation locally.
   useEffect(() => {
@@ -266,8 +267,8 @@ export default function App() {
         if (typeof cloudData.monthlyGoal === 'number') setMonthlyGoal(cloudData.monthlyGoal);
 
         pushToast({
-          title: 'Library synced',
-          description: `${merged.addedFromCloud} volume(s) pulled from the cloud.`,
+          title: t.toasts.librarySynced,
+          description: t.toasts.librarySyncedDetail(merged.addedFromCloud),
           icon: 'cloud_download',
         });
 
@@ -276,17 +277,18 @@ export default function App() {
         if (merged.conflicts.length > 0) {
           const keptCloud = merged.conflicts.filter((entry) => entry.keptSide === 'cloud');
           pushToast({
-            title: `${merged.conflicts.length} conflict(s) resolved`,
-            description:
-              `Newest edit kept for: ${merged.conflicts.slice(0, 3).map((entry) => entry.title).join(', ')}` +
-              (merged.conflicts.length > 3 ? ` and ${merged.conflicts.length - 3} more.` : '.') +
-              (keptCloud.length > 0 ? ` ${keptCloud.length} local change(s) were superseded by the cloud copy.` : ''),
+            title: t.toasts.conflictsResolved(merged.conflicts.length),
+            description: t.toasts.conflictsDetail(
+              merged.conflicts.slice(0, 3).map((entry) => entry.title).join(', '),
+              Math.max(0, merged.conflicts.length - 3),
+              keptCloud.length
+            ),
             icon: 'merge',
           });
         }
       } catch (error) {
         pushToast({
-          title: 'Cloud fetch failed',
+          title: t.toasts.cloudFetchFailed,
           description: error instanceof Error ? error.message : String(error),
           icon: 'error',
         });
@@ -296,25 +298,25 @@ export default function App() {
       },
       (error) =>
         pushToast({
-          title: 'Cloud features unavailable',
-          description: `The Firebase SDK could not be loaded: ${error.message}`,
+          title: t.toasts.cloudUnavailable,
+          description: t.toasts.cloudUnavailableDetail(error.message),
           icon: 'cloud_off',
         })
     );
     // deletedBookIds/deletedShelfIds are read through the closure only at login time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pushToast]);
+  }, [pushToast, t]);
 
   const handleLogin = async () => {
     if (!isFirebaseConfigured) {
-      pushToast({ title: 'Cloud features disabled', description: firebaseConfigError ?? '', icon: 'cloud_off' });
+      pushToast({ title: t.toasts.cloudDisabled, description: firebaseConfigError ?? '', icon: 'cloud_off' });
       return;
     }
     try {
       await loginWithGoogle();
     } catch (error) {
       pushToast({
-        title: 'Sign-in failed',
+        title: t.toasts.signInFailed,
         description: error instanceof Error ? error.message : String(error),
         icon: 'error',
       });
@@ -324,10 +326,10 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await logout();
-      pushToast({ title: 'Signed out', description: 'Your library stays on this device.', icon: 'logout' });
+      pushToast({ title: t.toasts.signedOut, description: t.toasts.signedOutDetail, icon: 'logout' });
     } catch (error) {
       pushToast({
-        title: 'Sign-out failed',
+        title: t.toasts.signOutFailed,
         description: error instanceof Error ? error.message : String(error),
         icon: 'error',
       });
@@ -352,20 +354,20 @@ export default function App() {
       setHasUnsyncedChanges(false);
       setLastSyncedAt(new Date().toISOString());
       pushToast({
-        title: 'Sync complete',
-        description: `${books.length} volumes backed up to the cloud.`,
+        title: t.toasts.syncComplete,
+        description: t.toasts.syncCompleteDetail(books.length),
         icon: 'cloud_done',
       });
     } catch (error) {
       pushToast({
-        title: 'Sync Failed',
+        title: t.toasts.syncFailed,
         description: error instanceof Error ? error.message : String(error),
         icon: 'error',
       });
     } finally {
       setIsSyncing(false);
     }
-  }, [currentUser, books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds, pushToast]);
+  }, [currentUser, books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds, pushToast, t]);
 
   // Debounced auto-sync: without it the cloud copy silently goes stale whenever
   // the user forgets to press Sync.
@@ -398,55 +400,55 @@ export default function App() {
         if (t > latestDate) latestDate = t;
       });
       b.readHistory?.forEach((dateString) => {
-        const t = new Date(dateString).getTime();
-        if (t > latestDate) latestDate = t;
+        const time = new Date(dateString).getTime();
+        if (time > latestDate) latestDate = time;
       });
       if (b.readAt) {
-        const t = new Date(b.readAt).getTime();
-        if (t > latestDate) latestDate = t;
+        const time = new Date(b.readAt).getTime();
+        if (time > latestDate) latestDate = time;
       }
     });
 
     if (latestDate > 0 && Date.now() - latestDate > 48 * 60 * 60 * 1000) {
       reminderTriggeredRef.current = true;
       pushToast({
-        title: 'Reading Reminder',
-        description: 'It has been over 48 hours since your last reading session. Keep your streak alive!',
+        title: t.toasts.readingReminder,
+        description: t.toasts.readingReminderDetail,
         icon: 'menu_book',
       });
       haptic.success();
     }
-  }, [isReminderEnabled, books, pushToast]);
+  }, [isReminderEnabled, books, pushToast, t]);
 
   useEffect(() => {
     const currentCompletedCount = books.filter((b) => b.status === 'read').length;
     if (currentCompletedCount > lastNotifiedCompletedCount) {
       if (currentCompletedCount % 5 === 0) {
         pushToast({
-          title: 'Milestone Reached!',
-          description: `You have read ${currentCompletedCount} books. Incredible progress!`,
+          title: t.toasts.milestone,
+          description: t.toasts.milestoneDetail(currentCompletedCount),
           icon: 'emoji_events',
         });
         haptic.success();
       }
       setLastNotifiedCompletedCount(currentCompletedCount);
     }
-  }, [books, lastNotifiedCompletedCount, pushToast]);
+  }, [books, lastNotifiedCompletedCount, pushToast, t]);
 
   useEffect(() => {
     const streak = calculateReadingStreak(books);
     if (streak > lastNotifiedStreak) {
       if (streak % 7 === 0) {
         pushToast({
-          title: 'Reading Streak!',
-          description: `You have reached a ${streak}-day reading streak! Keep the momentum going.`,
+          title: t.toasts.streak,
+          description: t.toasts.streakDetail(streak),
           icon: 'local_fire_department',
         });
         haptic.success();
       }
       setLastNotifiedStreak(streak);
     }
-  }, [books, lastNotifiedStreak, pushToast]);
+  }, [books, lastNotifiedStreak, pushToast, t]);
 
   // Filtered books in the current view
   const filteredBooks = useMemo(() => {
@@ -532,12 +534,12 @@ export default function App() {
   const blockAiWithLoginPrompt = useCallback((): boolean => {
     if (!aiRequiresLogin) return false;
     pushToast({
-      title: 'Sign in required',
-      description: 'This deployment requires a signed-in account for AI scanning and recommendations.',
+      title: t.toasts.signInRequired,
+      description: t.toasts.signInRequiredDetail,
       icon: 'lock',
     });
     return true;
-  }, [aiRequiresLogin, pushToast]);
+  }, [aiRequiresLogin, pushToast, t]);
 
   const exitCompareMode = () => {
     setIsCompareMode(false);
@@ -591,14 +593,14 @@ export default function App() {
       if (payload.mode === 'isbn' || payload.mode === 'qr') {
         if (!payload.barcode) {
           pushToast({
-            title: 'No code detected',
-            description: 'No barcode was decoded from that frame. Frame the code more tightly and try again.',
+            title: t.toasts.noCode,
+            description: t.toasts.noCodeDetail,
             icon: 'error',
           });
           return;
         }
 
-        setProcessingLabel(payload.mode === 'isbn' ? 'Looking up ISBN' : 'Resolving QR code');
+        setProcessingLabel(payload.mode === 'isbn' ? t.processingLabels.isbn : t.processingLabels.qr);
         setIsProcessing(true);
         try {
           const result =
@@ -607,10 +609,14 @@ export default function App() {
           addBook(book);
           haptic.success();
           setActiveBookDetail(book);
-          pushToast({ title: 'Book added', description: `${result.title} — ${result.author}`, icon: 'library_add' });
+          pushToast({
+            title: t.toasts.bookAdded,
+            description: t.toasts.titleAndAuthor(result.title, result.author),
+            icon: 'library_add',
+          });
         } catch (error) {
           pushToast({
-            title: 'Lookup failed',
+            title: t.toasts.lookupFailed,
             description: error instanceof Error ? error.message : String(error),
             icon: 'error',
           });
@@ -624,22 +630,22 @@ export default function App() {
       if (payload.sample) {
         const candidates = buildDemoCandidates(payload.sample.imageUrl, payload.sample.groundTruth);
         setPendingScanData({ imageUrl: payload.sample.imageUrl, candidates });
-        setProcessingLabel('Analyzing demo shelf');
+        setProcessingLabel(t.processingLabels.demoShelf);
         setIsProcessing(true);
         return;
       }
 
       if (blockAiWithLoginPrompt()) return;
 
-      setProcessingLabel('Reading spines with Gemini');
+      setProcessingLabel(t.processingLabels.shelf);
       setIsProcessing(true);
       try {
         const candidates = await recognizeShelf(payload.imageUrl);
         if (candidates.length === 0) {
           setIsProcessing(false);
           pushToast({
-            title: 'No spines detected',
-            description: 'The model could not find any book spines in that photo. Try better lighting or a closer shot.',
+            title: t.toasts.noSpines,
+            description: t.toasts.noSpinesDetail,
             icon: 'error',
           });
           return;
@@ -648,13 +654,13 @@ export default function App() {
       } catch (error) {
         setIsProcessing(false);
         pushToast({
-          title: 'Shelf recognition failed',
+          title: t.toasts.shelfRecognitionFailed,
           description: error instanceof Error ? error.message : String(error),
           icon: 'error',
         });
       }
     },
-    [addBook, bookFromLookup, pushToast, blockAiWithLoginPrompt]
+    [addBook, bookFromLookup, pushToast, blockAiWithLoginPrompt, t]
   );
 
   const handleProcessingComplete = () => {
@@ -707,8 +713,8 @@ export default function App() {
     setActiveTab('library');
     haptic.success();
     pushToast({
-      title: 'Volumes cataloged',
-      description: `${newBooks.length} book${newBooks.length === 1 ? '' : 's'} added to your library.`,
+      title: t.toasts.volumesCataloged,
+      description: t.toasts.booksAddedDetail(newBooks.length),
       icon: 'library_add',
     });
   };
@@ -755,7 +761,11 @@ export default function App() {
       const book = bookFromLookup(result, 'manual');
       addBook(book);
       haptic.success();
-      pushToast({ title: 'Book added', description: `${result.title} — ${result.author}`, icon: 'library_add' });
+      pushToast({
+        title: t.toasts.bookAdded,
+        description: t.toasts.titleAndAuthor(result.title, result.author),
+        icon: 'library_add',
+      });
       setIsManualAddOpen(false);
       return;
     }
@@ -848,8 +858,8 @@ export default function App() {
     if (!book) return;
     if (!book.pageCount) {
       pushToast({
-        title: 'Page count unknown',
-        description: 'Set the total page count for this book before tracking pages.',
+        title: t.toasts.pageCountUnknown,
+        description: t.toasts.pageCountUnknownDetail,
         icon: 'error',
       });
       return;
@@ -885,7 +895,7 @@ export default function App() {
     setDeletedBookIds((prev) => (prev.includes(bookId) ? prev : [...prev, bookId]));
     setCompareQueue((queue) => queue.filter((b) => b.id !== bookId));
     setActiveBookDetail(null);
-    pushToast({ title: 'Volume removed', description: 'The book was deleted from your library.', icon: 'delete' });
+    pushToast({ title: t.toasts.volumeRemoved, description: t.toasts.volumeRemovedDetail, icon: 'delete' });
   };
 
   const handleCreateShelf = (name: string, color?: string, texture?: string) => {
@@ -908,8 +918,8 @@ export default function App() {
 
     if (!fallbackShelf && orphanCount > 0) {
       pushToast({
-        title: 'Cannot delete the last shelf',
-        description: 'Create another shelf first so its books have somewhere to go.',
+        title: t.toasts.cannotDeleteLastShelf,
+        description: t.toasts.cannotDeleteLastShelfDetail,
         icon: 'error',
       });
       return;
@@ -922,8 +932,9 @@ export default function App() {
     setDeletedShelfIds((prev) => (prev.includes(shelfId) ? prev : [...prev, shelfId]));
     if (selectedShelfId === shelfId) setSelectedShelfId('all');
     pushToast({
-      title: 'Shelf removed',
-      description: orphanCount > 0 ? `${orphanCount} volume(s) moved to "${fallbackShelf?.name}".` : 'Empty shelf deleted.',
+      title: t.toasts.shelfRemoved,
+      description:
+        orphanCount > 0 ? t.toasts.shelfRemovedMoved(orphanCount, fallbackShelf?.name ?? '') : t.toasts.emptyShelfDeleted,
       icon: 'delete',
     });
   };
@@ -958,7 +969,7 @@ export default function App() {
       return newShelves;
     });
 
-    pushToast({ title: 'Shelves reorganized', description: 'Books were grouped by category.', icon: 'auto_awesome' });
+    pushToast({ title: t.toasts.shelvesReorganized, description: t.toasts.shelvesReorganizedDetail, icon: 'auto_awesome' });
   };
 
   const handleUpdateShelfData = (shelfId: string, updates: Partial<Shelf>) => {
@@ -987,7 +998,7 @@ export default function App() {
     );
     if (overdue.length === 0) return;
     pushToast({
-      title: 'Lent books overdue',
+      title: t.toasts.lentOverdue,
       description: overdue.map((b) => `${b.title} (${b.lentTo})`).join(', '),
       icon: 'handshake',
     });
@@ -1111,10 +1122,10 @@ export default function App() {
               <div className="flex justify-between items-end">
                 <div>
                   <h2 className="font-serif-literata text-[22px] sm:text-[26px] text-[#F4EFE6] font-bold tracking-tight">
-                    Physical Library Archive
+                    {t.library.title}
                   </h2>
                   <p className="font-mono-ibm text-[11px] text-[#A79C8C] mt-0.5">
-                    {books.length} CATALOGED VOLUMES • {shelves.length} PHYSICAL SHELVES
+                    {t.library.summary(books.length, shelves.length)}
                   </p>
                 </div>
 
@@ -1127,7 +1138,7 @@ export default function App() {
                     className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
-                    <span>ADD BY SEARCH</span>
+                    <span>{t.library.addBySearch}</span>
                   </button>
 
                   <button
@@ -1138,7 +1149,7 @@ export default function App() {
                     className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
                   >
                     <span className="material-symbols-outlined text-[16px]">upload_file</span>
-                    <span>IMPORT</span>
+                    <span>{t.library.import}</span>
                   </button>
 
                   <button
@@ -1150,7 +1161,7 @@ export default function App() {
                     className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
                   >
                     <span className="material-symbols-outlined text-[16px]">share</span>
-                    <span>SHARE COLLECTION</span>
+                    <span>{t.library.shareCollection}</span>
                   </button>
 
                   <button
@@ -1161,7 +1172,7 @@ export default function App() {
                     className="px-4 py-1.5 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] rounded-lg font-mono-ibm text-[11px] font-bold tracking-wider uppercase transition-all shadow-[0_2px_12px_rgba(201,150,63,0.3)] flex items-center gap-1.5"
                   >
                     <span className="material-symbols-outlined text-[17px] font-bold">photo_camera</span>
-                    <span>SCAN SHELF</span>
+                    <span>{t.library.scanShelf}</span>
                   </button>
                 </div>
               </div>
@@ -1190,7 +1201,7 @@ export default function App() {
                   reminderEnabled={isReminderEnabled}
                   onToggleReminder={setIsReminderEnabled}
                 />
-                <LazyPanel label="The weekly reading chart">
+                <LazyPanel label={t.panels.weeklyChart}>
                   <WeeklyReadingChart books={books} />
                 </LazyPanel>
               </div>
@@ -1202,10 +1213,10 @@ export default function App() {
                   goals={readingGoals}
                   onEditGoals={() => setIsReadingGoalsModalOpen(true)}
                 />
-                <LazyPanel label="The library growth panel">
+                <LazyPanel label={t.panels.growth}>
                   <LibraryGrowthDashboard books={books} />
                 </LazyPanel>
-                <LazyPanel label="The analytics panel">
+                <LazyPanel label={t.panels.analytics}>
                   <ReadingAnalyticsDashboard books={books} />
                 </LazyPanel>
               </div>
@@ -1239,7 +1250,7 @@ export default function App() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Try 'unread books by Orwell' or 'reading now'..."
+                    placeholder={t.library.searchPlaceholder}
                     className="w-full pl-10 pr-4 py-2 bg-[#12100E] hairline-border rounded-xl text-[13px] font-sans-inter text-[#F4EFE6] placeholder:text-[#9C8F7E] focus:outline-none focus:border-[#C9963F]"
                   />
                   {searchQuery && (
@@ -1249,7 +1260,7 @@ export default function App() {
                         setSearchQuery('');
                       }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A79C8C] hover:text-[#F4EFE6]"
-                      aria-label="Clear search"
+                      aria-label={t.manualSearch.clearLabel}
                     >
                       <span className="material-symbols-outlined text-[16px]">cancel</span>
                     </button>
@@ -1262,10 +1273,10 @@ export default function App() {
                     haptic.selectionClick();
                     setSelectedShelfId(e.target.value);
                   }}
-                  aria-label="Filter by shelf"
+                  aria-label={t.library.filterByShelf}
                   className="bg-[#12100E] text-[#F4EFE6] hairline-border text-[12px] font-mono-ibm rounded-xl px-3 py-2 focus:outline-none focus:border-[#C9963F]"
                 >
-                  <option value="all">All Shelves ({books.length})</option>
+                  <option value="all">{t.library.allShelves(books.length)}</option>
                   {shelves.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} ({books.filter((b) => b.shelfId === s.id).length})
@@ -1275,7 +1286,7 @@ export default function App() {
               </div>
 
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar font-mono-ibm text-[11px] pt-1">
-                <span className="text-[#A79C8C] text-[10px] uppercase tracking-wider mr-1 shrink-0">STATUS:</span>
+                <span className="text-[#A79C8C] text-[10px] uppercase tracking-wider mr-1 shrink-0">{t.library.statusLabel}</span>
                 {(['all', 'unread', 'reading', 'read'] as const).map((st) => (
                   <button
                     key={st}
@@ -1289,13 +1300,13 @@ export default function App() {
                         : 'bg-[#12100E] text-[#A79C8C] hairline-border hover:text-[#F4EFE6]'
                     }`}
                   >
-                    {st}
+                    {t.library.statusFilters[st]}
                   </button>
                 ))}
               </div>
 
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar font-mono-ibm text-[11px] pt-1 border-t border-[#3A332A]/50 mt-1">
-                <span className="text-[#A79C8C] text-[10px] uppercase tracking-wider mr-1 shrink-0 mt-2">SMART:</span>
+                <span className="text-[#A79C8C] text-[10px] uppercase tracking-wider mr-1 shrink-0 mt-2">{t.library.smartLabel}</span>
                 <div className="flex items-center gap-1.5 mt-2">
                   {(['none', 'recently_added', 'high_priority', 'abandoned'] as const).map((filterId) => (
                     <button
@@ -1310,7 +1321,7 @@ export default function App() {
                           : 'bg-[#12100E] text-[#A79C8C] hairline-border hover:text-[#F4EFE6]'
                       }`}
                     >
-                      {filterId.replace('_', ' ')}
+                      {t.library.smartFilters[filterId]}
                     </button>
                   ))}
                 </div>
@@ -1320,7 +1331,7 @@ export default function App() {
             {/* Books Grid */}
             <section className="space-y-4">
               <div className="flex justify-between items-center font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
-                <span>CATALOGED VOLUMES ({filteredBooks.length})</span>
+                <span>{t.library.catalogedVolumes(filteredBooks.length)}</span>
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => {
@@ -1333,15 +1344,15 @@ export default function App() {
                         ? 'bg-[#C9963F] text-[#12100E] font-bold'
                         : 'bg-[#12100E] text-[#A79C8C] hover:text-[#F4EFE6] border border-[#3A332A]'
                     }`}
-                    title="Compare Books"
+                    title={t.library.compareBooks}
                   >
                     <span className="material-symbols-outlined text-[14px]">compare_arrows</span>
                     <span className="hidden sm:inline">
                       {isCompareMode
                         ? compareQueue.length > 0
-                          ? `SELECT 2ND (${compareQueue.length}/2)`
-                          : 'SELECT 2 BOOKS'
-                        : 'COMPARE'}
+                          ? t.library.selectSecond(compareQueue.length)
+                          : t.library.selectTwo
+                        : t.library.compare}
                     </span>
                   </button>
 
@@ -1354,7 +1365,7 @@ export default function App() {
                       className={`p-1 rounded ${
                         viewMode === 'list' ? 'bg-[#2C251D] text-[#C9963F]' : 'text-[#A79C8C] hover:text-[#F4EFE6]'
                       } transition-colors`}
-                      title="List View"
+                      title={t.library.listView}
                     >
                       <span className="material-symbols-outlined text-[16px] block">view_list</span>
                     </button>
@@ -1366,27 +1377,27 @@ export default function App() {
                       className={`p-1 rounded ${
                         viewMode === 'gallery' ? 'bg-[#2C251D] text-[#C9963F]' : 'text-[#A79C8C] hover:text-[#F4EFE6]'
                       } transition-colors`}
-                      title="Gallery View"
+                      title={t.library.galleryView}
                     >
                       <span className="material-symbols-outlined text-[16px] block">grid_view</span>
                     </button>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span>SORT:</span>
+                    <span>{t.library.sortLabel}</span>
                     <select
                       value={sortMode}
                       onChange={(e) => {
                         haptic.selectionClick();
                         setSortMode(e.target.value as typeof sortMode);
                       }}
-                      aria-label="Sort books"
+                      aria-label={t.library.sortAria}
                       className="bg-transparent text-[#F4EFE6] focus:outline-none cursor-pointer"
                     >
-                      <option value="physical" className="bg-[#1C1916]">PHYSICAL ORDER</option>
-                      <option value="recent" className="bg-[#1C1916]">MOST RECENTLY READ</option>
-                      <option value="author" className="bg-[#1C1916]">AUTHOR (A-Z)</option>
-                      <option value="title" className="bg-[#1C1916]">TITLE (A-Z)</option>
+                      <option value="physical" className="bg-[#1C1916]">{t.library.sortModes.physical}</option>
+                      <option value="recent" className="bg-[#1C1916]">{t.library.sortModes.recent}</option>
+                      <option value="author" className="bg-[#1C1916]">{t.library.sortModes.author}</option>
+                      <option value="title" className="bg-[#1C1916]">{t.library.sortModes.title}</option>
                     </select>
                   </div>
                 </div>
@@ -1397,10 +1408,10 @@ export default function App() {
                   <span className="material-symbols-outlined text-5xl text-[#3A332A]">shelves</span>
                   <div>
                     <h3 className="font-serif-literata text-[20px] text-[#F4EFE6] font-semibold">
-                      No volumes found matching filter
+                      {t.library.emptyTitle}
                     </h3>
                     <p className="font-sans-inter text-[13px] text-[#A79C8C] mt-1 max-w-sm">
-                      Try clearing search parameters or point your camera at a new bookshelf.
+                      {t.library.emptyBody}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 justify-center">
@@ -1409,21 +1420,21 @@ export default function App() {
                       className="px-5 py-2.5 bg-[#C9963F] text-[#12100E] font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider shadow-lg flex items-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[18px]">photo_camera</span>
-                      <span>Scan New Shelf</span>
+                      <span>{t.library.scanNewShelf}</span>
                     </button>
                     <button
                       onClick={() => setIsManualAddOpen(true)}
                       className="px-5 py-2.5 bg-[#262119] text-[#C9963F] hairline-border font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider flex items-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[18px]">search</span>
-                      <span>Add by search</span>
+                      <span>{t.library.addBySearchLong}</span>
                     </button>
                     <button
                       onClick={() => setIsImportOpen(true)}
                       className="px-5 py-2.5 bg-[#262119] text-[#C9963F] hairline-border font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider flex items-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[18px]">upload_file</span>
-                      <span>Import CSV</span>
+                      <span>{t.library.importCsv}</span>
                     </button>
                   </div>
                 </div>
@@ -1505,7 +1516,7 @@ export default function App() {
                     onClick={loadMoreBooks}
                     className="px-4 py-2 bg-[#1C1916] hairline-border rounded-xl font-mono-ibm text-[11px] text-[#A79C8C] hover:text-[#C9963F] uppercase tracking-wider transition-colors"
                   >
-                    Load {Math.min(60, remainingBooks)} more ({remainingBooks} left)
+                    {t.library.loadMore(Math.min(60, remainingBooks), remainingBooks)}
                   </button>
                 </div>
               )}
@@ -1522,7 +1533,7 @@ export default function App() {
         <ProcessingView
           imageUrl={pendingScanData?.imageUrl ?? ''}
           candidates={pendingScanData?.candidates ?? []}
-          label={processingLabel}
+          label={processingLabel || t.processing.defaultLabel}
           onComplete={handleProcessingComplete}
         />
       )}
@@ -1581,7 +1592,7 @@ export default function App() {
           };
           addBook(book);
           haptic.success();
-          pushToast({ title: 'Added to library', description: recommendation.title, icon: 'library_add' });
+          pushToast({ title: t.toasts.addedToLibrary, description: recommendation.title, icon: 'library_add' });
         }}
       />
 
@@ -1612,8 +1623,8 @@ export default function App() {
         onImport={(imported) => {
           setBooks((prev) => [...imported, ...prev]);
           pushToast({
-            title: 'Import complete',
-            description: `${imported.length} book${imported.length === 1 ? '' : 's'} added to your library.`,
+            title: t.toasts.importComplete,
+            description: t.toasts.booksAddedDetail(imported.length),
             icon: 'library_add',
           });
         }}

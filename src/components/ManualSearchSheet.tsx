@@ -4,6 +4,7 @@ import { searchBooks, BookLookupResult } from '../services/bookLookup';
 import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
 import { ModalShell } from './ModalShell';
+import { useT } from '../i18n/I18nProvider';
 
 interface ManualSearchSheetProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
   onSelectResult,
   initialQuery = '',
 }) => {
+  const t = useT();
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [results, setResults] = useState<BookLookupResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -51,7 +53,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
         const found = await searchBooks(query);
         if (requestIdRef.current !== requestId) return;
         setResults(found);
-        if (found.length === 0) setError(`No catalog entry found for "${query}".`);
+        if (found.length === 0) setError(t.manualSearch.noResults(query));
       } catch (lookupError) {
         if (requestIdRef.current !== requestId) return;
         setResults([]);
@@ -62,13 +64,13 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [searchQuery, isOpen]);
+  }, [searchQuery, isOpen, t]);
 
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
-      <ModalShell isOpen={isOpen} onClose={onClose} label="Catalog search" closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-end justify-center">
+      <ModalShell isOpen={isOpen} onClose={onClose} label={t.manualSearch.dialogLabel} closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-end justify-center">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -90,20 +92,20 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
 
           <div className="p-5 sm:p-7 flex-1 flex flex-col min-h-0">
             <div className="flex justify-between items-center mb-1">
-              <h2 className="font-serif-literata text-[22px] text-[#F4EFE6]">Catalog Search</h2>
+              <h2 className="font-serif-literata text-[22px] text-[#F4EFE6]">{t.manualSearch.title}</h2>
               <button
                 onClick={() => {
                   haptic.lightImpact();
                   onClose();
                 }}
                 className="text-[#A79C8C] hover:text-[#F4EFE6] p-1 rounded-full"
-                aria-label="Close search"
+                aria-label={t.manualSearch.closeLabel}
               >
                 <span className="material-symbols-outlined text-[22px]">close</span>
               </button>
             </div>
             <p className="font-mono-ibm text-[10px] text-[#8C8273] uppercase tracking-widest mb-4">
-              Powered by Open Library
+              {t.manualSearch.poweredBy}
             </p>
 
             <div className="relative mb-5">
@@ -114,7 +116,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search title, author, or ISBN..."
+                placeholder={t.manualSearch.placeholder}
                 autoFocus
                 className="w-full pl-11 pr-10 py-3 bg-[#1C1916] hairline-border rounded-xl font-sans-inter text-[15px] text-[#F4EFE6] placeholder:text-[#9C8F7E] focus:outline-none focus:border-[#C9963F] focus:ring-1 focus:ring-[#C9963F]"
               />
@@ -125,7 +127,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
                     setSearchQuery('');
                   }}
                   className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[#A79C8C] hover:text-[#F4EFE6]"
-                  aria-label="Clear search"
+                  aria-label={t.manualSearch.clearLabel}
                 >
                   <span className="material-symbols-outlined text-[18px]">cancel</span>
                 </button>
@@ -134,14 +136,14 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
 
             <div className="flex-1 overflow-y-auto no-scrollbar space-y-2.5 pr-1">
               <div className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider mb-2 flex justify-between">
-                <span>{isSearching ? 'SEARCHING…' : 'SEARCH RESULTS'}</span>
-                <span>{results.length} FOUND</span>
+                <span>{isSearching ? t.manualSearch.searching : t.manualSearch.resultsHeading}</span>
+                <span>{t.manualSearch.foundCount(results.length)}</span>
               </div>
 
               {isSearching && results.length === 0 && (
                 <div className="py-12 flex flex-col items-center gap-3">
                   <div className="w-8 h-8 border-2 border-[#C9963F]/20 border-t-[#C9963F] rounded-full animate-spin" />
-                  <p className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-widest">Querying catalog</p>
+                  <p className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-widest">{t.manualSearch.querying}</p>
                 </div>
               )}
 
@@ -155,7 +157,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
               {!isSearching && !error && results.length === 0 && searchQuery.trim().length < 2 && (
                 <div className="py-12 text-center text-[#A79C8C]">
                   <span className="material-symbols-outlined text-4xl text-[#3A332A] mb-2">search</span>
-                  <p className="font-sans-inter text-[14px]">Type at least two characters to search the catalog.</p>
+                  <p className="font-sans-inter text-[14px]">{t.manualSearch.typeMore}</p>
                 </div>
               )}
 

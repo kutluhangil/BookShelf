@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Book } from '../types';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { haptic } from '../services/haptics';
+import { useT } from '../i18n/I18nProvider';
 
 interface BookCardProps {
   book: Book;
@@ -18,6 +19,7 @@ export const BookCard: React.FC<BookCardProps> = ({
   onClick,
   onResolve,
 }) => {
+  const t = useT();
   const isReview = book.confidence === 'review';
   const isUnknown = book.confidence === 'unknown';
   const hasProgress = typeof book.progress === 'number';
@@ -62,7 +64,7 @@ export const BookCard: React.FC<BookCardProps> = ({
           <>
             <img
               src={book.coverUrl || book.spineCropUrl}
-              alt={`${book.title} spine`}
+              alt={t.bookCard.spineAlt(book.title)}
               className="w-full h-full object-cover grayscale-[25%] group-hover:grayscale-0 group-hover:scale-105 transition-all duration-500"
               loading="lazy"
             />
@@ -79,7 +81,7 @@ export const BookCard: React.FC<BookCardProps> = ({
           <div className="absolute bottom-0 inset-x-0 z-20 bg-[#100E0C]/90 backdrop-blur-[2px] px-1.5 py-1 flex flex-col gap-0.5 border-t border-[#3A332A]/80 shadow-md">
             <div className="flex justify-between items-center text-[9px] font-mono-ibm font-semibold leading-none">
               <span className="text-[#A79C8C] text-[8px] uppercase tracking-wider">
-                {progressPercent === 100 ? 'READ' : 'PROGRESS'}
+                {progressPercent === 100 ? t.bookCard.read : t.bookCard.progress}
               </span>
               <span
                 className={
@@ -123,7 +125,7 @@ export const BookCard: React.FC<BookCardProps> = ({
                       : 'bg-[#262119] text-[#A79C8C] border-[#3A332A]'
                   }`}
                 >
-                  {progressPercent === 100 ? '100% DONE' : `${progressPercent}% READ`}
+                  {progressPercent === 100 ? t.bookCard.done100 : t.bookCard.percentRead(progressPercent)}
                 </span>
               )}
               <span className="material-symbols-outlined text-[#A79C8C] text-[18px] opacity-60 group-hover:opacity-100 transition-opacity">
@@ -148,7 +150,7 @@ export const BookCard: React.FC<BookCardProps> = ({
         {/* Bottom archival tags & action triggers */}
         <div className="mt-3 pt-2.5 border-t border-[#3A332A]/70 flex justify-between items-center text-[11px] font-mono-ibm text-[#9C8F7E]">
           <span className="truncate max-w-[140px] uppercase tracking-wider">
-            {book.publishYear ? `${book.publishYear} ED.` : 'ARCHIVAL VOL.'} {book.publisher ? `• ${book.publisher}` : ''}
+            {book.publishYear ? t.bookCard.edition(book.publishYear) : t.bookCard.archivalVolume}{book.publisher ? ` • ${book.publisher}` : ''}
           </span>
 
           {isReview && onResolve ? (
@@ -160,16 +162,16 @@ export const BookCard: React.FC<BookCardProps> = ({
               }}
               className="text-[#C9963F] hover:underline font-semibold tracking-wider flex items-center gap-1"
             >
-              <span>RESOLVE</span>
+              <span>{t.bookCard.resolve}</span>
               <span className="material-symbols-outlined text-[14px]">chevron_right</span>
             </button>
           ) : isUnknown ? (
             <span className="text-[#A9503F] font-semibold tracking-wider">
-              MANUAL REQ.
+              {t.bookCard.manualRequired}
             </span>
           ) : (
             <span className="font-mono-ibm text-[11px] text-[#A79C8C]">
-              CONF: {book.score ? book.score.toFixed(2) : '0.98'}
+              {t.confidence.score(book.score ? book.score.toFixed(2) : '0.98')}
             </span>
           )}
         </div>

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Book, ReadingGoals } from '../types';
+import { useT } from '../i18n/I18nProvider';
 
 interface ReadingGoalsDashboardProps {
   books: Book[];
@@ -12,6 +13,7 @@ export const ReadingGoalsDashboard: React.FC<ReadingGoalsDashboardProps> = ({
   goals,
   onEditGoals
 }) => {
+  const t = useT();
   const currentYear = new Date().getFullYear();
 
   // Calculate actuals
@@ -47,16 +49,16 @@ export const ReadingGoalsDashboard: React.FC<ReadingGoalsDashboardProps> = ({
       <div className="flex justify-between items-start">
         <div>
           <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold">
-            {currentYear} Reading Goals
+            {t.readingGoals.title(currentYear)}
           </h3>
           <p className="font-mono-ibm text-[11px] text-[#A79C8C] mt-0.5">
-            YOUR ANNUAL PROGRESS
+            {t.readingGoals.subtitle}
           </p>
         </div>
         <button
           onClick={onEditGoals}
           className="text-[#5A5044] hover:text-[#C9963F] transition-colors p-1"
-          title="Edit Goals"
+          title={t.readingGoals.editGoals}
         >
           <span className="material-symbols-outlined text-[18px]">edit</span>
         </button>
@@ -67,7 +69,7 @@ export const ReadingGoalsDashboard: React.FC<ReadingGoalsDashboardProps> = ({
         {goals.annualBookCount ? (
           <div className="space-y-2">
             <div className="flex justify-between items-end">
-              <span className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">Books Read</span>
+              <span className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">{t.readingGoals.booksRead}</span>
               <span className="font-serif-literata text-[18px] text-[#F4EFE6] font-bold leading-none">
                 {totalBooks} <span className="text-[12px] text-[#5A5044]">/ {goals.annualBookCount}</span>
               </span>
@@ -85,7 +87,7 @@ export const ReadingGoalsDashboard: React.FC<ReadingGoalsDashboardProps> = ({
         {goals.annualPageCount ? (
           <div className="space-y-2">
             <div className="flex justify-between items-end">
-              <span className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">Pages Read</span>
+              <span className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">{t.readingGoals.pagesRead}</span>
               <span className="font-serif-literata text-[18px] text-[#F4EFE6] font-bold leading-none">
                 {totalPages.toLocaleString()} <span className="text-[12px] text-[#5A5044]">/ {goals.annualPageCount.toLocaleString()}</span>
               </span>
@@ -103,7 +105,7 @@ export const ReadingGoalsDashboard: React.FC<ReadingGoalsDashboardProps> = ({
       {/* Genre Milestones */}
       {goals.genreMilestones && goals.genreMilestones.length > 0 && (
         <div className="pt-4 border-t border-[#3A332A]">
-          <h4 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider mb-3">Genre Milestones</h4>
+          <h4 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider mb-3">{t.readingGoals.genreMilestones}</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {goals.genreMilestones.map((gm, idx) => {
               // Exact match or partial match logic can be refined

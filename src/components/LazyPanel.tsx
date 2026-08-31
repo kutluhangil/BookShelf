@@ -1,4 +1,5 @@
 import React, { Suspense } from 'react';
+import { useT } from '../i18n/I18nProvider';
 
 interface LazyPanelState {
   error: Error | null;
@@ -25,22 +26,27 @@ class PanelBoundary extends React.Component<{ children: React.ReactNode; label: 
   render(): React.ReactNode {
     if (!this.state.error) return this.props.children;
 
-    return (
-      <div className="bg-[#1C1916] border border-[#3A332A] rounded-2xl p-6 min-h-[180px] flex flex-col items-center justify-center gap-3 text-center">
-        <span className="material-symbols-outlined text-[28px] text-[#C97A3F]">wifi_off</span>
-        <p className="font-sans-inter text-[13px] text-[#A79C8C] max-w-[240px]">
-          {this.props.label} could not load. It needs a connection the first time it is opened.
-        </p>
-        <button
-          onClick={this.handleRetry}
-          className="px-3 py-1.5 bg-[#262119] hairline-border rounded-lg font-mono-ibm text-[10px] text-[#C9963F] uppercase tracking-wider"
-        >
-          Retry
-        </button>
-      </div>
-    );
+    return <PanelFallback label={this.props.label} onRetry={this.handleRetry} />;
   }
 }
+
+/** Split out of the boundary so the copy can come from the i18n hook. */
+const PanelFallback: React.FC<{ label: string; onRetry: () => void }> = ({ label, onRetry }) => {
+  const t = useT();
+
+  return (
+    <div className="bg-[#1C1916] border border-[#3A332A] rounded-2xl p-6 min-h-[180px] flex flex-col items-center justify-center gap-3 text-center">
+      <span className="material-symbols-outlined text-[28px] text-[#C97A3F]">wifi_off</span>
+      <p className="font-sans-inter text-[13px] text-[#A79C8C] max-w-[240px]">{t.lazyPanel.failed(label)}</p>
+      <button
+        onClick={onRetry}
+        className="px-3 py-1.5 bg-[#262119] hairline-border rounded-lg font-mono-ibm text-[10px] text-[#C9963F] uppercase tracking-wider"
+      >
+        {t.common.retry}
+      </button>
+    </div>
+  );
+};
 
 const Skeleton: React.FC = () => (
   <div className="bg-[#1C1916] border border-[#3A332A] rounded-2xl p-6 min-h-[180px] flex items-center justify-center">

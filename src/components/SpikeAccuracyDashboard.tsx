@@ -3,6 +3,7 @@ import { SPIKE_DATASET } from '../data/spikeDataset';
 import { SpikeSample } from '../types';
 import { haptic } from '../services/haptics';
 import { runBenchmark, measureSample } from '../services/matchBenchmark';
+import { useT } from '../i18n/I18nProvider';
 
 interface SpikeAccuracyDashboardProps {
   onClose: () => void;
@@ -13,6 +14,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
   onClose,
   onTestSampleInScanner,
 }) => {
+  const t = useT();
   const [selectedSample, setSelectedSample] = useState<SpikeSample>(SPIKE_DATASET[0]);
   const [activeTab, setActiveTab] = useState<'matrix' | 'markdown' | 'checklist'>('matrix');
 
@@ -30,32 +32,11 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
   // that says whether the matcher works; coverage says how far it can reach.
   const isGatePassed = avgMatchAccuracy >= 0.9 && ambiguityRate <= 0.2;
 
-  const categories = [
-    {
-      key: 'good_light',
-      name: '1. Good Light / Thick Spines',
-      target: '6 Photos (Ideal baseline)',
-      samples: SPIKE_DATASET.filter((s) => s.category === 'good_light'),
-    },
-    {
-      key: 'warm_angle',
-      name: '2. Warm Tungsten / 10–25° Angle',
-      target: '6 Photos (Real living room)',
-      samples: SPIKE_DATASET.filter((s) => s.category === 'warm_angle'),
-    },
-    {
-      key: 'thin_spines',
-      name: '3. Thin Spines / Pocket Books',
-      target: '4 Photos (High density)',
-      samples: SPIKE_DATASET.filter((s) => s.category === 'thin_spines'),
-    },
-    {
-      key: 'turkish_classics',
-      name: '4. Turkish Literature Weighted',
-      target: '4 Photos (İletişim, YKY, Dergah)',
-      samples: SPIKE_DATASET.filter((s) => s.category === 'turkish_classics'),
-    },
-  ];
+  const categories = (['good_light', 'warm_angle', 'thin_spines', 'turkish_classics'] as const).map((key) => ({
+    key,
+    ...t.spike.categories[key],
+    samples: SPIKE_DATASET.filter((s) => s.category === key),
+  }));
 
   return (
     <div className="fixed inset-0 z-50 bg-[#12100E] text-[#F4EFE6] flex flex-col overflow-hidden">
@@ -68,14 +49,14 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-serif-literata text-[20px] text-[#F4EFE6] font-bold">
-                Phase 0 Spike — Accuracy Benchmark Report
+                {t.spike.title}
               </h2>
               <span className="px-2 py-0.5 rounded bg-[#6E8F6A]/20 text-[#C8ECC1] border border-[#6E8F6A]/40 font-mono-ibm text-[10px] font-bold">
-                GATE: {isGatePassed ? 'PASSED (GO)' : 'FAIL (NO-GO)'}
+                {isGatePassed ? t.spike.gatePassed : t.spike.gateFailed}
               </span>
             </div>
             <p className="font-sans-inter text-[12px] text-[#A79C8C]">
-              20 Benchmark Shelf Dataset (§7.3 & §8 Evaluation Matrix)
+              {t.spike.subtitle}
             </p>
           </div>
         </div>
@@ -96,10 +77,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
       <div className="px-4 sm:px-6 py-2.5 bg-[#3A2412] border-b border-[#C9963F]/40 flex items-start gap-2">
         <span className="material-symbols-outlined text-[18px] text-[#F5BD62] shrink-0">science</span>
         <p className="font-sans-inter text-[12px] text-[#F5BD62] leading-relaxed">
-          <strong className="font-semibold">Measured locally.</strong> Computed now, in your browser, by running the
-          trigram catalog matcher against the bundled samples' known ground truth. Accuracy covers only the books the
-          local catalog contains — coverage reports the rest. Spine detection runs on the server-side vision model and
-          is not measured here.
+          <strong className="font-semibold">{t.spike.measuredLocallyLead}</strong> {t.spike.measuredLocallyBody}
         </p>
       </div>
 
@@ -116,7 +94,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
               : 'border-transparent text-[#A79C8C] hover:text-[#F4EFE6]'
           }`}
         >
-          METRICS & DATASET INSPECTOR
+          {t.spike.tabMetrics}
         </button>
         <button
           onClick={() => {
@@ -142,7 +120,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
               : 'border-transparent text-[#A79C8C] hover:text-[#F4EFE6]'
           }`}
         >
-          GATE CRITERIA CHECKLIST
+          {t.spike.tabChecklist}
         </button>
       </div>
 
@@ -152,52 +130,52 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div className="bg-[#1C1916] rounded-xl p-4 hairline-border">
             <div className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider mb-1">
-              TOTAL SAMPLES / VOLUMES
+              {t.spike.totalSamples}
             </div>
             <div className="font-serif-literata text-[28px] text-[#F4EFE6] font-bold">
               20 / {totalBooks}
             </div>
             <div className="font-sans-inter text-[11px] text-[#9C8F7E] mt-1">
-              4 distinct realistic lighting & angle buckets
+              {t.spike.buckets}
             </div>
           </div>
 
           <div className="bg-[#1C1916] rounded-xl p-4 hairline-border border-[#6E8F6A]/30">
             <div className="font-mono-ibm text-[11px] text-[#C8ECC1] uppercase tracking-wider mb-1 flex justify-between">
-              <span>CATALOG COVERAGE</span>
-              <span>{benchmark.catalogSize} ENTRIES</span>
+              <span>{t.spike.catalogCoverage}</span>
+              <span>{t.spike.entries(benchmark.catalogSize)}</span>
             </div>
             <div className="font-serif-literata text-[28px] text-[#C8ECC1] font-bold">
               {(catalogCoverage * 100).toFixed(1)}%
             </div>
             <div className="font-sans-inter text-[11px] text-[#6E8F6A] mt-1">
-              {benchmark.totals.coveredCount} of {totalBooks} sample books are in the local catalog
+              {t.spike.coverageDetail(benchmark.totals.coveredCount, totalBooks)}
             </div>
           </div>
 
           <div className="bg-[#1C1916] rounded-xl p-4 hairline-border border-[#6E8F6A]/30">
             <div className="font-mono-ibm text-[11px] text-[#C8ECC1] uppercase tracking-wider mb-1 flex justify-between">
-              <span>TOP-1 MATCH ACCURACY</span>
-              <span>GATE: &gt;90%</span>
+              <span>{t.spike.top1Accuracy}</span>
+              <span>{t.spike.gateAbove90}</span>
             </div>
             <div className="font-serif-literata text-[28px] text-[#C8ECC1] font-bold">
               {(avgMatchAccuracy * 100).toFixed(1)}%
             </div>
             <div className="font-sans-inter text-[11px] text-[#6E8F6A] mt-1">
-              {((avgMatchAccuracy - 0.9) * 100).toFixed(1)}% vs gate, over covered books
+              {t.spike.vsGate(((avgMatchAccuracy - 0.9) * 100).toFixed(1))}
             </div>
           </div>
 
           <div className="bg-[#1C1916] rounded-xl p-4 hairline-border border-[#6E8F6A]/30">
             <div className="font-mono-ibm text-[11px] text-[#C8ECC1] uppercase tracking-wider mb-1 flex justify-between">
-              <span>AMBIGUOUS MATCHES</span>
-              <span>GATE: &lt;20%</span>
+              <span>{t.spike.ambiguousMatches}</span>
+              <span>{t.spike.gateBelow20}</span>
             </div>
             <div className="font-serif-literata text-[28px] text-[#C8ECC1] font-bold">
               {(ambiguityRate * 100).toFixed(1)}%
             </div>
             <div className="font-sans-inter text-[11px] text-[#6E8F6A] mt-1">
-              runner-up within 0.08 of the top score
+              {t.spike.runnerUp}
             </div>
           </div>
         </div>
@@ -229,13 +207,13 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
 
                       <div className="flex gap-2 font-mono-ibm text-[10px]">
                         <span className="px-2 py-0.5 rounded bg-[#100E0C] hairline-border text-[#C8ECC1]">
-                          REC: {(catRecall * 100).toFixed(0)}%
+                          {t.spike.rec((catRecall * 100).toFixed(0))}
                         </span>
                         <span className="px-2 py-0.5 rounded bg-[#100E0C] hairline-border text-[#F5BD62]">
-                          TXT: {(catText * 100).toFixed(0)}%
+                          {t.spike.txt((catText * 100).toFixed(0))}
                         </span>
                         <span className="px-2 py-0.5 rounded bg-[#100E0C] hairline-border text-[#C9963F]">
-                          E2E: {(catE2E * 100).toFixed(0)}%
+                          {t.spike.e2e((catE2E * 100).toFixed(0))}
                         </span>
                       </div>
                     </div>
@@ -267,7 +245,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
                               {sample.name.split('—')[1] || sample.name}
                             </p>
                             <p className="font-sans-inter text-[10px] text-[#A79C8C]">
-                              {sample.bookCount} books • {sample.angle}
+                              {t.spike.sampleMeta(sample.bookCount, sample.angle)}
                             </p>
                           </div>
                         );
@@ -284,14 +262,14 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <span className="font-mono-ibm text-[10px] text-[#C9963F] uppercase tracking-wider">
-                      SAMPLE DETAIL INSPECTOR
+                      {t.spike.inspector}
                     </span>
                     <h3 className="font-serif-literata text-[20px] text-[#F4EFE6] font-semibold">
                       {selectedSample.name}
                     </h3>
                   </div>
                   <span className="font-mono-ibm text-[11px] text-[#A79C8C] px-2 py-0.5 rounded bg-[#100E0C] hairline-border">
-                    {selectedSample.bookCount} VOLS
+                    {t.spike.vols(selectedSample.bookCount)}
                   </span>
                 </div>
 
@@ -309,19 +287,19 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
                 {/* Sample Metrics */}
                 <div className="grid grid-cols-3 gap-2 mb-4 font-mono-ibm text-center">
                   <div className="bg-[#12100E] p-2 rounded hairline-border">
-                    <span className="text-[9px] text-[#A79C8C] block">COVERAGE</span>
+                    <span className="text-[9px] text-[#A79C8C] block">{t.spike.coverageShort}</span>
                     <span className="text-[14px] text-[#C8ECC1] font-bold">
                       {(selectedMeasurement.coverage * 100).toFixed(0)}%
                     </span>
                   </div>
                   <div className="bg-[#12100E] p-2 rounded hairline-border">
-                    <span className="text-[9px] text-[#A79C8C] block">MATCH</span>
+                    <span className="text-[9px] text-[#A79C8C] block">{t.spike.matchShort}</span>
                     <span className="text-[14px] text-[#F5BD62] font-bold">
                       {(selectedMeasurement.matchAccuracy * 100).toFixed(0)}%
                     </span>
                   </div>
                   <div className="bg-[#12100E] p-2 rounded hairline-border">
-                    <span className="text-[9px] text-[#A79C8C] block">AMBIG</span>
+                    <span className="text-[9px] text-[#A79C8C] block">{t.spike.ambigShort}</span>
                     <span className="text-[14px] text-[#C9963F] font-bold">
                       {(selectedMeasurement.ambiguityRate * 100).toFixed(0)}%
                     </span>
@@ -331,7 +309,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
                 {/* Ground Truth Titles */}
                 <div className="space-y-2 mb-4">
                   <span className="font-mono-ibm text-[10px] text-[#A79C8C] uppercase tracking-wider block">
-                    GROUND TRUTH VOLUMES ({selectedSample.groundTruth.length})
+                    {t.spike.groundTruth(selectedSample.groundTruth.length)}
                   </span>
                   <div className="max-h-52 overflow-y-auto no-scrollbar space-y-1.5 pr-1">
                     {selectedSample.groundTruth.map((gt, i) => (
@@ -348,7 +326,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
                         <div
                           className="w-3 h-3 rounded-full shrink-0 border border-white/20"
                           style={{ backgroundColor: gt.color }}
-                          title="Spine color"
+                          title={t.spike.spineColor}
                         />
                       </div>
                     ))}
@@ -365,7 +343,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
                     className="w-full py-2.5 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] rounded-lg font-mono-ibm text-[11px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
                   >
                     <span className="material-symbols-outlined text-[16px]">play_arrow</span>
-                    <span>Test This Sample In Scanner</span>
+                    <span>{t.spike.testInScanner}</span>
                   </button>
                 )}
               </div>
@@ -375,79 +353,29 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
 
         {activeTab === 'markdown' && (
           <div className="bg-[#1C1916] rounded-xl p-6 hairline-border font-mono-ibm text-[13px] text-[#D4CDA8] whitespace-pre-wrap leading-relaxed">
-            {`# Spike Accuracy Report — Phase 0
-
-> **Date:** August 26, 2026
-> **Dataset Size:** 20 Shelf Photos across 4 Realistic Buckets
-> **Total Volumes Evaluated:** ${totalBooks} physical books
-> **Evaluator:** Spike Agent (A0)
-
----
-
-## 1. Executive Summary & Gate Decision
-
-| Metric | Phase 0 Gate Target | Measured Spike Result | Status |
-|---|---|---|---|
-| **Catalog coverage** | informational | **${(catalogCoverage * 100).toFixed(1)}%** | ${benchmark.totals.coveredCount}/${totalBooks} books |
-| **Top-1 match accuracy** | ≥ 90% | **${(avgMatchAccuracy * 100).toFixed(1)}%** | ${avgMatchAccuracy >= 0.9 ? '**PASS**' : '**FAIL**'} |
-| **Ambiguous matches** | ≤ 20% | **${(ambiguityRate * 100).toFixed(1)}%** | ${ambiguityRate <= 0.2 ? '**PASS**' : '**FAIL**'} |
-
-**OUTCOME: ${isGatePassed ? 'PASSED' : 'FAILED'}** — measured live in ${benchmark.totals.durationMs.toFixed(0)}ms against ${benchmark.catalogSize} catalog entries.
-Scope: the local catalog matching layer only. Accuracy is computed over the books the catalog actually contains; coverage reports the rest. Spine detection runs on the server-side vision model and is not covered here.
-
----
-
-## 2. Category Performance Matrix
-
-### Bucket 1: Good Light, Flat Angle, Thick Spines (6 Photos)
-- **Segmentation Recall:** 100.0%
-- **Text Capture Rate:** 89.8%
-- **End-to-End Accuracy:** 89.8%
-- *Notes:* Near-perfect bounding box detection. Trigram matcher scores exceed 0.90 for standard Latin publishing titles.
-
-### Bucket 2: Warm Tungsten / 10–25° Angle (6 Photos)
-- **Segmentation Recall:** 89.1%
-- **Text Capture Rate:** 77.8%
-- **End-to-End Accuracy:** 68.7%
-- *Notes:* 4-orientation OCR captures angled spines accurately. Bounding box projection onto spine perpendicular axis handles up to 25° roll without pre-warping degradation.
-
-### Bucket 3: Thin Spines / Pocket Books (4 Photos)
-- **Segmentation Recall:** 84.0%
-- **Text Capture Rate:** 72.3%
-- **End-to-End Accuracy:** 66.3%
-- *Notes:* Splitting candidates wider than 1.8x median width prevents merged spines on pocket series (Kafka, Penguin Moderns).
-
-### Bucket 4: Turkish Literature Heavy (4 Photos)
-- **Segmentation Recall:** 90.3%
-- **Text Capture Rate:** 83.0%
-- **End-to-End Accuracy:** 80.5%
-- *Notes:* Character unaccenting and Turkish I/İ handling resolves İletişim, Dergâh, and YKY typography robustly.
-
----
-
-## 3. Algorithm Findings (§7.3)
-1. 4-orientation OCR (0°, 90°, 180°, 270°) is essential for Turkish vs English spine directions.
-2. 3-tier confidence bands correctly route 76.8% directly into 'MATCHED', 18.2% into 'REVIEW', and only 5.0% into 'UNKNOWN'.
-3. On-device crop preservation keeps high visual fidelity without transmitting user shelf photos to external cloud servers.`}
+            {t.spike.report({
+              totalBooks,
+              coverage: (catalogCoverage * 100).toFixed(1),
+              coveredCount: benchmark.totals.coveredCount,
+              matchAccuracy: (avgMatchAccuracy * 100).toFixed(1),
+              matchPassed: avgMatchAccuracy >= 0.9,
+              ambiguity: (ambiguityRate * 100).toFixed(1),
+              ambiguityPassed: ambiguityRate <= 0.2,
+              gatePassed: isGatePassed,
+              durationMs: benchmark.totals.durationMs.toFixed(0),
+              catalogSize: benchmark.catalogSize,
+            })}
           </div>
         )}
 
         {activeTab === 'checklist' && (
           <div className="bg-[#1C1916] rounded-xl p-6 hairline-border space-y-4 font-sans-inter">
             <h3 className="font-serif-literata text-[20px] text-[#F4EFE6] font-semibold">
-              Blueprint Acceptance Criteria Checklist
+              {t.spike.checklistTitle}
             </h3>
 
             <div className="space-y-3">
-              {[
-                { label: 'Segmentation recall ≥ 85% on 20 benchmark photos', done: true },
-                { label: 'Text capture rate ≥ 70% with 4-orientation OCR', done: true },
-                { label: 'End-to-end matching accuracy ≥ 65% across 4 light/angle buckets', done: true },
-                { label: 'Noise filtering removes non-alphanumeric artifacts', done: true },
-                { label: 'Turkish character normalization (İ/I, unaccent, stop words) operational', done: true },
-                { label: '3-tier confidence bands (≥0.82 Matched, 0.45-0.82 Review, <0.45 Unknown)', done: true },
-                { label: 'Privacy boundary: raw shelf crops remain strictly client-side', done: true },
-              ].map((item, i) => (
+              {t.spike.checklist.map((label, i) => (
                 <div
                   key={i}
                   className="flex items-center gap-3 p-3 bg-[#12100E] rounded-lg hairline-border"
@@ -455,7 +383,7 @@ Scope: the local catalog matching layer only. Accuracy is computed over the book
                   <span className="material-symbols-outlined text-[#6E8F6A] text-[20px]">
                     check_circle
                   </span>
-                  <span className="text-[14px] text-[#F4EFE6]">{item.label}</span>
+                  <span className="text-[14px] text-[#F4EFE6]">{label}</span>
                 </div>
               ))}
             </div>

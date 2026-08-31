@@ -4,6 +4,7 @@ import { ShelfStrip } from './ShelfStrip';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
+import { useT } from '../i18n/I18nProvider';
 
 interface ScanResultsViewProps {
   sourceImageUrl: string;
@@ -22,6 +23,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
   onSaveMatchedBooks,
   onDiscard,
 }) => {
+  const t = useT();
   const [isBannerCollapsed, setIsBannerCollapsed] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(
     new Set(candidates.filter((c) => c.confidence === 'matched' && !c.isDismissed).map((c) => c.id))
@@ -57,11 +59,11 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
               <span className="font-mono-ibm text-[11px] text-[#C9963F] font-semibold tracking-widest uppercase">
-                DETECTED {candidates.length} SPINES
+                {t.scanResults.detected(candidates.length)}
               </span>
               <span className="text-[#3A332A]">|</span>
               <span className="font-mono-ibm text-[11px] text-[#A79C8C]">
-                {matched.length} MATCHED • {needsReview.length} REVIEW • {unrecognized.length} UNKNOWN
+                {t.scanResults.breakdown(matched.length, needsReview.length, unrecognized.length)}
               </span>
             </div>
 
@@ -72,7 +74,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
               }}
               className="text-[#A79C8C] hover:text-[#F4EFE6] font-mono-ibm text-[11px] flex items-center gap-1"
             >
-              <span>{isBannerCollapsed ? 'EXPAND' : 'COLLAPSE'}</span>
+              <span>{isBannerCollapsed ? t.scanResults.expand : t.scanResults.collapse}</span>
               <span className="material-symbols-outlined text-[16px]">
                 {isBannerCollapsed ? 'expand_more' : 'expand_less'}
               </span>
@@ -83,7 +85,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
             <div className="relative w-full h-32 sm:h-40 rounded-xl overflow-hidden hairline-border mb-3 bg-[#100E0C]">
               <img
                 src={sourceImageUrl}
-                alt="Source shelf"
+                alt={t.scanResults.sourceAlt}
                 className="w-full h-full object-cover grayscale-[30%]"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
@@ -119,8 +121,8 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
               className="opacity-90 hover:opacity-100"
             />
             <div className="flex justify-between font-mono-ibm text-[9px] text-[#9C8F7E] px-1">
-              <span>SPINE #1</span>
-              <span>SPINE #{candidates.length}</span>
+              <span>{t.scanResults.spineIndex(1)}</span>
+              <span>{t.scanResults.spineIndex(candidates.length)}</span>
             </div>
           </div>
         </div>
@@ -135,11 +137,11 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-[#C9963F]" />
                 <h3 className="font-serif-literata text-[18px] sm:text-[20px] text-[#F5BD62] font-semibold">
-                  Needs Review ({needsReview.length})
+                  {t.scanResults.needsReview(needsReview.length)}
                 </h3>
               </div>
               <span className="font-mono-ibm text-[11px] text-[#A79C8C]">
-                Multiple editions found
+                {t.scanResults.multipleEditions}
               </span>
             </div>
 
@@ -157,7 +159,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                     <div className="w-12 h-16 shrink-0 bg-[#100E0C] rounded overflow-hidden border border-[#3A332A]">
                       <img
                         src={cand.cropUrl}
-                        alt="Candidate crop"
+                        alt={t.scanResults.candidateAlt}
                         className="w-full h-full object-cover grayscale-[20%]"
                       />
                     </div>
@@ -170,13 +172,13 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                         {cand.editions[0]?.title || cand.rawTextForward}
                       </h4>
                       <p className="font-sans-inter text-[13px] text-[#A79C8C] truncate">
-                        {cand.editions[0]?.author || 'Ambiguous typography reading'}
+                        {cand.editions[0]?.author || t.scanResults.ambiguousReading}
                       </p>
                     </div>
                   </div>
 
                   <button className="px-3 py-1.5 bg-[#C9963F]/20 text-[#C9963F] font-mono-ibm text-[11px] font-semibold rounded-lg shrink-0 group-hover:bg-[#C9963F] group-hover:text-[#12100E] transition-all flex items-center gap-1">
-                    <span>RESOLVE</span>
+                    <span>{t.bookCard.resolve}</span>
                     <span className="material-symbols-outlined text-[15px]">chevron_right</span>
                   </button>
                 </div>
@@ -192,7 +194,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-[#6E8F6A]" />
                 <h3 className="font-serif-literata text-[18px] sm:text-[20px] text-[#C8ECC1] font-semibold">
-                  Matched Books ({matched.length})
+                  {t.scanResults.matchedBooks(matched.length)}
                 </h3>
               </div>
               <button
@@ -206,7 +208,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                 }}
                 className="font-mono-ibm text-[11px] text-[#A79C8C] hover:text-[#F4EFE6]"
               >
-                {selectedCandidates.size === matched.length ? 'DESELECT ALL' : 'SELECT ALL'}
+                {selectedCandidates.size === matched.length ? t.scanResults.deselectAll : t.scanResults.selectAll}
               </button>
             </div>
 
@@ -277,11 +279,11 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-[#A9503F]" />
                 <h3 className="font-serif-literata text-[18px] sm:text-[20px] text-[#FFB4AB] font-semibold">
-                  Unrecognized Spines ({unrecognized.length})
+                  {t.scanResults.unrecognized(unrecognized.length)}
                 </h3>
               </div>
               <span className="font-mono-ibm text-[11px] text-[#A79C8C]">
-                Below confidence threshold
+                {t.scanResults.belowThreshold}
               </span>
             </div>
 
@@ -295,7 +297,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                     <div className="w-10 h-14 shrink-0 bg-[#100E0C] rounded overflow-hidden border border-[#3A332A]">
                       <img
                         src={cand.cropUrl}
-                        alt="Unrecognized spine crop"
+                        alt={t.scanResults.unrecognizedAlt}
                         className="w-full h-full object-cover grayscale"
                       />
                     </div>
@@ -304,7 +306,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                         <ConfidenceBadge level="unknown" score={cand.score} showScore />
                       </div>
                       <p className="font-mono-ibm text-[11px] text-[#9C8F7E] truncate">
-                        RAW: {cand.rawTextForward || 'Unreadable embossing / spine reflection'}
+                        {t.scanResults.raw(cand.rawTextForward || t.scanResults.unreadable)}
                       </p>
                     </div>
                   </div>
@@ -316,7 +318,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                     }}
                     className="px-3 py-1.5 bg-[#262119] hover:bg-[#304E2E]/40 text-[#C9963F] hairline-border rounded font-mono-ibm text-[11px] font-semibold shrink-0"
                   >
-                    IDENTIFY
+                    {t.scanResults.identify}
                   </button>
                 </div>
               ))}
@@ -330,10 +332,10 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
         <div className="max-w-[800px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-center sm:text-left">
             <p className="font-mono-ibm text-[12px] text-[#F4EFE6] font-semibold">
-              {selectedCandidates.size} OF {matched.length + needsReview.length} BOOKS SELECTED
+              {t.scanResults.selectedCount(selectedCandidates.size, matched.length + needsReview.length)}
             </p>
             <p className="font-sans-inter text-[11px] text-[#A79C8C]">
-              Ready to save into Physical Library Archive
+              {t.scanResults.readyToSave}
             </p>
           </div>
 
@@ -345,7 +347,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
               }}
               className="px-4 py-2.5 rounded-xl hairline-border text-[#A79C8C] hover:text-[#F4EFE6] hover:bg-[#1C1916] font-sans-inter text-[13px] transition-colors"
             >
-              Discard
+              {t.scanResults.discard}
             </button>
 
             {needsReview.length > 0 ? (
@@ -356,7 +358,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                 }}
                 className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-[#262119] hover:bg-[#304E2E]/40 hairline-border border-[#C9963F] text-[#C9963F] font-mono-ibm text-[12px] font-semibold tracking-wider transition-all"
               >
-                REVIEW {needsReview.length} ISSUES
+                {t.scanResults.reviewIssues(needsReview.length)}
               </button>
             ) : null}
 
@@ -365,7 +367,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
               disabled={selectedCandidates.size === 0}
               className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] font-mono-ibm text-[12px] font-bold tracking-wider transition-all shadow-[0_4px_16px_rgba(201,150,63,0.35)] disabled:opacity-40 disabled:pointer-events-none"
             >
-              ADD {selectedCandidates.size} MATCHED BOOKS
+              {t.scanResults.addMatched(selectedCandidates.size)}
             </button>
           </div>
         </div>

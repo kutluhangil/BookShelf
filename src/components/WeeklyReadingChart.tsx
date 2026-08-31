@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Book } from '../types';
+import { useI18n } from '../i18n/I18nProvider';
 import {
   BarChart,
   Bar,
@@ -15,6 +16,8 @@ interface WeeklyReadingChartProps {
 }
 
 export const WeeklyReadingChart: React.FC<WeeklyReadingChartProps> = ({ books }) => {
+  const { t, locale } = useI18n();
+
   const data = useMemo(() => {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
@@ -25,13 +28,13 @@ export const WeeklyReadingChart: React.FC<WeeklyReadingChartProps> = ({ books })
       const start = new Date(end.getTime() - (6 * 24 * 60 * 60 * 1000));
       start.setHours(0, 0, 0, 0);
       
-      const startStr = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      const endStr = end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const startStr = start.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+      const endStr = end.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
       
       return {
         start,
         end,
-        label: i === 0 ? 'This Week' : `${startStr} - ${endStr}`,
+        label: i === 0 ? t.weeklyChart.thisWeek : `${startStr} - ${endStr}`,
         seconds: 0,
         minutes: 0
       };
@@ -57,7 +60,7 @@ export const WeeklyReadingChart: React.FC<WeeklyReadingChartProps> = ({ books })
       ...b,
       minutes: Math.round(b.seconds / 60)
     }));
-  }, [books]);
+  }, [books, locale, t]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -65,7 +68,7 @@ export const WeeklyReadingChart: React.FC<WeeklyReadingChartProps> = ({ books })
         <div className="bg-[#151311] border border-[#3A332A] p-3 rounded-xl shadow-lg">
           <p className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider mb-1">{label}</p>
           <p className="font-sans-inter text-[14px] text-[#F4EFE6] font-bold">
-            {payload[0].value} <span className="text-[12px] font-normal text-[#A79C8C]">minutes</span>
+            {payload[0].value} <span className="text-[12px] font-normal text-[#A79C8C]">{t.weeklyChart.minutesUnit}</span>
           </p>
         </div>
       );
@@ -78,7 +81,7 @@ export const WeeklyReadingChart: React.FC<WeeklyReadingChartProps> = ({ books })
       <div className="flex items-center gap-2">
         <span className="material-symbols-outlined text-[16px] text-[#C9963F]">bar_chart</span>
         <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold">
-          Weekly Reading Time
+          {t.weeklyChart.title}
         </h3>
       </div>
       
@@ -100,7 +103,7 @@ export const WeeklyReadingChart: React.FC<WeeklyReadingChartProps> = ({ books })
               fontFamily="var(--font-ibm)"
               tickLine={false} 
               axisLine={false} 
-              tickFormatter={(val) => `${val}m`} 
+              tickFormatter={(val) => t.common.minutesShort(val)} 
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: '#262119', opacity: 0.5 }} />
             <Bar dataKey="minutes" radius={[4, 4, 0, 0]}>

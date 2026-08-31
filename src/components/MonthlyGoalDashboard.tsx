@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Book } from '../types';
+import { useT } from '../i18n/I18nProvider';
 
 interface MonthlyGoalDashboardProps {
   books: Book[];
@@ -12,6 +13,7 @@ export const MonthlyGoalDashboard: React.FC<MonthlyGoalDashboardProps> = ({
   monthlyGoal,
   onUpdateGoal,
 }) => {
+  const t = useT();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(monthlyGoal.toString());
 
@@ -61,10 +63,10 @@ export const MonthlyGoalDashboard: React.FC<MonthlyGoalDashboardProps> = ({
     <section className="bg-[#1C1916] rounded-2xl hairline-border p-5 sm:p-6 flex items-center justify-between">
       <div className="flex-1">
         <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold">
-          Reading Goal
+          {t.monthlyGoal.title}
         </h3>
         <p className="font-mono-ibm text-[11px] text-[#A79C8C] mt-0.5 mb-4">
-          MONTHLY TARGET
+          {t.monthlyGoal.subtitle}
         </p>
 
         {isEditing ? (
@@ -80,13 +82,13 @@ export const MonthlyGoalDashboard: React.FC<MonthlyGoalDashboardProps> = ({
               autoFocus
               className="bg-[#262119] text-[#F4EFE6] border border-[#C9963F] rounded px-2 py-1 w-16 text-center font-mono-ibm focus:outline-none"
             />
-            <span className="text-[#A79C8C] text-[12px] font-mono-ibm uppercase">Books</span>
+            <span className="text-[#A79C8C] text-[12px] font-mono-ibm uppercase">{t.common.books}</span>
           </div>
         ) : (
           <div
             onClick={() => setIsEditing(true)}
             className="group cursor-pointer inline-flex flex-col items-start"
-            title="Click to edit goal"
+            title={t.monthlyGoal.editHint}
           >
             <div className="flex items-baseline gap-1.5">
               <span className="font-serif-literata text-[24px] sm:text-[28px] text-[#C9963F] font-bold leading-none">
@@ -97,7 +99,7 @@ export const MonthlyGoalDashboard: React.FC<MonthlyGoalDashboardProps> = ({
               </span>
             </div>
             <div className="text-[#5A5044] text-[10px] font-mono-ibm uppercase mt-1 group-hover:text-[#C9963F] transition-colors flex items-center gap-1">
-              <span>Edit Goal</span>
+              <span>{t.monthlyGoal.editGoal}</span>
               <span className="material-symbols-outlined text-[12px]">edit</span>
             </div>
           </div>

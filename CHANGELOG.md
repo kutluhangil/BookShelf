@@ -9,6 +9,7 @@ Newest entries at the top.
 - Fixed an unbounded memory leak in the rate limiter: expired per-IP entries are now swept.
 
 ### Added
+- Turkish interface with a TR/EN switch. Every string the app renders itself lives in a typed message catalog (`src/i18n/`); the locale is picked from the browser language on first load, and an explicit choice is remembered in local storage. Turkish is typed against the English catalog, so a missing key fails the build rather than showing a blank label. Dates, weekday names and number formatting follow the active locale.
 - Root `ErrorBoundary` with a "reset stored library" escape hatch, so a bad persisted record can no longer permanently brick the app on every reload.
 - GitHub Actions CI running type check, unit tests and build on every push and pull request.
 - Per-spine crops: each scan candidate gets its own thumbnail cut from the shelf photo, instead of every book showing the whole shelf as its proof of capture.
@@ -21,9 +22,10 @@ Newest entries at the top.
 - PWA support — installable, with an offline shell that runs the whole library with the server stopped.
 - Incremental rendering for the book grid, 60 at a time.
 - A live benchmark for the catalog matcher, replacing the Phase 0 dashboard's hard-coded figures.
-- Component tests with jsdom and Testing Library; 62 tests in total.
+- Component tests with jsdom and Testing Library; 71 tests in total.
 
 ### Changed
+- A user's cloud library moved from the top-level `books` and `shelves` collections into `users/{uid}/books` and `users/{uid}/shelves`. Ownership is now the document path: records no longer carry a `userId` field, reads need no `where` clause (and so no composite index), and the security rules collapse to a single uid comparison.
 - Camera frames are downscaled to 1280px before upload, cutting a 1-3MB payload per scan.
 - All AI calls go through a single `apiClient` that attaches credentials and surfaces the server's structured error detail.
 - Eagerly loaded JavaScript is down from one 1.65MB chunk to 634KB across three (gzip 447KB to 183KB): Firebase, ZXing and Recharts all load on demand.

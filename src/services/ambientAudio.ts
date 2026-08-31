@@ -6,18 +6,8 @@
 
 export type AmbientTrackId = 'rain' | 'fireplace' | 'library' | 'brown_noise';
 
-export interface AmbientTrack {
-  id: AmbientTrackId;
-  name: string;
-  description: string;
-}
-
-export const AMBIENT_TRACKS: AmbientTrack[] = [
-  { id: 'rain', name: 'Rain on Window', description: 'Filtered white noise with soft droplets' },
-  { id: 'fireplace', name: 'Cozy Fireplace', description: 'Low rumble with crackling embers' },
-  { id: 'library', name: 'Library Ambience', description: 'Distant murmur and page turns' },
-  { id: 'brown_noise', name: 'Deep Focus', description: 'Pure brown noise' },
-];
+/** Display names live in the i18n catalog; this module stays audio-only. */
+export const AMBIENT_TRACK_IDS: AmbientTrackId[] = ['rain', 'fireplace', 'library', 'brown_noise'];
 
 function createNoiseBuffer(ctx: AudioContext, type: 'white' | 'brown', seconds = 4): AudioBuffer {
   const length = ctx.sampleRate * seconds;

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ShelfStrip } from './ShelfStrip';
 import { haptic } from '../services/haptics';
 import { ModalShell } from './ModalShell';
+import { useT } from '../i18n/I18nProvider';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -15,35 +16,24 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   onClose,
   onStartScanning,
 }) => {
+  const t = useT();
   const [slide, setSlide] = useState(0);
 
   if (!isOpen) return null;
 
   const slides = [
     {
-      step: '01 / 03',
-      title: 'Digitize Your Library In Seconds',
-      subtitle: 'Simply point your camera at any physical bookshelf.',
-      description:
-        'Book Shelf analyzes physical book spines at any angle, extracting typography, colors, and author titles without manual entry.',
+      ...t.onboarding.slides[0],
       image: 'https://images.unsplash.com/photo-1507842229451-79b1be8d6293?q=80&w=900&auto=format&fit=crop',
       showStrip: false,
     },
     {
-      step: '02 / 03',
-      title: 'Tactile Spine Strips & 3-Tier Match',
-      subtitle: 'Color signatures matched with high-precision cataloging.',
-      description:
-        'Books are classified into Matched, Review, or Unknown. Multi-edition disambiguation allows selecting the exact physical print you own.',
+      ...t.onboarding.slides[1],
       image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=900&auto=format&fit=crop',
       showStrip: true,
     },
     {
-      step: '03 / 03',
-      title: 'Privacy-First Physical Archive',
-      subtitle: 'Your bookshelf photos never leave your device.',
-      description:
-        'Raw shelf images and crops are stored securely in local memory. Export and share your physical collection with stunning visual cards.',
+      ...t.onboarding.slides[2],
       image: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?q=80&w=900&auto=format&fit=crop',
       showStrip: false,
     },
@@ -53,7 +43,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
   return (
     <AnimatePresence>
-      <ModalShell isOpen={isOpen} onClose={onClose} label="Guide and onboarding" closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <ModalShell isOpen={isOpen} onClose={onClose} label={t.onboarding.dialogLabel} closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -74,13 +64,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           {/* Header */}
           <div className="p-4 px-6 border-b border-[#3A332A] flex justify-between items-center bg-[#181512]">
             <span className="font-mono-ibm text-[11px] text-[#C9963F] font-semibold tracking-widest uppercase">
-              {current.step} • INTRODUCTION
+              {t.onboarding.stepLabel(current.step)}
             </span>
             <button
               onClick={onClose}
               className="text-[#A79C8C] hover:text-[#F4EFE6] p-1 rounded-full text-xs font-mono-ibm tracking-wider uppercase"
             >
-              SKIP
+              {t.onboarding.skip}
             </button>
           </div>
 
@@ -142,7 +132,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   }}
                   className="w-full py-3 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] rounded-xl font-mono-ibm text-[12px] font-bold uppercase tracking-wider transition-all"
                 >
-                  NEXT STEP
+                  {t.onboarding.nextStep}
                 </button>
               ) : (
                 <button
@@ -154,7 +144,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   className="w-full py-3 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] rounded-xl font-mono-ibm text-[12px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[18px]">photo_camera</span>
-                  <span>START SCANNING SHELF</span>
+                  <span>{t.onboarding.startScanning}</span>
                 </button>
               )}
             </div>

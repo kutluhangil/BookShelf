@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Book } from '../types';
 import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
+import { useT } from '../i18n/I18nProvider';
 
 interface QueuedForReadingProps {
   books: Book[];
@@ -9,6 +10,8 @@ interface QueuedForReadingProps {
 }
 
 export const QueuedForReading: React.FC<QueuedForReadingProps> = ({ books, onSelectBook }) => {
+  const t = useT();
+
   const queuedBooks = useMemo(() => {
     // Priority: unread books with "priority", "next", "urgent", "high priority" tags
     const unread = books.filter(b => b.status === 'unread');
@@ -43,10 +46,10 @@ export const QueuedForReading: React.FC<QueuedForReadingProps> = ({ books, onSel
           queue_play_next
         </span>
         <h3 className="font-serif-literata text-[18px] text-[#F4EFE6] font-semibold">
-          Queued for Reading
+          {t.queued.title}
         </h3>
         <span className="ml-auto text-[11px] font-mono-ibm text-[#A79C8C] uppercase tracking-wider">
-          {queuedBooks.length} VOLUME{queuedBooks.length !== 1 ? 'S' : ''}
+          {t.queued.volumeCount(queuedBooks.length)}
         </span>
       </div>
 
@@ -92,7 +95,7 @@ export const QueuedForReading: React.FC<QueuedForReadingProps> = ({ books, onSel
                   </span>
                 )) || (
                   <span className="inline-block px-1.5 py-0.5 bg-[#262119] text-[#A79C8C] rounded text-[9px] font-mono-ibm uppercase tracking-wider">
-                    Up Next
+                    {t.queued.upNext}
                   </span>
                 )}
               </div>

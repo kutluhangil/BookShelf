@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Book } from '../types';
 import { RECOMMENDATION_CATALOG, CatalogBook } from '../data/recommendationCatalog';
 import { haptic } from '../services/haptics';
+import { useT } from '../i18n/I18nProvider';
 
 interface RecommendedBooksProps {
   books: Book[];
@@ -14,6 +15,8 @@ interface RecommendedItem extends CatalogBook {
 }
 
 export const RecommendedBooks: React.FC<RecommendedBooksProps> = ({ books, onAddBook }) => {
+  const t = useT();
+
   const recommendations = useMemo(() => {
     if (books.length === 0) return [];
 
@@ -43,13 +46,13 @@ export const RecommendedBooks: React.FC<RecommendedBooksProps> = ({ books, onAdd
 
       if (authorScore > 0) {
         score += authorScore * 3; // Author matches are weighted heavily
-        matchReason = `Because you read ${catalogBook.author}`;
+        matchReason = t.recommended.becauseAuthor(catalogBook.author);
       }
       
       if (categoryScore > 0) {
         score += categoryScore;
         if (!matchReason) {
-          matchReason = `Because you like ${catalogBook.category}`;
+          matchReason = t.recommended.becauseCategory(catalogBook.category);
         }
       }
 
@@ -57,14 +60,14 @@ export const RecommendedBooks: React.FC<RecommendedBooksProps> = ({ books, onAdd
       score += Math.random() * 0.5;
 
       if (score > 0) {
-        if (!matchReason) matchReason = 'Recommended for you';
+        if (!matchReason) matchReason = t.recommended.generic;
         scoredCatalog.push({ ...catalogBook, score, matchReason });
       }
     });
 
     // Sort by score descending and take the top 3
     return scoredCatalog.sort((a, b) => b.score - a.score).slice(0, 3);
-  }, [books]);
+  }, [books, t]);
 
   if (recommendations.length === 0) return null;
 
@@ -73,7 +76,7 @@ export const RecommendedBooks: React.FC<RecommendedBooksProps> = ({ books, onAdd
       <div className="flex items-center gap-2">
         <span className="material-symbols-outlined text-[16px] text-[#C9963F]">explore</span>
         <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold">
-          Recommended for You
+          {t.recommended.title}
         </h3>
       </div>
       
@@ -123,10 +126,10 @@ export const RecommendedBooks: React.FC<RecommendedBooksProps> = ({ books, onAdd
                     } as any); // using any for missing minor fields like isbn etc or passing just what we have
                   }}
                   className="px-3 py-1.5 bg-[#C9963F]/10 hover:bg-[#C9963F]/20 text-[#C9963F] rounded text-[11px] font-mono-ibm font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
-                  title="Add to Library"
+                  title={t.recommended.addToLibrary}
                 >
                   <span className="material-symbols-outlined text-[14px]">add</span>
-                  <span>ADD</span>
+                  <span>{t.recommended.add}</span>
                 </button>
               )}
             </div>

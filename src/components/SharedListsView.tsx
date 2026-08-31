@@ -15,6 +15,7 @@ import {
 import { isFirebaseConfigured, firebaseConfigError, type User } from '../lib/firebase';
 import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
+import { useT } from '../i18n/I18nProvider';
 
 interface SharedListsViewProps {
   books: Book[];
@@ -25,6 +26,7 @@ interface SharedListsViewProps {
 type Scope = 'mine' | 'public';
 
 export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, currentUser, onRequestLogin }) => {
+  const t = useT();
   const [scope, setScope] = useState<Scope>('mine');
   const [myLists, setMyLists] = useState<SharedList[]>([]);
   const [publicLists, setPublicLists] = useState<SharedList[]>([]);
@@ -99,12 +101,12 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
     claimInvitations(member)
       .then((claimed) => {
         if (claimed.length > 0) {
-          setNotice(`Joined ${claimed.length} list(s) you were invited to.`);
+          setNotice(t.sharedLists.joinedInvites(claimed.length));
           void loadLists();
         }
       })
       .catch((thrown) => setError(thrown instanceof Error ? thrown.message : String(thrown)));
-  }, [asMember, loadLists]);
+  }, [asMember, loadLists, t]);
 
   const activeList = [...myLists, ...publicLists].find((l) => l.id === activeListId) ?? null;
   const isOwner = activeList != null && currentUser != null && activeList.ownerId === currentUser.uid;
@@ -169,7 +171,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
           l.id === listId ? { ...l, invitedEmails: [...(l.invitedEmails ?? []), inviteEmail.trim().toLowerCase()] } : l
         )
       );
-      setNotice(`Invitation recorded for ${inviteEmail.trim().toLowerCase()}. They join automatically on sign-in.`);
+      setNotice(t.sharedLists.inviteRecorded(inviteEmail.trim().toLowerCase()));
       setInviteEmail('');
     });
 
@@ -204,14 +206,14 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
         <h3 className="font-serif-literata text-[18px] text-[#F4EFE6] group-hover:text-[#C9963F] transition-colors">
           {list.name}
         </h3>
-        <span className="material-symbols-outlined text-[16px] text-[#A79C8C]" title={list.isPublic ? 'Public' : 'Invite-only'}>
+        <span className="material-symbols-outlined text-[16px] text-[#A79C8C]" title={list.isPublic ? t.sharedLists.public : t.sharedLists.inviteOnly}>
           {list.isPublic ? 'public' : 'lock'}
         </span>
       </div>
-      <p className="text-[13px] text-[#A79C8C] mb-4 line-clamp-2">{list.description || 'No description'}</p>
+      <p className="text-[13px] text-[#A79C8C] mb-4 line-clamp-2">{list.description || t.sharedLists.noDescription}</p>
 
       <div className="flex items-center justify-between mt-auto">
-        <span className="text-[12px] text-[#8C8273] font-mono-ibm">{list.books.length} Books</span>
+        <span className="text-[12px] text-[#8C8273] font-mono-ibm">{t.sharedLists.bookCount(list.books.length)}</span>
         <div className="flex -space-x-2">
           {list.members.slice(0, 5).map((member, index) => (
             <div
@@ -244,7 +246,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
           }}
           className="mt-4 w-full py-2 bg-[#262119] hover:bg-[#3A332A] text-[#C9963F] rounded-lg font-mono-ibm text-[11px] font-bold uppercase tracking-wider transition-colors"
         >
-          Join list
+          {t.sharedLists.joinList}
         </button>
       )}
     </div>
@@ -258,10 +260,10 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
             <div>
               <h2 className="font-serif-literata text-[24px] text-[#F4EFE6] font-bold flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#C9963F] text-[28px]">group</span>
-                Shared Lists
+                {t.sharedLists.title}
               </h2>
               <p className="font-sans-inter text-[13px] text-[#A79C8C] mt-0.5">
-                Collaborate with friends or explore public collections
+                {t.sharedLists.subtitle}
               </p>
             </div>
             {currentUser && (
@@ -273,7 +275,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                 className="px-4 py-2 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] font-mono-ibm text-[12px] font-bold rounded-xl tracking-wider transition-all flex items-center gap-1.5 shadow-[0_4px_16px_rgba(201,150,63,0.3)]"
               >
                 <span className="material-symbols-outlined text-[18px]">add</span>
-                <span>CREATE LIST</span>
+                <span>{t.sharedLists.createList}</span>
               </button>
             )}
           </div>
@@ -287,7 +289,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                   scope === value ? 'bg-[#C9963F] text-[#12100E] font-bold' : 'bg-[#1C1916] text-[#A79C8C] hairline-border'
                 }`}
               >
-                {value === 'mine' ? `My lists (${myLists.length})` : `Public (${publicLists.length})`}
+                {value === 'mine' ? t.sharedLists.myLists(myLists.length) : t.sharedLists.publicLists(publicLists.length)}
               </button>
             ))}
           </div>
@@ -307,17 +309,16 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
           {!currentUser && (
             <div className="bg-[#262119] border border-[#C9963F]/30 rounded-xl p-6 text-center">
               <span className="material-symbols-outlined text-[32px] text-[#C9963F] mb-2">lock</span>
-              <h3 className="text-[#F4EFE6] font-serif-literata text-[18px] mb-2">Sign in to collaborate</h3>
+              <h3 className="text-[#F4EFE6] font-serif-literata text-[18px] mb-2">{t.sharedLists.signInTitle}</h3>
               <p className="text-[#A79C8C] text-[13px] max-w-md mx-auto mb-4">
-                You can browse public lists without an account, but creating lists, joining and adding books requires
-                signing in.
+                {t.sharedLists.signInBody}
               </p>
               {onRequestLogin && isFirebaseConfigured && (
                 <button
                   onClick={onRequestLogin}
                   className="px-4 py-2 bg-[#C9963F] text-[#12100E] rounded-xl font-mono-ibm text-[11px] font-bold uppercase tracking-wider"
                 >
-                  Sign in with Google
+                  {t.header.signInWithGoogle}
                 </button>
               )}
             </div>
@@ -327,14 +328,14 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
             <form onSubmit={handleCreateList} className="bg-[#1C1916] rounded-xl p-5 border border-[#C9963F]/50 space-y-4">
               <input
                 type="text"
-                placeholder="List name"
+                placeholder={t.sharedLists.namePlaceholder}
                 value={newListForm.name}
                 onChange={(event) => setNewListForm({ ...newListForm, name: event.target.value })}
                 className="w-full bg-[#12100E] text-[#F4EFE6] border border-[#3A332A] rounded-xl px-4 py-2.5 text-[14px] focus:border-[#C9963F] outline-none"
                 required
               />
               <textarea
-                placeholder="Description (optional)"
+                placeholder={t.sharedLists.descriptionPlaceholder}
                 value={newListForm.description}
                 onChange={(event) => setNewListForm({ ...newListForm, description: event.target.value })}
                 className="w-full bg-[#12100E] text-[#F4EFE6] border border-[#3A332A] rounded-xl px-4 py-2.5 text-[14px] focus:border-[#C9963F] outline-none min-h-[80px]"
@@ -348,18 +349,18 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                   className="accent-[#C9963F]"
                 />
                 <label htmlFor="isPublic" className="text-[13px] text-[#D4CDA8]">
-                  Make this list public (anyone can read and join it)
+                  {t.sharedLists.makePublic}
                 </label>
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setIsCreating(false)} className="px-4 py-2 text-[#A79C8C] hover:text-[#F4EFE6] text-sm">
-                  Cancel
+                  {t.common.cancel}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-[#2C251D] hover:bg-[#3A332A] text-[#C9963F] border border-[#C9963F]/30 rounded-lg text-sm font-bold tracking-wider"
                 >
-                  Save
+                  {t.common.save}
                 </button>
               </div>
             </form>
@@ -367,16 +368,14 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
 
           {isLoading ? (
             <div className="text-center text-[#A79C8C] py-10 font-mono-ibm text-[12px] uppercase tracking-widest">
-              Loading lists…
+              {t.sharedLists.loading}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {(scope === 'mine' ? myLists : publicLists).map((list) => renderListCard(list, scope === 'public' && !!currentUser))}
               {(scope === 'mine' ? myLists : publicLists).length === 0 && (
                 <div className="col-span-full text-center py-12 text-[#8C8273]">
-                  {scope === 'mine'
-                    ? 'No shared lists yet. Create one to get started.'
-                    : 'No public lists are available right now.'}
+                  {scope === 'mine' ? t.sharedLists.emptyMine : t.sharedLists.emptyPublic}
                 </div>
               )}
             </div>
@@ -384,9 +383,9 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
         </>
       ) : !activeList ? (
         <div className="space-y-4">
-          <p className="text-[#FF6B6B] text-[13px]">That list is no longer available.</p>
+          <p className="text-[#FF6B6B] text-[13px]">{t.sharedLists.listGone}</p>
           <button onClick={() => setActiveListId(null)} className="text-[#C9963F] font-mono-ibm text-[12px]">
-            BACK TO LISTS
+            {t.sharedLists.backToLists}
           </button>
         </div>
       ) : (
@@ -396,7 +395,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
             className="flex items-center gap-1 text-[#A79C8C] hover:text-[#C9963F] transition-colors text-[13px] font-mono-ibm"
           >
             <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-            BACK TO LISTS
+            {t.sharedLists.backToLists}
           </button>
 
           {error && (
@@ -436,17 +435,17 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                         onClick={() => void handleDelete(activeList.id)}
                         className="px-3 py-1.5 bg-[#A9503F] text-white rounded-lg font-mono-ibm text-[11px] font-bold uppercase"
                       >
-                        Confirm
+                        {t.common.confirm}
                       </button>
                       <button onClick={() => setPendingDeleteId(null)} className="px-2 text-[#A79C8C] text-[11px] font-mono-ibm">
-                        Cancel
+                        {t.common.cancel}
                       </button>
                     </div>
                   ) : (
                     <button
                       onClick={() => setPendingDeleteId(activeList.id)}
                       className="p-2 rounded-lg bg-[#262119] text-[#A79C8C] hover:text-[#FF6B6B] transition-colors"
-                      title="Delete list"
+                      title={t.sharedLists.deleteList}
                     >
                       <span className="material-symbols-outlined text-[18px]">delete</span>
                     </button>
@@ -456,7 +455,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
 
             {isOwner && (
               <div className="border-t border-[#3A332A] pt-5">
-                <h3 className="font-mono-ibm text-[12px] text-[#C9963F] mb-3 uppercase tracking-wider">Invite a reader</h3>
+                <h3 className="font-mono-ibm text-[12px] text-[#C9963F] mb-3 uppercase tracking-wider">{t.sharedLists.inviteReader}</h3>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="email"
@@ -470,19 +469,19 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                     disabled={!inviteEmail.trim()}
                     className="px-4 py-2 bg-[#262119] hover:bg-[#3A332A] text-[#C9963F] rounded-lg font-mono-ibm text-[11px] font-bold uppercase tracking-wider disabled:opacity-50"
                   >
-                    Invite
+                    {t.sharedLists.invite}
                   </button>
                 </div>
                 {(activeList.invitedEmails?.length ?? 0) > 0 && (
                   <p className="mt-2 text-[11px] font-mono-ibm text-[#8C8273]">
-                    Pending: {activeList.invitedEmails!.join(', ')}
+                    {t.sharedLists.pending(activeList.invitedEmails!.join(', '))}
                   </p>
                 )}
               </div>
             )}
 
             <div className="mt-8 border-t border-[#3A332A] pt-6">
-              <h3 className="font-mono-ibm text-[12px] text-[#C9963F] mb-4 uppercase tracking-wider">Books in this list</h3>
+              <h3 className="font-mono-ibm text-[12px] text-[#C9963F] mb-4 uppercase tracking-wider">{t.sharedLists.booksInList}</h3>
               {activeList.books.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {activeList.books.map((book) => (
@@ -501,7 +500,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                         <button
                           onClick={() => void handleRemoveBook(activeList.id, book.id)}
                           className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-[#A79C8C] hover:text-[#FF6B6B] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                          title="Remove from list"
+                          title={t.sharedLists.removeFromList}
                         >
                           <span className="material-symbols-outlined text-[14px]">close</span>
                         </button>
@@ -510,14 +509,14 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                   ))}
                 </div>
               ) : (
-                <p className="text-[#8C8273]">No books added yet.</p>
+                <p className="text-[#8C8273]">{t.sharedLists.noBooks}</p>
               )}
             </div>
 
             {isMember && (
               <div className="mt-8 border-t border-[#3A332A] pt-6">
                 <h3 className="font-mono-ibm text-[12px] text-[#C9963F] mb-4 uppercase tracking-wider">
-                  Add books from your library
+                  {t.sharedLists.addFromLibrary}
                 </h3>
                 <div className="flex overflow-x-auto gap-4 pb-4 snap-x">
                   {books
@@ -538,7 +537,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                           />
                         </div>
                         <span className="text-[10px] bg-[#3A332A] hover:bg-[#C9963F] text-[#D4CDA8] hover:text-[#12100E] px-2 py-1 rounded-full transition-colors w-full">
-                          ADD
+                          {t.recommended.add}
                         </span>
                       </button>
                     ))}
