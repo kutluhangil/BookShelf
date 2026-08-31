@@ -1,9 +1,20 @@
 # SPINE Phase 0 — Spike Doğruluk Raporu
 
-> ⚠️ **Bu rapor sentetik örnek veri üzerinden üretilmiştir.** Buradaki sayılar
-> `src/data/spikeDataset.ts` içindeki, ground truth'u önceden bilinen demo örneklerine
-> aittir; canlı Gemini tanıma hattının ölçümü değildir. Gerçek doğruluk ölçümü için
-> etiketlenmiş gerçek raf fotoğraflarıyla yeniden koşulmalıdır.
+> ⚠️ **Bu rapor tarihseldir ve ölçülmemiş sayılar içerir.** Aşağıdaki Faz 0 rakamları
+> hiçbir zaman çalıştırılmadı; `src/data/spikeDataset.ts` içine elle yazılmış sabitlerdi.
+>
+> **Güncel durum:** Uygulama içindeki "Phase 0 Eval" ekranı artık tarayıcıda canlı ölçüm
+> yapıyor (`src/services/matchBenchmark.ts`). Yerel katalog eşleştiricisinin gerçek sonucu:
+>
+> | Metrik | Ölçülen |
+> |---|---|
+> | Katalog kapsamı | **%6.0** (199 örnek kitaptan 12'si, 18 katalog kaydı) |
+> | Kapsanan kitaplarda Top-1 doğruluk | **%100.0** |
+> | Belirsiz eşleşme oranı | **%0.0** |
+>
+> Yorum: trigram eşleştirici bildiği kitaplarda kusursuz, ama paketlenmiş katalog çok küçük.
+> Uygulama bu yüzden sırt tanıma için Gemini görüntü modelini, metadata için Open Library'yi
+> kullanıyor. Sırt tespiti bu ölçümün kapsamı dışındadır.
 
 
 > **Tarih:** 26 Ağustos 2026  

@@ -130,6 +130,17 @@ const LOCAL_CATALOG: CatalogEntry[] = (() => {
   return Array.from(entries.values());
 })();
 
+/** Exposed so the benchmark can measure the matcher directly. */
+export function rankCatalogEntries(query: string, limit = 3): Array<{ entry: CatalogEntry; score: number }> {
+  return rankCatalog(query, limit);
+}
+
+export type { CatalogEntry };
+
+export function catalogSize(): number {
+  return LOCAL_CATALOG.length;
+}
+
 function rankCatalog(query: string, limit: number): Array<{ entry: CatalogEntry; score: number }> {
   return LOCAL_CATALOG.map((entry) => ({
     entry,

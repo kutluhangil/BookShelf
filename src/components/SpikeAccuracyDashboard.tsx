@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { SPIKE_DATASET } from '../data/spikeDataset';
 import { SpikeSample } from '../types';
 import { haptic } from '../services/haptics';
+import { runBenchmark, measureSample } from '../services/matchBenchmark';
 
 interface SpikeAccuracyDashboardProps {
   onClose: () => void;
@@ -15,20 +16,19 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
   const [selectedSample, setSelectedSample] = useState<SpikeSample>(SPIKE_DATASET[0]);
   const [activeTab, setActiveTab] = useState<'matrix' | 'markdown' | 'checklist'>('matrix');
 
-  // Compute aggregate statistics
-  const totalBooks = SPIKE_DATASET.reduce((acc, s) => acc + s.bookCount, 0);
-  const avgSegmentationRecall =
-    SPIKE_DATASET.reduce((acc, s) => acc + s.evaluation.segmentationRecall, 0) /
-    SPIKE_DATASET.length;
-  const avgTextCaptureRate =
-    SPIKE_DATASET.reduce((acc, s) => acc + s.evaluation.textCaptureRate, 0) /
-    SPIKE_DATASET.length;
-  const avgEndToEnd =
-    SPIKE_DATASET.reduce((acc, s) => acc + s.evaluation.endToEndAccuracy, 0) /
-    SPIKE_DATASET.length;
+  // Measured live against the samples' ground truth, rather than read from
+  // hard-coded numbers that never ran anything.
+  const benchmark = useMemo(() => runBenchmark(SPIKE_DATASET), []);
+  const selectedMeasurement = useMemo(() => measureSample(selectedSample), [selectedSample]);
 
-  const isGatePassed =
-    avgSegmentationRecall >= 0.85 && avgTextCaptureRate >= 0.7 && avgEndToEnd >= 0.65;
+  const totalBooks = benchmark.totals.expectedCount;
+  const catalogCoverage = benchmark.totals.coverage;
+  const avgMatchAccuracy = benchmark.totals.matchAccuracy;
+  const ambiguityRate = benchmark.totals.ambiguityRate;
+
+  // Top-1 accuracy on the books the catalog actually contains is the number
+  // that says whether the matcher works; coverage says how far it can reach.
+  const isGatePassed = avgMatchAccuracy >= 0.9 && ambiguityRate <= 0.2;
 
   const categories = [
     {
@@ -96,9 +96,10 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
       <div className="px-4 sm:px-6 py-2.5 bg-[#3A2412] border-b border-[#C9963F]/40 flex items-start gap-2">
         <span className="material-symbols-outlined text-[18px] text-[#F5BD62] shrink-0">science</span>
         <p className="font-sans-inter text-[12px] text-[#F5BD62] leading-relaxed">
-          <strong className="font-semibold">Demo data.</strong> These figures come from the bundled sample dataset with
-          known ground truth. They are fixtures for exercising the review UI, not measurements of the live Gemini
-          recognition pipeline.
+          <strong className="font-semibold">Measured locally.</strong> Computed now, in your browser, by running the
+          trigram catalog matcher against the bundled samples' known ground truth. Accuracy covers only the books the
+          local catalog contains — coverage reports the rest. Spine detection runs on the server-side vision model and
+          is not measured here.
         </p>
       </div>
 
@@ -163,40 +164,40 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
 
           <div className="bg-[#1C1916] rounded-xl p-4 hairline-border border-[#6E8F6A]/30">
             <div className="font-mono-ibm text-[11px] text-[#C8ECC1] uppercase tracking-wider mb-1 flex justify-between">
-              <span>SEGMENTATION RECALL</span>
-              <span>GATE: &gt;85%</span>
+              <span>CATALOG COVERAGE</span>
+              <span>{benchmark.catalogSize} ENTRIES</span>
             </div>
             <div className="font-serif-literata text-[28px] text-[#C8ECC1] font-bold">
-              {(avgSegmentationRecall * 100).toFixed(1)}%
+              {(catalogCoverage * 100).toFixed(1)}%
             </div>
             <div className="font-sans-inter text-[11px] text-[#6E8F6A] mt-1">
-              +6.5% above minimum requirement
+              {benchmark.totals.coveredCount} of {totalBooks} sample books are in the local catalog
             </div>
           </div>
 
           <div className="bg-[#1C1916] rounded-xl p-4 hairline-border border-[#6E8F6A]/30">
             <div className="font-mono-ibm text-[11px] text-[#C8ECC1] uppercase tracking-wider mb-1 flex justify-between">
-              <span>TEXT CAPTURE RATE</span>
-              <span>GATE: &gt;70%</span>
+              <span>TOP-1 MATCH ACCURACY</span>
+              <span>GATE: &gt;90%</span>
             </div>
             <div className="font-serif-literata text-[28px] text-[#C8ECC1] font-bold">
-              {(avgTextCaptureRate * 100).toFixed(1)}%
+              {(avgMatchAccuracy * 100).toFixed(1)}%
             </div>
             <div className="font-sans-inter text-[11px] text-[#6E8F6A] mt-1">
-              +11.3% above minimum requirement
+              {((avgMatchAccuracy - 0.9) * 100).toFixed(1)}% vs gate, over covered books
             </div>
           </div>
 
           <div className="bg-[#1C1916] rounded-xl p-4 hairline-border border-[#6E8F6A]/30">
             <div className="font-mono-ibm text-[11px] text-[#C8ECC1] uppercase tracking-wider mb-1 flex justify-between">
-              <span>END-TO-END MATCHING</span>
-              <span>GATE: &gt;65%</span>
+              <span>AMBIGUOUS MATCHES</span>
+              <span>GATE: &lt;20%</span>
             </div>
             <div className="font-serif-literata text-[28px] text-[#C8ECC1] font-bold">
-              {(avgEndToEnd * 100).toFixed(1)}%
+              {(ambiguityRate * 100).toFixed(1)}%
             </div>
             <div className="font-sans-inter text-[11px] text-[#6E8F6A] mt-1">
-              +11.8% above minimum requirement
+              runner-up within 0.08 of the top score
             </div>
           </div>
         </div>
@@ -207,13 +208,13 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
             <div className="lg:col-span-7 space-y-6">
               {categories.map((cat) => {
                 const catRecall =
-                  cat.samples.reduce((a, s) => a + s.evaluation.segmentationRecall, 0) /
+                  cat.samples.reduce((a, s) => a + measureSample(s).coverage, 0) /
                   cat.samples.length;
                 const catText =
-                  cat.samples.reduce((a, s) => a + s.evaluation.textCaptureRate, 0) /
+                  cat.samples.reduce((a, s) => a + measureSample(s).matchAccuracy, 0) /
                   cat.samples.length;
                 const catE2E =
-                  cat.samples.reduce((a, s) => a + s.evaluation.endToEndAccuracy, 0) /
+                  cat.samples.reduce((a, s) => a + measureSample(s).ambiguityRate, 0) /
                   cat.samples.length;
 
                 return (
@@ -308,21 +309,21 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
                 {/* Sample Metrics */}
                 <div className="grid grid-cols-3 gap-2 mb-4 font-mono-ibm text-center">
                   <div className="bg-[#12100E] p-2 rounded hairline-border">
-                    <span className="text-[9px] text-[#A79C8C] block">RECALL</span>
+                    <span className="text-[9px] text-[#A79C8C] block">COVERAGE</span>
                     <span className="text-[14px] text-[#C8ECC1] font-bold">
-                      {(selectedSample.evaluation.segmentationRecall * 100).toFixed(0)}%
+                      {(selectedMeasurement.coverage * 100).toFixed(0)}%
                     </span>
                   </div>
                   <div className="bg-[#12100E] p-2 rounded hairline-border">
-                    <span className="text-[9px] text-[#A79C8C] block">TXT OCR</span>
+                    <span className="text-[9px] text-[#A79C8C] block">MATCH</span>
                     <span className="text-[14px] text-[#F5BD62] font-bold">
-                      {(selectedSample.evaluation.textCaptureRate * 100).toFixed(0)}%
+                      {(selectedMeasurement.matchAccuracy * 100).toFixed(0)}%
                     </span>
                   </div>
                   <div className="bg-[#12100E] p-2 rounded hairline-border">
-                    <span className="text-[9px] text-[#A79C8C] block">E2E ACC</span>
+                    <span className="text-[9px] text-[#A79C8C] block">AMBIG</span>
                     <span className="text-[14px] text-[#C9963F] font-bold">
-                      {(selectedSample.evaluation.endToEndAccuracy * 100).toFixed(0)}%
+                      {(selectedMeasurement.ambiguityRate * 100).toFixed(0)}%
                     </span>
                   </div>
                 </div>
@@ -387,11 +388,12 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
 
 | Metric | Phase 0 Gate Target | Measured Spike Result | Status |
 |---|---|---|---|
-| **Segmentation Recall** | ≥ 85% | **${(avgSegmentationRecall * 100).toFixed(1)}%** | **PASS (GO)** |
-| **Text Capture Rate** | ≥ 70% | **${(avgTextCaptureRate * 100).toFixed(1)}%** | **PASS (GO)** |
-| **End-to-End Accuracy** | ≥ 65% | **${(avgEndToEnd * 100).toFixed(1)}%** | **PASS (GO)** |
+| **Catalog coverage** | informational | **${(catalogCoverage * 100).toFixed(1)}%** | ${benchmark.totals.coveredCount}/${totalBooks} books |
+| **Top-1 match accuracy** | ≥ 90% | **${(avgMatchAccuracy * 100).toFixed(1)}%** | ${avgMatchAccuracy >= 0.9 ? '**PASS**' : '**FAIL**'} |
+| **Ambiguous matches** | ≤ 20% | **${(ambiguityRate * 100).toFixed(1)}%** | ${ambiguityRate <= 0.2 ? '**PASS**' : '**FAIL**'} |
 
-**GATE OUTCOME: PASSED (GO)** — All criteria exceed requirements. Proceeding to Phase 1 (Foundation).
+**OUTCOME: ${isGatePassed ? 'PASSED' : 'FAILED'}** — measured live in ${benchmark.totals.durationMs.toFixed(0)}ms against ${benchmark.catalogSize} catalog entries.
+Scope: the local catalog matching layer only. Accuracy is computed over the books the catalog actually contains; coverage reports the rest. Spine detection runs on the server-side vision model and is not covered here.
 
 ---
 
