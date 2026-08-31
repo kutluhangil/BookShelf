@@ -176,6 +176,16 @@ the login button is disabled and says so.
 | `npm test` | Runs the Vitest unit tests |
 | `npm run lint` | Type-checks the project with `tsc --noEmit` |
 
+### Environment variables
+
+| Variable | Required | What it does |
+|---|:-:|---|
+| `GEMINI_API_KEY` | yes | Server-side key for shelf recognition, OCR and recommendations. The server refuses to start without it. |
+| `GEMINI_MODEL` | no | Defaults to `gemini-2.5-flash`. |
+| `REQUIRE_AUTH` | no | Defaults to on in production. `false` is refused in production, because the AI endpoints cost money per call. |
+| `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT` | when auth is on | Used to verify Firebase ID tokens server-side. |
+| `VITE_FIREBASE_*` | no | Client credentials. Without them the app runs fully offline against local storage and says so. |
+
 ---
 
 ## 📈 Status
@@ -194,6 +204,11 @@ the login button is disabled and says so.
 | Cloud Persistence (Firebase) | ✅ Optional |
 | Shared Lists (public + invite-only) | ✅ Optional |
 | Unit tests (Vitest) | ✅ |
+| Offline / installable (PWA) | ✅ |
+| CSV & Goodreads import | ✅ |
+| API authentication (Firebase ID token) | ✅ |
+| CI (type check, tests, build) | ✅ |
+| Turkish UI (i18n) | ⬜ Needs a product decision |
 | Mobile Native Port (React Native) | ⬜ Planned |
 
 > **Note on the "Phase 0 Eval" screen:** the bundled benchmark dataset is synthetic

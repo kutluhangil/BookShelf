@@ -11,10 +11,28 @@ Newest entries at the top.
 ### Added
 - Root `ErrorBoundary` with a "reset stored library" escape hatch, so a bad persisted record can no longer permanently brick the app on every reload.
 - GitHub Actions CI running type check, unit tests and build on every push and pull request.
+- Per-spine crops: each scan candidate gets its own thumbnail cut from the shelf photo, instead of every book showing the whole shelf as its proof of capture.
+- CSV import for this app's own export format and Goodreads exports, with per-line skip reporting, duplicate detection and optional Open Library enrichment.
+- ZXing fallback for barcode scanning, lazily loaded, so ISBN and QR scanning work on Safari and Firefox (that is, on iPhones).
+- Live shared lists via `onSnapshot`, debounced auto-sync, an unsynced-changes indicator and a close-tab warning.
+- Visible conflict resolution: merges report what was resolved and how many local edits the cloud superseded.
+- `ModalShell`: every dialog now has `role="dialog"`, an accessible name, Escape to close, a focus trap, focus restoration and a body scroll lock.
+- `BookCover` with a real fallback tile, wired into all nine places that render a cover.
+- PWA support — installable, with an offline shell that runs the whole library with the server stopped.
+- Incremental rendering for the book grid, 60 at a time.
+- A live benchmark for the catalog matcher, replacing the Phase 0 dashboard's hard-coded figures.
+- Component tests with jsdom and Testing Library; 62 tests in total.
 
 ### Changed
 - Camera frames are downscaled to 1280px before upload, cutting a 1-3MB payload per scan.
 - All AI calls go through a single `apiClient` that attaches credentials and surfaces the server's structured error detail.
+- Eagerly loaded JavaScript is down from one 1.65MB chunk to 634KB across three (gzip 447KB to 183KB): Firebase, ZXing and Recharts all load on demand.
+
+### Fixed
+- `BookDetailModal` nested the quote scanner inside its own `AnimatePresence`, giving it two unkeyed children; React logged a duplicate-key error on every open.
+- `ModalShell` filtered focusable elements with `offsetParent`, which is null for `position: fixed` elements — exactly what these dialogs are — so the focus trap could stop wrapping.
+- A lazily loaded chart panel that failed to fetch took the whole app down through the root error boundary; each panel now degrades on its own.
+- Added the favicon the app had been requesting on every load.
 
 ## 2026-08-30
 
