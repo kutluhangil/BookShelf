@@ -7,15 +7,13 @@ export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
     build: {
-      // Charts and the animation runtime dominate the eager bundle; splitting them
-      // keeps the initial payload from being one 1.6MB file. Firebase is deliberately
-      // NOT listed here: it is loaded through dynamic imports, so Rollup emits it as
-      // separate async chunks that a reader who never signs in never downloads.
+      // Only genuinely eager vendor code is named here. Firebase and Recharts are
+      // deliberately absent: both are reached through dynamic imports, and naming
+      // them would pull their chunks back into the initial module graph.
       rollupOptions: {
         output: {
           manualChunks: {
             react: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime'],
-            charts: ['recharts'],
             motion: ['motion/react'],
           },
         },

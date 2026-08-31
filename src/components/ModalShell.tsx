@@ -15,6 +15,20 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
+ * Deliberately avoids `offsetParent`, which is null for position: fixed elements
+ * and always null without layout, and so silently emptied the focus list.
+ */
+function isVisible(element: HTMLElement): boolean {
+  if (element.hasAttribute('hidden') || element.getAttribute('aria-hidden') === 'true') return false;
+  if (element.closest('[hidden], [aria-hidden="true"]')) return false;
+  if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+  }
+  return true;
+}
+
+/**
  * Shared dialog behaviour: Escape to close, a focus trap, focus restoration and
  * a body scroll lock. None of the modals had any of this, so keyboard users
  * could tab out of an open dialog into the page behind it.
@@ -43,9 +57,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       const container = containerRef.current;
       if (!container) return;
 
-      const focusable = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (element) => element.offsetParent !== null || element === document.activeElement
-      );
+      const focusable = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(isVisible);
       if (focusable.length === 0) {
         event.preventDefault();
         return;
@@ -78,7 +90,10 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     // Move focus into the dialog, preferring anything the content auto-focused.
     const container = containerRef.current;
     const autoFocused = container?.querySelector<HTMLElement>('[autofocus]');
-    const target = autoFocused ?? container?.querySelector<HTMLElement>(FOCUSABLE) ?? container;
+    const firstFocusable = container
+      ? Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).find(isVisible)
+      : undefined;
+    const target = autoFocused ?? firstFocusable ?? container;
     target?.focus({ preventScroll: true });
 
     return () => {

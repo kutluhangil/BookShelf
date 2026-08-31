@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { Book, Shelf, SpineCandidate, EditionOption, ReadingStatus, SpikeSample, ReadingGoals } from './types';
 import { INITIAL_BOOKS, INITIAL_SHELVES } from './data/initialLibrary';
 import { recognizeShelf, buildDemoCandidates } from './services/clusteringEngine';
@@ -22,8 +22,7 @@ import { SpikeAccuracyDashboard } from './components/SpikeAccuracyDashboard';
 import { OnboardingModal } from './components/OnboardingModal';
 import { YourShelvesView } from './components/YourShelvesView';
 import { SharedListsView } from './components/SharedListsView';
-import { LibraryGrowthDashboard } from './components/LibraryGrowthDashboard';
-import { ReadingAnalyticsDashboard } from './components/ReadingAnalyticsDashboard';
+
 import { GamificationBadges } from './components/GamificationBadges';
 import { MonthlyGoalDashboard } from './components/MonthlyGoalDashboard';
 import { ReadingGoalsDashboard } from './components/ReadingGoalsDashboard';
@@ -31,7 +30,6 @@ import { DailyQuoteDashboard } from './components/DailyQuoteDashboard';
 import { RecommendedBooks } from './components/RecommendedBooks';
 import { QueuedForReading } from './components/QueuedForReading';
 import { ReadingCalendarWidget } from './components/ReadingCalendarWidget';
-import { WeeklyReadingChart } from './components/WeeklyReadingChart';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { ReadingGoalsModal } from './components/ReadingGoalsModal';
 import { BookComparisonModal } from './components/BookComparisonModal';
@@ -41,8 +39,28 @@ import { LibraryAnnualProgressBar } from './components/LibraryAnnualProgressBar'
 import { calculateReadingStreak } from './utils/streak';
 import { parseNLPSearchQuery } from './utils/searchParser';
 import { haptic } from './services/haptics';
+import { useIncrementalList } from './hooks/useIncrementalList';
 import { motion } from 'motion/react';
 import { BookCover } from './components/BookCover';
+
+// Recharts is ~390KB and none of these panels are above the fold, so they load
+// on demand instead of blocking first paint.
+const LibraryGrowthDashboard = lazy(() =>
+  import('./components/LibraryGrowthDashboard').then((m) => ({ default: m.LibraryGrowthDashboard }))
+);
+const ReadingAnalyticsDashboard = lazy(() =>
+  import('./components/ReadingAnalyticsDashboard').then((m) => ({ default: m.ReadingAnalyticsDashboard }))
+);
+const WeeklyReadingChart = lazy(() =>
+  import('./components/WeeklyReadingChart').then((m) => ({ default: m.WeeklyReadingChart }))
+);
+
+/** Keeps the dashboard grid from collapsing while a chart chunk loads. */
+const ChartFallback: React.FC = () => (
+  <div className="bg-[#1C1916] border border-[#3A332A] rounded-2xl p-6 min-h-[180px] flex items-center justify-center">
+    <div className="w-6 h-6 border-2 border-[#C9963F]/20 border-t-[#C9963F] rounded-full animate-spin" />
+  </div>
+);
 
 type ActiveTab = 'library' | 'shelves' | 'shared' | 'eval';
 
@@ -482,6 +500,16 @@ export default function App() {
 
     return result;
   }, [books, selectedShelfId, readingStatusFilter, smartFilter, searchQuery, sortMode]);
+
+  // Render the grid in chunks so a large library does not mount hundreds of
+  // animated cards at once.
+  const {
+    visible: visibleBooks,
+    hasMore: hasMoreBooks,
+    remaining: remainingBooks,
+    sentinelRef: listSentinelRef,
+    loadMore: loadMoreBooks,
+  } = useIncrementalList(filteredBooks, 60);
 
   const allSpineColors = useMemo(() => books.map((b) => b.spineColor || '#C9963F'), [books]);
 
@@ -1168,7 +1196,9 @@ export default function App() {
                   reminderEnabled={isReminderEnabled}
                   onToggleReminder={setIsReminderEnabled}
                 />
-                <WeeklyReadingChart books={books} />
+                <Suspense fallback={<ChartFallback />}>
+                  <WeeklyReadingChart books={books} />
+                </Suspense>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1178,8 +1208,12 @@ export default function App() {
                   goals={readingGoals}
                   onEditGoals={() => setIsReadingGoalsModalOpen(true)}
                 />
-                <LibraryGrowthDashboard books={books} />
-                <ReadingAnalyticsDashboard books={books} />
+                <Suspense fallback={<ChartFallback />}>
+                  <LibraryGrowthDashboard books={books} />
+                </Suspense>
+                <Suspense fallback={<ChartFallback />}>
+                  <ReadingAnalyticsDashboard books={books} />
+                </Suspense>
               </div>
 
               <GamificationBadges books={books} />
@@ -1401,7 +1435,7 @@ export default function App() {
                 </div>
               ) : viewMode === 'gallery' ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {filteredBooks.map((book, idx) => {
+                  {visibleBooks.map((book, idx) => {
                     const isSelected = isCompareMode && compareQueue.some((b) => b.id === book.id);
                     return (
                       <motion.div
@@ -1446,7 +1480,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredBooks.map((book, idx) => (
+                  {visibleBooks.map((book, idx) => (
                     <div key={book.id} className="relative">
                       <BookCard
                         book={book}
@@ -1468,6 +1502,17 @@ export default function App() {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+
+              {hasMoreBooks && (
+                <div ref={listSentinelRef} className="flex justify-center py-6">
+                  <button
+                    onClick={loadMoreBooks}
+                    className="px-4 py-2 bg-[#1C1916] hairline-border rounded-xl font-mono-ibm text-[11px] text-[#A79C8C] hover:text-[#C9963F] uppercase tracking-wider transition-colors"
+                  >
+                    Load {Math.min(60, remainingBooks)} more ({remainingBooks} left)
+                  </button>
                 </div>
               )}
             </section>
