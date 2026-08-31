@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadLibrary, saveLibrary, clearLibrary, isPersistenceAvailable } from '../services/localStore';
+import { AppError } from '../services/appError';
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();
@@ -60,8 +61,15 @@ describe('localStore', () => {
     expect(loadLibrary()).toBeNull();
   });
 
-  it('raises an actionable error on a schema mismatch instead of silently resetting', () => {
+  it('raises a coded error on a schema mismatch instead of silently resetting', () => {
     window.localStorage.setItem('bookshelf.library.v1', JSON.stringify({ version: 99 }));
-    expect(() => loadLibrary()).toThrow(/schema version 99/);
+    try {
+      loadLibrary();
+      expect.unreachable('loadLibrary should reject a foreign schema version');
+    } catch (error) {
+      expect(error).toBeInstanceOf(AppError);
+      expect((error as AppError).code).toBe('storage.schemaMismatch');
+      expect((error as AppError).params).toMatchObject({ found: 99, expected: 1 });
+    }
   });
 });

@@ -2,6 +2,7 @@ import { SpineCandidate, Book, EditionOption, ConfidenceLevel } from '../types';
 import { INITIAL_BOOKS, MOCK_GLOBAL_CATALOG } from '../data/initialLibrary';
 import { postJson, ApiError } from './apiClient';
 import { cropRegions } from './imageCrop';
+import { AppError } from './appError';
 
 // Helper for Turkish character normalization & unaccent
 export function normalizeSpineText(input: string): string {
@@ -254,13 +255,6 @@ export function buildCandidatesFromRecognition(
   });
 }
 
-export class ShelfRecognitionError extends Error {
-  constructor(message: string, readonly detail?: string) {
-    super(message);
-    this.name = 'ShelfRecognitionError';
-  }
-}
-
 /**
  * Sends the captured shelf photo to the server-side vision endpoint and returns
  * review-ready spine candidates.
@@ -274,15 +268,17 @@ export async function recognizeShelf(shelfImageDataUrl: string): Promise<SpineCa
   try {
     payload = await postJson<{ spines?: unknown }>('/api/gemini/shelf', { imageBase64 });
   } catch (error) {
-    if (error instanceof ApiError) {
-      throw new ShelfRecognitionError(error.message, error.isAuthError ? 'Sign in to use the shelf scanner.' : undefined);
+    // An auth failure has a shelf-specific fix; every other server error already
+    // says what went wrong, so it travels untouched.
+    if (error instanceof ApiError && error.isAuthError) {
+      throw new AppError('shelf.signInRequired', {}, { detail: error.detail, cause: error });
     }
     throw error;
   }
 
   const spines = payload?.spines;
   if (!Array.isArray(spines)) {
-    throw new ShelfRecognitionError('Shelf recognition returned no spine list.', JSON.stringify(payload).slice(0, 300));
+    throw new AppError('shelf.noSpines', {}, { detail: JSON.stringify(payload).slice(0, 300) });
   }
 
   const candidates = buildCandidatesFromRecognition(shelfImageDataUrl, spines as RecognizedSpine[]);

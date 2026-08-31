@@ -44,6 +44,7 @@ import { LazyPanel } from './components/LazyPanel';
 import { motion } from 'motion/react';
 import { BookCover } from './components/BookCover';
 import { useT } from './i18n/I18nProvider';
+import { formatError } from './i18n/formatError';
 
 // Recharts is ~390KB and none of these panels are above the fold, so they load
 // on demand instead of blocking first paint.
@@ -78,7 +79,7 @@ function readInitialState() {
         deletedBookIds: stored.deletedBookIds ?? [],
         deletedShelfIds: stored.deletedShelfIds ?? [],
         restored: true,
-        error: null as string | null,
+        error: null as unknown,
       };
     }
   } catch (error) {
@@ -90,7 +91,9 @@ function readInitialState() {
       deletedBookIds: [] as string[],
       deletedShelfIds: [] as string[],
       restored: false,
-      error: error instanceof Error ? error.message : String(error),
+      // Kept raw: readInitialState runs before the provider exists, so the
+      // message is rendered later, in the reader's locale.
+      error: error as unknown,
     };
   }
 
@@ -189,7 +192,7 @@ export default function App() {
       .catch((error) =>
         pushToast({
           title: t.toasts.serverUnreachable,
-          description: t.toasts.serverUnreachableDetail(error instanceof Error ? error.message : String(error)),
+          description: t.toasts.serverUnreachableDetail(formatError(t, error)),
           icon: 'cloud_off',
         })
       );
@@ -200,7 +203,7 @@ export default function App() {
     if (initialState.error) {
       pushToast({
         title: t.toasts.storedLibraryUnreadable,
-        description: initialState.error,
+        description: formatError(t, initialState.error),
         icon: 'error',
       });
     } else if (!isPersistenceAvailable()) {
@@ -289,7 +292,7 @@ export default function App() {
       } catch (error) {
         pushToast({
           title: t.toasts.cloudFetchFailed,
-          description: error instanceof Error ? error.message : String(error),
+          description: formatError(t, error),
           icon: 'error',
         });
         } finally {
@@ -309,7 +312,11 @@ export default function App() {
 
   const handleLogin = async () => {
     if (!isFirebaseConfigured) {
-      pushToast({ title: t.toasts.cloudDisabled, description: firebaseConfigError ?? '', icon: 'cloud_off' });
+      pushToast({
+        title: t.toasts.cloudDisabled,
+        description: firebaseConfigError ? formatError(t, firebaseConfigError) : '',
+        icon: 'cloud_off',
+      });
       return;
     }
     try {
@@ -317,7 +324,7 @@ export default function App() {
     } catch (error) {
       pushToast({
         title: t.toasts.signInFailed,
-        description: error instanceof Error ? error.message : String(error),
+        description: formatError(t, error),
         icon: 'error',
       });
     }
@@ -330,7 +337,7 @@ export default function App() {
     } catch (error) {
       pushToast({
         title: t.toasts.signOutFailed,
-        description: error instanceof Error ? error.message : String(error),
+        description: formatError(t, error),
         icon: 'error',
       });
     }
@@ -361,7 +368,7 @@ export default function App() {
     } catch (error) {
       pushToast({
         title: t.toasts.syncFailed,
-        description: error instanceof Error ? error.message : String(error),
+        description: formatError(t, error),
         icon: 'error',
       });
     } finally {
@@ -617,7 +624,7 @@ export default function App() {
         } catch (error) {
           pushToast({
             title: t.toasts.lookupFailed,
-            description: error instanceof Error ? error.message : String(error),
+            description: formatError(t, error),
             icon: 'error',
           });
         } finally {
@@ -655,7 +662,7 @@ export default function App() {
         setIsProcessing(false);
         pushToast({
           title: t.toasts.shelfRecognitionFailed,
-          description: error instanceof Error ? error.message : String(error),
+          description: formatError(t, error),
           icon: 'error',
         });
       }

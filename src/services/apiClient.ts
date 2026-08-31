@@ -1,4 +1,5 @@
 import { getAuthInstance, isFirebaseConfigured } from '../lib/firebase';
+import { AppError } from './appError';
 
 /**
  * Single entry point for the server's AI endpoints. It attaches the signed-in
@@ -13,14 +14,24 @@ export interface ServerCapabilities {
   authRequired: boolean;
 }
 
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly detail?: string
-  ) {
-    super(detail ? `${message}: ${detail}` : message);
+/**
+ * A server rejection. The code is picked from the status so the reader gets
+ * "sign in" rather than "HTTP 401", while `detail` keeps the server's own
+ * (English) explanation for the console.
+ */
+export class ApiError extends AppError<'api.requestFailed' | 'api.unauthorized' | 'api.healthFailed'> {
+  readonly status: number;
+
+  constructor(status: number, detail?: string, options: { health?: boolean } = {}) {
+    if (status === 401) {
+      super('api.unauthorized', {}, { detail });
+    } else if (options.health) {
+      super('api.healthFailed', { status }, { detail });
+    } else {
+      super('api.requestFailed', { status }, { detail });
+    }
     this.name = 'ApiError';
+    this.status = status;
   }
 
   get isAuthError(): boolean {
@@ -47,7 +58,7 @@ export function fetchServerCapabilities(force = false): Promise<ServerCapabiliti
   if (force || !capabilitiesPromise) {
     capabilitiesPromise = fetch('/api/health')
       .then(async (response) => {
-        if (!response.ok) throw new ApiError('Server health check failed', response.status);
+        if (!response.ok) throw new ApiError(response.status, undefined, { health: true });
         return (await response.json()) as ServerCapabilities;
       })
       .catch((error) => {
@@ -73,11 +84,8 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new ApiError(
-      payload?.error ?? `Request to ${path} failed`,
-      response.status,
-      payload?.detail ?? undefined
-    );
+    const serverDetail = [payload?.error, payload?.detail].filter(Boolean).join(': ');
+    throw new ApiError(response.status, serverDetail || `POST ${path}`);
   }
 
   return payload as T;

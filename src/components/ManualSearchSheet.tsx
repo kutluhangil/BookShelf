@@ -5,6 +5,7 @@ import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
 import { ModalShell } from './ModalShell';
 import { useT } from '../i18n/I18nProvider';
+import { formatError } from '../i18n/formatError';
 
 interface ManualSearchSheetProps {
   isOpen: boolean;
@@ -57,7 +58,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
       } catch (lookupError) {
         if (requestIdRef.current !== requestId) return;
         setResults([]);
-        setError(lookupError instanceof Error ? lookupError.message : String(lookupError));
+        setError(formatError(t, lookupError));
       } finally {
         if (requestIdRef.current === requestId) setIsSearching(false);
       }

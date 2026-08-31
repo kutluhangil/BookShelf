@@ -6,6 +6,7 @@ import { lookupByIsbn } from '../services/bookLookup';
 import { haptic } from '../services/haptics';
 import { ModalShell } from './ModalShell';
 import { useT } from '../i18n/I18nProvider';
+import { formatError } from '../i18n/formatError';
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -66,7 +67,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       setStage('preview');
       haptic.selectionClick();
     } catch (thrown) {
-      setError(thrown instanceof Error ? thrown.message : String(thrown));
+      setError(formatError(t, thrown));
     }
   };
 

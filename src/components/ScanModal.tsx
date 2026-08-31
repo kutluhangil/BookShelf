@@ -5,6 +5,7 @@ import { SpikeSample } from '../types';
 import { haptic } from '../services/haptics';
 import { createBarcodeReader, type BarcodeReader } from '../services/barcodeScanner';
 import { useT } from '../i18n/I18nProvider';
+import { formatError } from '../i18n/formatError';
 
 export type ScanMode = 'shelf' | 'isbn' | 'qr';
 
@@ -93,7 +94,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
           ? t.scanner.permissionDenied
           : name === 'NotFoundError'
             ? t.scanner.notFound
-            : t.camera.startFailed(error instanceof Error ? error.message : String(error))
+            : t.camera.startFailed(formatError(t, error))
       );
     }
   }, [t]);
@@ -206,7 +207,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
         reader = await createBarcodeReader(scanMode);
       } catch (error) {
         if (!cancelled) {
-          setBarcodeError(t.scanner.barcodeUnavailable(error instanceof Error ? error.message : String(error)));
+          setBarcodeError(t.scanner.barcodeUnavailable(formatError(t, error)));
         }
         return;
       }

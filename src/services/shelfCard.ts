@@ -4,6 +4,8 @@
  * a real file instead of a no-op.
  */
 
+import { AppError } from './appError';
+
 export interface ShelfCardOptions {
   title: string;
   subtitle: string;
@@ -41,7 +43,7 @@ export function renderShelfCard(options: ShelfCardOptions): HTMLCanvasElement {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas 2D context is unavailable in this browser.');
+  if (!ctx) throw new AppError('device.canvasUnavailable', {});
 
   ctx.fillStyle = PALETTE.background;
   ctx.fillRect(0, 0, width, height);

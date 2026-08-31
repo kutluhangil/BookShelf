@@ -16,6 +16,7 @@ import { isFirebaseConfigured, firebaseConfigError, type User } from '../lib/fir
 import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
 import { useT } from '../i18n/I18nProvider';
+import { formatError } from '../i18n/formatError';
 
 interface SharedListsViewProps {
   books: Book[];
@@ -55,7 +56,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
 
   const loadLists = useCallback(async () => {
     if (!isFirebaseConfigured) {
-      setError(firebaseConfigError);
+      setError(firebaseConfigError ? formatError(t, firebaseConfigError) : null);
       setIsLoading(false);
       return;
     }
@@ -69,7 +70,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
       setMyLists(mine);
       setPublicLists(publics);
     } catch (thrown) {
-      setError(thrown instanceof Error ? thrown.message : String(thrown));
+      setError(formatError(t, thrown));
     } finally {
       setIsLoading(false);
     }
@@ -105,7 +106,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
           void loadLists();
         }
       })
-      .catch((thrown) => setError(thrown instanceof Error ? thrown.message : String(thrown)));
+      .catch((thrown) => setError(formatError(t, thrown)));
   }, [asMember, loadLists, t]);
 
   const activeList = [...myLists, ...publicLists].find((l) => l.id === activeListId) ?? null;
@@ -117,7 +118,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
     try {
       await action();
     } catch (thrown) {
-      setError(thrown instanceof Error ? thrown.message : String(thrown));
+      setError(formatError(t, thrown));
     }
   };
 

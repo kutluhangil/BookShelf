@@ -15,16 +15,11 @@ export interface BookLookupResult {
   subjects?: string[];
 }
 
+import { AppError, toDetail } from './appError';
+
 const SEARCH_ENDPOINT = 'https://openlibrary.org/search.json';
 const BOOKS_ENDPOINT = 'https://openlibrary.org/api/books';
 const COVER_ENDPOINT = 'https://covers.openlibrary.org/b';
-
-export class BookLookupError extends Error {
-  constructor(message: string, readonly detail?: string) {
-    super(message);
-    this.name = 'BookLookupError';
-  }
-}
 
 /** Strips separators and validates an ISBN-10/13 checksum-free shape. */
 export function normalizeIsbn(value: string): string | null {
@@ -42,18 +37,15 @@ function parseYear(value: unknown): number {
   return 0;
 }
 
-async function fetchJson(url: string, context: string): Promise<unknown> {
+async function fetchJson(url: string, subject: string): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(url, { headers: { Accept: 'application/json' } });
   } catch (error) {
-    throw new BookLookupError(
-      `${context}: could not reach Open Library. Check your network connection.`,
-      error instanceof Error ? error.message : String(error)
-    );
+    throw new AppError('lookup.network', { subject }, { detail: toDetail(error), cause: error });
   }
   if (!response.ok) {
-    throw new BookLookupError(`${context}: Open Library responded with HTTP ${response.status}.`, url);
+    throw new AppError('lookup.http', { subject, status: response.status }, { detail: url });
   }
   return response.json();
 }
@@ -62,18 +54,18 @@ async function fetchJson(url: string, context: string): Promise<unknown> {
 export async function lookupByIsbn(rawIsbn: string): Promise<BookLookupResult> {
   const isbn = normalizeIsbn(rawIsbn);
   if (!isbn) {
-    throw new BookLookupError(`"${rawIsbn}" is not a valid ISBN-10 or ISBN-13.`);
+    throw new AppError('lookup.invalidIsbn', { value: rawIsbn });
   }
 
   const key = `ISBN:${isbn}`;
   const data = (await fetchJson(
     `${BOOKS_ENDPOINT}?bibkeys=${encodeURIComponent(key)}&format=json&jscmd=data`,
-    `ISBN ${isbn}`
+    isbn
   )) as Record<string, any>;
 
   const entry = data[key];
   if (!entry) {
-    throw new BookLookupError(`No book found in Open Library for ISBN ${isbn}.`);
+    throw new AppError('lookup.notFound', { isbn });
   }
 
   return {
@@ -109,7 +101,7 @@ export async function searchBooks(query: string, limit = 12): Promise<BookLookup
     fields: 'title,author_name,first_publish_year,publisher,isbn,cover_i,number_of_pages_median',
   });
 
-  const data = (await fetchJson(`${SEARCH_ENDPOINT}?${params.toString()}`, `Search "${trimmed}"`)) as {
+  const data = (await fetchJson(`${SEARCH_ENDPOINT}?${params.toString()}`, trimmed)) as {
     docs?: Array<Record<string, any>>;
   };
 
@@ -138,8 +130,9 @@ export async function lookupFromQrPayload(payload: string): Promise<BookLookupRe
     if (candidate) return lookupByIsbn(candidate);
   }
 
-  throw new BookLookupError(
-    'This QR code does not contain a book identifier.',
-    `Decoded payload: ${payload.slice(0, 120)}`
+  throw new AppError(
+    'lookup.qrUnrecognized',
+    {},
+    { detail: `Decoded payload: ${payload.slice(0, 120)}` }
   );
 }

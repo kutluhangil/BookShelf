@@ -1,9 +1,14 @@
+import { errorsEn } from './errors.en';
+
 /**
  * English copy. This object is the source of truth for the catalog shape:
  * every other locale is typed against `typeof en`, so a missing key is a
  * compile error rather than a blank label at runtime.
  */
 export const en = {
+  /** Service-layer failures, keyed by AppError code. */
+  errors: errorsEn,
+
   common: {
     cancel: 'Cancel',
     close: 'Close',

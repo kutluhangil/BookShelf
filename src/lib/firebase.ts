@@ -1,6 +1,7 @@
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth, User } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
+import { AppError } from '../services/appError';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -22,11 +23,14 @@ const missingKeys = REQUIRED_KEYS.filter((key) => !firebaseConfig[key]);
  */
 export const isFirebaseConfigured = missingKeys.length === 0;
 
+/** The failure to show when a cloud feature is reached without configuration. */
 export const firebaseConfigError = isFirebaseConfigured
   ? null
-  : `Firebase is not configured. Missing environment variables: ${missingKeys
-      .map((key) => `VITE_FIREBASE_${key.replace(/([A-Z])/g, '_$1').toUpperCase()}`)
-      .join(', ')}. Copy .env.example to .env and fill in your Firebase web app credentials.`;
+  : new AppError('firebase.notConfigured', {
+      missing: missingKeys
+        .map((key) => `VITE_FIREBASE_${key.replace(/([A-Z])/g, '_$1').toUpperCase()}`)
+        .join(', '),
+    });
 
 /**
  * The Firebase SDK is ~670KB minified — larger than the rest of the app combined,
@@ -36,7 +40,7 @@ export const firebaseConfigError = isFirebaseConfigured
 let appPromise: Promise<FirebaseApp> | null = null;
 
 function requireConfigured(): void {
-  if (!isFirebaseConfigured) throw new Error(firebaseConfigError as string);
+  if (!isFirebaseConfigured) throw firebaseConfigError as AppError;
 }
 
 async function getApp(): Promise<FirebaseApp> {

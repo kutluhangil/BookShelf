@@ -4,6 +4,7 @@ import { Book } from '../types';
 import { postJson } from '../services/apiClient';
 import { ModalShell } from './ModalShell';
 import { useT } from '../i18n/I18nProvider';
+import { formatError } from '../i18n/formatError';
 
 export interface AIRecommendation {
   title: string;
@@ -44,7 +45,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
       setRecommendations(list as AIRecommendation[]);
       setAddedTitles([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(formatError(t, err));
     } finally {
       setIsLoading(false);
     }

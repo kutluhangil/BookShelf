@@ -5,6 +5,7 @@ import { haptic } from '../services/haptics';
 import { AmbientAudioEngine, AMBIENT_TRACK_IDS, AmbientTrackId } from '../services/ambientAudio';
 import { BookCover } from './BookCover';
 import { useT } from '../i18n/I18nProvider';
+import { formatError } from '../i18n/formatError';
 
 interface AmbientReadingModeProps {
   book: Book;
@@ -36,7 +37,7 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
         engine.stop();
       }
     } catch (error) {
-      setAudioError(error instanceof Error ? error.message : String(error));
+      setAudioError(formatError(t, error));
       setActiveTrack(null);
     }
   }, [activeTrack]);

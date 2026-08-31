@@ -4,6 +4,8 @@
  * unreliable (CORS / 403) and shipped no audio at all in practice.
  */
 
+import { AppError } from './appError';
+
 export type AmbientTrackId = 'rain' | 'fireplace' | 'library' | 'brown_noise';
 
 /** Display names live in the i18n catalog; this module stays audio-only. */
@@ -43,7 +45,7 @@ export class AmbientAudioEngine {
     if (!this.ctx) {
       const AudioContextClass =
         window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioContextClass) throw new Error('Web Audio API is not available in this browser.');
+      if (!AudioContextClass) throw new AppError('device.audioUnavailable', {});
       this.ctx = new AudioContextClass();
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();

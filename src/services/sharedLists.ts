@@ -1,5 +1,6 @@
 import { getFirestoreApi } from '../lib/firebase';
 import { SharedList, Book, SharedListMember } from '../types';
+import { AppError } from './appError';
 
 const COLLECTION_NAME = 'sharedLists';
 
@@ -50,7 +51,7 @@ export const removeBookFromSharedList = async (listId: string, bookId: string): 
   const { db, doc, getDoc, updateDoc } = await getFirestoreApi();
   const ref = doc(db, COLLECTION_NAME, listId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error(`Shared list ${listId} no longer exists.`);
+  if (!snap.exists()) throw new AppError('sharedList.missing', { listId });
   const data = snap.data() as SharedList;
   await updateDoc(ref, { books: data.books.filter((b) => b.id !== bookId) });
 };
@@ -59,11 +60,11 @@ export const addMemberToSharedList = async (listId: string, member: SharedListMe
   const { db, doc, getDoc, updateDoc, arrayUnion } = await getFirestoreApi();
   const ref = doc(db, COLLECTION_NAME, listId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error(`Shared list ${listId} no longer exists.`);
+  if (!snap.exists()) throw new AppError('sharedList.missing', { listId });
 
   const data = snap.data() as SharedList;
   if (data.members.some((m) => m.userId === member.userId || (member.email && m.email === member.email))) {
-    throw new Error(`${member.email ?? member.displayName ?? 'That person'} is already a member of this list.`);
+    throw new AppError('sharedList.alreadyMember', { person: member.email ?? member.displayName ?? null });
   }
 
   await updateDoc(ref, {
@@ -76,16 +77,16 @@ export const addMemberToSharedList = async (listId: string, member: SharedListMe
 export const inviteByEmail = async (listId: string, email: string): Promise<void> => {
   const normalized = email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized)) {
-    throw new Error(`"${email}" is not a valid email address.`);
+    throw new AppError('sharedList.invalidEmail', { email });
   }
   const { db, doc, getDoc, updateDoc, arrayUnion } = await getFirestoreApi();
   const ref = doc(db, COLLECTION_NAME, listId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error(`Shared list ${listId} no longer exists.`);
+  if (!snap.exists()) throw new AppError('sharedList.missing', { listId });
 
   const data = snap.data() as SharedList;
   if (data.invitedEmails?.includes(normalized)) {
-    throw new Error(`${normalized} has already been invited.`);
+    throw new AppError('sharedList.alreadyInvited', { email: normalized });
   }
   await updateDoc(ref, { invitedEmails: arrayUnion(normalized) });
 };
@@ -116,9 +117,9 @@ export const joinPublicList = async (listId: string, member: SharedListMember): 
   const { db, doc, getDoc, updateDoc, arrayUnion } = await getFirestoreApi();
   const ref = doc(db, COLLECTION_NAME, listId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error(`Shared list ${listId} no longer exists.`);
+  if (!snap.exists()) throw new AppError('sharedList.missing', { listId });
   const list = snap.data() as SharedList;
-  if (!list.isPublic) throw new Error('This list is invite-only.');
+  if (!list.isPublic) throw new AppError('sharedList.inviteOnly', {});
   if (list.memberIds?.includes(member.userId)) return;
 
   await updateDoc(ref, {

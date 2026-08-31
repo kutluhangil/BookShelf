@@ -1,4 +1,5 @@
 import { Book, Shelf, ReadingGoals } from '../types';
+import { AppError } from './appError';
 
 const STORAGE_KEY = 'bookshelf.library.v1';
 const SCHEMA_VERSION = 1;
@@ -37,10 +38,11 @@ export function loadLibrary(): PersistedLibrary | null {
 
   const parsed = JSON.parse(raw) as PersistedLibrary;
   if (parsed.version !== SCHEMA_VERSION) {
-    throw new Error(
-      `Stored library uses schema version ${parsed.version}, expected ${SCHEMA_VERSION}. ` +
-        `Clear the "${STORAGE_KEY}" localStorage key to reset.`
-    );
+    throw new AppError('storage.schemaMismatch', {
+      found: parsed.version,
+      expected: SCHEMA_VERSION,
+      key: STORAGE_KEY,
+    });
   }
   return parsed;
 }

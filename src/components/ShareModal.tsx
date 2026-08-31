@@ -6,6 +6,7 @@ import { haptic } from '../services/haptics';
 import { renderShelfCard, canvasToBlob, downloadBlob } from '../services/shelfCard';
 import { ModalShell } from './ModalShell';
 import { useI18n } from '../i18n/I18nProvider';
+import { formatError } from '../i18n/formatError';
 
 interface ShareModalProps {
   shelf?: Shelf;
@@ -56,7 +57,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   const fail = (thrown: unknown) => {
     setStatus(null);
-    setError(thrown instanceof Error ? thrown.message : String(thrown));
+    setError(formatError(t, thrown));
   };
 
   const buildCard = (format: 'card' | 'story') =>

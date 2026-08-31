@@ -1,7 +1,10 @@
+import { errorsTr } from './errors.tr';
 import type { Messages } from './types';
 
 /** Turkish copy. Typed against the English catalog, so gaps fail the build. */
 export const tr: Messages = {
+  errors: errorsTr,
+
   common: {
     cancel: 'İptal',
     close: 'Kapat',

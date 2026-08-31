@@ -9,6 +9,7 @@ Newest entries at the top.
 - Fixed an unbounded memory leak in the rate limiter: expired per-IP entries are now swept.
 
 ### Added
+- Coded service-layer errors: services now raise `AppError` with a code and typed params (`src/services/appError.ts`) instead of an English sentence, and `formatError` renders it from the active locale's catalog (`src/i18n/messages/errors.{en,tr}.ts`). The technical detail (HTTP body, SDK message, URL) is kept on the error and appended in parentheses, so failures are readable in Turkish without losing diagnosability. A mapped type makes a new code without a message a compile error.
 - Turkish interface with a TR/EN switch. Every string the app renders itself lives in a typed message catalog (`src/i18n/`); the locale is picked from the browser language on first load, and an explicit choice is remembered in local storage. Turkish is typed against the English catalog, so a missing key fails the build rather than showing a blank label. Dates, weekday names and number formatting follow the active locale.
 - Root `ErrorBoundary` with a "reset stored library" escape hatch, so a bad persisted record can no longer permanently brick the app on every reload.
 - GitHub Actions CI running type check, unit tests and build on every push and pull request.

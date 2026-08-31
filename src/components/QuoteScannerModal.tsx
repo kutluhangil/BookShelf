@@ -4,6 +4,7 @@ import { haptic } from '../services/haptics';
 import { postJson } from '../services/apiClient';
 import { ModalShell } from './ModalShell';
 import { useT } from '../i18n/I18nProvider';
+import { formatError } from '../i18n/formatError';
 
 interface QuoteScannerModalProps {
   isOpen: boolean;
@@ -45,7 +46,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
           ? t.camera.permissionDenied
           : name === 'NotFoundError'
             ? t.camera.notFound
-            : t.camera.startFailed(err instanceof Error ? err.message : String(err))
+            : t.camera.startFailed(formatError(t, err))
       );
     }
   }, [t]);
@@ -81,7 +82,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
         onScanComplete(payload.text);
         onClose();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(formatError(t, err));
         setIsScanning(false);
       }
     }
