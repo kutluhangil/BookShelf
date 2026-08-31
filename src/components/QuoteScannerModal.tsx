@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { haptic } from '../services/haptics';
 import { postJson } from '../services/apiClient';
+import { ModalShell } from './ModalShell';
 
 interface QuoteScannerModalProps {
   isOpen: boolean;
@@ -87,6 +88,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
   return (
     <AnimatePresence>
       {isOpen && (
+        <ModalShell isOpen onClose={onClose} label="Scan a quote" closeOnBackdrop={false} className="contents">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -160,6 +162,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
             </div>
           </div>
         </motion.div>
+        </ModalShell>
       )}
     </AnimatePresence>
   );

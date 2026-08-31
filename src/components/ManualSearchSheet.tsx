@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { searchBooks, BookLookupResult } from '../services/bookLookup';
 import { haptic } from '../services/haptics';
+import { BookCover } from './BookCover';
+import { ModalShell } from './ModalShell';
 
 interface ManualSearchSheetProps {
   isOpen: boolean;
@@ -66,7 +68,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-end justify-center">
+      <ModalShell isOpen={isOpen} onClose={onClose} label="Catalog search" closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-end justify-center">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -168,11 +170,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
                   className="w-full text-left bg-[#1C1916] rounded-xl flex items-center p-2.5 hairline-border hover:bg-[#2C2927] hover:border-[#C9963F]/50 transition-all cursor-pointer group"
                 >
                   <div className="w-12 h-16 shrink-0 bg-[#100E0C] rounded overflow-hidden mr-3 border border-[#3A332A] flex items-center justify-center">
-                    {book.coverUrl ? (
-                      <img src={book.coverUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-                    ) : (
-                      <span className="material-symbols-outlined text-[#3A332A] text-[20px]">book</span>
-                    )}
+                    <BookCover coverUrl={book.coverUrl} title={book.title} className="w-full h-full" fallbackTextSize={9} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-serif-literata text-[16px] text-[#F4EFE6] group-hover:text-[#C9963F] transition-colors truncate">
@@ -192,7 +190,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
             </div>
           </div>
         </motion.div>
-      </div>
+      </ModalShell>
     </AnimatePresence>
   );
 };

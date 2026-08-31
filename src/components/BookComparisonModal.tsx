@@ -1,6 +1,8 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Book } from '../types';
+import { BookCover } from './BookCover';
+import { ModalShell } from './ModalShell';
 
 interface BookComparisonModalProps {
   isOpen: boolean;
@@ -27,7 +29,7 @@ export const BookComparisonModal: React.FC<BookComparisonModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <ModalShell isOpen={isOpen} onClose={onClose} label="Compare books" closeOnBackdrop={false} className="fixed inset-0 z-[100] flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -61,7 +63,7 @@ export const BookComparisonModal: React.FC<BookComparisonModalProps> = ({
                 <div key={i} className="flex flex-col items-center text-center space-y-3">
                   <div className="w-24 h-36 rounded-md overflow-hidden bg-[#2C251D] shadow-md border border-[#3A332A]">
                     {b.coverUrl ? (
-                      <img src={b.coverUrl} alt={b.title} className="w-full h-full object-cover" />
+                      <BookCover coverUrl={b.coverUrl} title={b.title} spineColor={b.spineColor} className="w-full h-full" fallbackTextSize={10} />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center p-2" style={{ backgroundColor: b.spineColor || '#2C251D' }}>
                          <span className="font-serif-literata text-[10px] text-[#F4EFE6] font-bold">{b.title}</span>
@@ -117,7 +119,7 @@ export const BookComparisonModal: React.FC<BookComparisonModalProps> = ({
             </div>
           </div>
         </motion.div>
-      </div>
+      </ModalShell>
     </AnimatePresence>
   );
 };

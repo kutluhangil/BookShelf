@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Book } from '../types';
 import { haptic } from '../services/haptics';
 import { AmbientAudioEngine, AMBIENT_TRACKS, AmbientTrackId } from '../services/ambientAudio';
+import { BookCover } from './BookCover';
 
 interface AmbientReadingModeProps {
   book: Book;
@@ -82,20 +83,13 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
             transition={{ delay: 0.5, duration: 1 }}
             className="relative z-10 flex flex-col items-center max-w-md w-full px-6"
           >
-            {book.coverUrl ? (
-              <img 
-                src={book.coverUrl} 
-                alt={book.title} 
-                className="w-32 h-48 object-cover rounded shadow-2xl mb-8 border border-white/5 opacity-50"
-              />
-            ) : (
-              <div 
-                className="w-32 h-48 rounded shadow-2xl mb-8 border border-white/5 opacity-50 flex items-center justify-center p-4 text-center"
-                style={{ backgroundColor: book.spineColor || '#2C251D' }}
-              >
-                <span className="font-serif-literata text-xs text-white/70 line-clamp-4">{book.title}</span>
-              </div>
-            )}
+            <BookCover
+              coverUrl={book.coverUrl}
+              title={book.title}
+              spineColor={book.spineColor}
+              fallbackTextSize={12}
+              className="w-32 h-48 rounded shadow-2xl mb-8 border border-white/5 opacity-50"
+            />
 
             <h2 className="font-serif-literata text-2xl text-white/60 mb-2 text-center tracking-wide">{book.title}</h2>
             <p className="font-mono-ibm text-sm text-white/40 mb-12 tracking-widest uppercase">{book.author}</p>

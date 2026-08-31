@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Book } from '../types';
 import { postJson } from '../services/apiClient';
+import { ModalShell } from './ModalShell';
 
 export interface AIRecommendation {
   title: string;
@@ -56,6 +57,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
+        <ModalShell isOpen onClose={onClose} label="AI recommendations" closeOnBackdrop={false} className="contents">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -162,6 +164,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
             </div>
           </motion.div>
         </motion.div>
+        </ModalShell>
       )}
     </AnimatePresence>
   );

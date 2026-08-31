@@ -4,6 +4,7 @@ import { Book } from '../types';
 import { parseLibraryCsv, rowsToBooks, type ImportResult } from '../services/libraryImport';
 import { lookupByIsbn } from '../services/bookLookup';
 import { haptic } from '../services/haptics';
+import { ModalShell } from './ModalShell';
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -111,6 +112,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
+        <ModalShell isOpen onClose={onClose} label="Import library" closeOnBackdrop={false} className="contents">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -273,6 +275,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             )}
           </motion.div>
         </motion.div>
+        </ModalShell>
       )}
     </AnimatePresence>
   );

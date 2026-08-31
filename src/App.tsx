@@ -42,6 +42,7 @@ import { calculateReadingStreak } from './utils/streak';
 import { parseNLPSearchQuery } from './utils/searchParser';
 import { haptic } from './services/haptics';
 import { motion } from 'motion/react';
+import { BookCover } from './components/BookCover';
 
 type ActiveTab = 'library' | 'shelves' | 'shared' | 'eval';
 
@@ -1413,24 +1414,15 @@ export default function App() {
                           isSelected ? 'border-[#C9963F] ring-2 ring-[#C9963F]' : 'border-[#3A332A] hover:border-[#C9963F]'
                         }`}
                       >
-                        {book.coverUrl ? (
-                          <img
-                            src={book.coverUrl}
-                            alt={book.title}
-                            loading="lazy"
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                          />
-                        ) : (
-                          <div
-                            className="w-full h-full flex flex-col items-center justify-center p-4 text-center"
-                            style={{ backgroundColor: book.spineColor || '#2C251D' }}
-                          >
-                            <span className="font-serif-literata text-[#F4EFE6] font-bold text-sm line-clamp-3">
-                              {book.title}
-                            </span>
-                            <span className="font-mono-ibm text-xs text-[#F4EFE6]/70 mt-2 line-clamp-1">{book.author}</span>
-                          </div>
-                        )}
+                        <BookCover
+                          coverUrl={book.coverUrl}
+                          title={book.title}
+                          author={book.author}
+                          spineColor={book.spineColor}
+                          showAuthor
+                          fallbackTextSize={14}
+                          className="w-full h-full transition-transform duration-500 group-hover:scale-105"
+                        />
                         <div
                           className={`absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity flex items-end p-3 ${
                             isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'

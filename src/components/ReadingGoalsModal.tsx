@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ReadingGoals, GenreMilestone } from '../types';
 import { haptic } from '../services/haptics';
+import { ModalShell } from './ModalShell';
 
 interface ReadingGoalsModalProps {
   isOpen: boolean;
@@ -50,7 +51,7 @@ export const ReadingGoalsModal: React.FC<ReadingGoalsModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <ModalShell isOpen={isOpen} onClose={onClose} label="Reading goals" closeOnBackdrop={false} className="fixed inset-0 z-[100] flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -183,7 +184,7 @@ export const ReadingGoalsModal: React.FC<ReadingGoalsModalProps> = ({
             </button>
           </div>
         </motion.div>
-      </div>
+      </ModalShell>
     </AnimatePresence>
   );
 };

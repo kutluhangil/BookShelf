@@ -14,6 +14,7 @@ import {
 } from '../services/sharedLists';
 import { isFirebaseConfigured, firebaseConfigError, type User } from '../lib/firebase';
 import { haptic } from '../services/haptics';
+import { BookCover } from './BookCover';
 
 interface SharedListsViewProps {
   books: Book[];
@@ -487,16 +488,13 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                   {activeList.books.map((book) => (
                     <div key={book.id} className="relative group">
                       <div className="aspect-[2/3] rounded-lg overflow-hidden bg-[#262119] border border-[#3A332A]">
-                        {book.coverUrl ? (
-                          <img src={book.coverUrl} alt={book.title} loading="lazy" className="w-full h-full object-cover" />
-                        ) : (
-                          <div
-                            className="w-full h-full p-2 flex items-center justify-center text-center"
-                            style={{ backgroundColor: book.spineColor || '#2C251D' }}
-                          >
-                            <span className="font-serif-literata text-[11px] text-[#F4EFE6] line-clamp-4">{book.title}</span>
-                          </div>
-                        )}
+                        <BookCover
+                          coverUrl={book.coverUrl}
+                          title={book.title}
+                          spineColor={book.spineColor}
+                          className="w-full h-full"
+                          fallbackTextSize={11}
+                        />
                       </div>
                       <p className="mt-1 text-[11px] text-[#A79C8C] truncate">{book.title}</p>
                       {isMember && (
@@ -531,16 +529,13 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                         className="min-w-[100px] snap-start flex flex-col items-center gap-2 cursor-pointer"
                       >
                         <div className="w-[80px] h-[120px] rounded shadow bg-[#262119] overflow-hidden">
-                          {book.coverUrl ? (
-                            <img src={book.coverUrl} alt={book.title} loading="lazy" className="w-full h-full object-cover" />
-                          ) : (
-                            <div
-                              className="w-full h-full p-2 text-[9px] text-[#F4EFE6] break-words"
-                              style={{ backgroundColor: book.spineColor || '#2C251D' }}
-                            >
-                              {book.title}
-                            </div>
-                          )}
+                          <BookCover
+                            coverUrl={book.coverUrl}
+                            title={book.title}
+                            spineColor={book.spineColor}
+                            className="w-full h-full"
+                            fallbackTextSize={9}
+                          />
                         </div>
                         <span className="text-[10px] bg-[#3A332A] hover:bg-[#C9963F] text-[#D4CDA8] hover:text-[#12100E] px-2 py-1 rounded-full transition-colors w-full">
                           ADD

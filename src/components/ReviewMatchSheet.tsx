@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SpineCandidate, EditionOption } from '../types';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { haptic } from '../services/haptics';
+import { BookCover } from './BookCover';
+import { ModalShell } from './ModalShell';
 
 interface ReviewMatchSheetProps {
   candidate: SpineCandidate | null;
@@ -46,7 +48,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-end justify-center">
+      <ModalShell isOpen={isOpen} onClose={onClose} label="Review spine match" closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-end justify-center">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -163,10 +165,12 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
                 >
                   {/* Cover Preview */}
                   <div className="w-20 sm:w-24 shrink-0 bg-[#100E0C] border-r border-[#3A332A] overflow-hidden">
-                    <img
-                      src={edition.coverUrl}
-                      alt={edition.title}
-                      className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 group-hover:scale-105 transition-all duration-300"
+                    <BookCover
+                      coverUrl={edition.coverUrl}
+                      title={edition.title}
+                      spineColor={candidate?.dominantColor}
+                      fallbackTextSize={10}
+                      className="w-full h-full grayscale-[20%] group-hover:grayscale-0 group-hover:scale-105 transition-all duration-300"
                     />
                   </div>
 
@@ -230,7 +234,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
             </div>
           </div>
         </motion.div>
-      </div>
+      </ModalShell>
     </AnimatePresence>
   );
 };

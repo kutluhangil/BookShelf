@@ -3,6 +3,7 @@ import { SpineCandidate, EditionOption, Book } from '../types';
 import { ShelfStrip } from './ShelfStrip';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { haptic } from '../services/haptics';
+import { BookCover } from './BookCover';
 
 interface ScanResultsViewProps {
   sourceImageUrl: string;
@@ -240,10 +241,12 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
 
                       {/* Small Thumbnail */}
                       <div className="w-10 h-14 shrink-0 bg-[#100E0C] rounded overflow-hidden border border-[#3A332A]">
-                        <img
-                          src={book.coverUrl}
-                          alt={book.title}
-                          className="w-full h-full object-cover"
+                        <BookCover
+                          coverUrl={book.coverUrl}
+                          title={book.title}
+                          spineColor={'spineColor' in book ? book.spineColor : cand.dominantColor}
+                          className="w-full h-full"
+                          fallbackTextSize={8}
                         />
                       </div>
 

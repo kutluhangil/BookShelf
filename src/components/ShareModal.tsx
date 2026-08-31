@@ -4,6 +4,7 @@ import { Shelf, Book } from '../types';
 import { ShelfStrip } from './ShelfStrip';
 import { haptic } from '../services/haptics';
 import { renderShelfCard, canvasToBlob, downloadBlob } from '../services/shelfCard';
+import { ModalShell } from './ModalShell';
 
 interface ShareModalProps {
   shelf?: Shelf;
@@ -150,7 +151,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <ModalShell isOpen={isOpen} onClose={onClose} label="Export and share collection" closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -288,7 +289,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             </button>
           </div>
         </motion.div>
-      </div>
+      </ModalShell>
     </AnimatePresence>
   );
 };

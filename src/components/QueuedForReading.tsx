@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Book } from '../types';
 import { haptic } from '../services/haptics';
+import { BookCover } from './BookCover';
 
 interface QueuedForReadingProps {
   books: Book[];
@@ -65,7 +66,7 @@ export const QueuedForReading: React.FC<QueuedForReadingProps> = ({ books, onSel
                 style={{ backgroundColor: book.spineColor || '#2C251D' }}
               >
                 {book.coverUrl ? (
-                  <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                  <BookCover coverUrl={book.coverUrl} title={book.title} spineColor={book.spineColor} className="w-full h-full" fallbackTextSize={10} />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center p-1 text-center bg-[#2C251D]">
                     <span className="font-serif-literata text-[7px] text-[#F4EFE6] font-bold line-clamp-3">{book.title}</span>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShelfStrip } from './ShelfStrip';
 import { haptic } from '../services/haptics';
+import { ModalShell } from './ModalShell';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -52,7 +53,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <ModalShell isOpen={isOpen} onClose={onClose} label="Guide and onboarding" closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -159,7 +160,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             </div>
           </div>
         </motion.div>
-      </div>
+      </ModalShell>
     </AnimatePresence>
   );
 };

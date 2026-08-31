@@ -5,6 +5,8 @@ import { ConfidenceBadge } from './ConfidenceBadge';
 import { AmbientReadingMode } from './AmbientReadingMode';
 import { QuoteScannerModal } from './QuoteScannerModal';
 import { haptic } from '../services/haptics';
+import { BookCover } from './BookCover';
+import { ModalShell } from './ModalShell';
 
 interface BookDetailModalProps {
   book: Book | null;
@@ -136,8 +138,9 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const currentShelf = shelves.find((s) => s.id === book.shelfId);
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <>
+      <AnimatePresence>
+      <ModalShell isOpen={isOpen} onClose={onClose} label={`Details for ${book.title}`} closeOnBackdrop={false} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -219,16 +222,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
               {/* Cover Art with subtle brass edge glow */}
               <div className="w-36 sm:w-40 aspect-[2/3] rounded-lg overflow-hidden shrink-0 hairline-border shadow-[0_8px_24px_rgba(0,0,0,0.7)] brass-glow bg-[#12100E] relative">
-                {book.coverUrl ? (
-                  <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
-                ) : (
-                  <div
-                    className="w-full h-full flex items-center justify-center p-4 text-center"
-                    style={{ backgroundColor: book.spineColor || '#2C251D' }}
-                  >
-                    <span className="font-serif-literata text-[13px] text-[#F4EFE6] line-clamp-5">{book.title}</span>
-                  </div>
-                )}
+                <BookCover
+                  coverUrl={book.coverUrl}
+                  title={book.title}
+                  author={book.author}
+                  spineColor={book.spineColor}
+                  className="w-full h-full"
+                  fallbackTextSize={13}
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
               </div>
 
@@ -794,9 +795,12 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             </div>
           </div>
         </motion.div>
-      </div>
-      
-      {/* Modals over modals */}
+      </ModalShell>
+      </AnimatePresence>
+
+      {/* The quote scanner brings its own AnimatePresence; keeping it inside the
+          modal's one gave that presence two unkeyed children, which React reports
+          as a duplicate key. */}
       <QuoteScannerModal
         isOpen={isQuoteScannerOpen}
         onClose={() => setIsQuoteScannerOpen(false)}
@@ -807,6 +811,6 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           }
         }}
       />
-    </AnimatePresence>
+    </>
   );
 };
