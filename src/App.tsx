@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef, lazy } from 'react';
 import { Book, Shelf, SpineCandidate, EditionOption, ReadingStatus, SpikeSample, ReadingGoals } from './types';
 import { INITIAL_BOOKS, INITIAL_SHELVES } from './data/initialLibrary';
 import { recognizeShelf, buildDemoCandidates } from './services/clusteringEngine';
@@ -40,6 +40,7 @@ import { calculateReadingStreak } from './utils/streak';
 import { parseNLPSearchQuery } from './utils/searchParser';
 import { haptic } from './services/haptics';
 import { useIncrementalList } from './hooks/useIncrementalList';
+import { LazyPanel } from './components/LazyPanel';
 import { motion } from 'motion/react';
 import { BookCover } from './components/BookCover';
 
@@ -53,13 +54,6 @@ const ReadingAnalyticsDashboard = lazy(() =>
 );
 const WeeklyReadingChart = lazy(() =>
   import('./components/WeeklyReadingChart').then((m) => ({ default: m.WeeklyReadingChart }))
-);
-
-/** Keeps the dashboard grid from collapsing while a chart chunk loads. */
-const ChartFallback: React.FC = () => (
-  <div className="bg-[#1C1916] border border-[#3A332A] rounded-2xl p-6 min-h-[180px] flex items-center justify-center">
-    <div className="w-6 h-6 border-2 border-[#C9963F]/20 border-t-[#C9963F] rounded-full animate-spin" />
-  </div>
 );
 
 type ActiveTab = 'library' | 'shelves' | 'shared' | 'eval';
@@ -1196,9 +1190,9 @@ export default function App() {
                   reminderEnabled={isReminderEnabled}
                   onToggleReminder={setIsReminderEnabled}
                 />
-                <Suspense fallback={<ChartFallback />}>
+                <LazyPanel label="The weekly reading chart">
                   <WeeklyReadingChart books={books} />
-                </Suspense>
+                </LazyPanel>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1208,12 +1202,12 @@ export default function App() {
                   goals={readingGoals}
                   onEditGoals={() => setIsReadingGoalsModalOpen(true)}
                 />
-                <Suspense fallback={<ChartFallback />}>
+                <LazyPanel label="The library growth panel">
                   <LibraryGrowthDashboard books={books} />
-                </Suspense>
-                <Suspense fallback={<ChartFallback />}>
+                </LazyPanel>
+                <LazyPanel label="The analytics panel">
                   <ReadingAnalyticsDashboard books={books} />
-                </Suspense>
+                </LazyPanel>
               </div>
 
               <GamificationBadges books={books} />
