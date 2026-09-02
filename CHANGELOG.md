@@ -5,10 +5,16 @@ Newest entries at the top.
 ## Unreleased
 
 ### Security
+- The AI rate limiter is keyed by user id, not by address. The quota belongs to the account that spends it: one account could previously burn it from many addresses, while everyone behind a shared NAT shared a single bucket. The address is now only the fallback for the development mode where authentication is off.
+- `trust proxy` is configurable through `TRUST_PROXY`. Express previously read `req.ip` off the socket, so behind a load balancer every request carried the proxy's address and the address-keyed limit collapsed into one bucket for all callers. Production warns when it is unset.
+- Security headers via `helmet`, including a Content-Security-Policy for the built app that names the origins it actually uses (Open Library, Google Fonts, Firebase). The opener policy is `same-origin-allow-popups` so Google sign-in still works, and the policy is off in development, where Vite needs inline scripts and `eval`.
+- Request bodies are parsed per route instead of globally: only the two image endpoints accept 12MB, everything else 256KB. Parsing runs after authentication and rate limiting, so a rejected caller never has their upload buffered.
+- Error responses no longer carry a stack frame outside development.
 - The Gemini endpoints now require a Firebase ID token. Enforced by default in production, where `REQUIRE_AUTH=false` refuses to start; development opts out explicitly. The client attaches the token automatically and gates the AI features when the server reports `authRequired`.
 - Fixed an unbounded memory leak in the rate limiter: expired per-IP entries are now swept.
 
 ### Added
+- Response compression (`compression`).
 - Coded service-layer errors: services now raise `AppError` with a code and typed params (`src/services/appError.ts`) instead of an English sentence, and `formatError` renders it from the active locale's catalog (`src/i18n/messages/errors.{en,tr}.ts`). The technical detail (HTTP body, SDK message, URL) is kept on the error and appended in parentheses, so failures are readable in Turkish without losing diagnosability. A mapped type makes a new code without a message a compile error.
 - Turkish interface with a TR/EN switch. Every string the app renders itself lives in a typed message catalog (`src/i18n/`); the locale is picked from the browser language on first load, and an explicit choice is remembered in local storage. Turkish is typed against the English catalog, so a missing key fails the build rather than showing a blank label. Dates, weekday names and number formatting follow the active locale.
 - Root `ErrorBoundary` with a "reset stored library" escape hatch, so a bad persisted record can no longer permanently brick the app on every reload.

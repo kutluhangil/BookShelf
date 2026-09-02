@@ -1,5 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import path from "path";
+import compression from "compression";
+import helmet from "helmet";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -11,6 +13,10 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+/** Image uploads need room for the base64 payload; every other route does not. */
+const IMAGE_BODY_LIMIT = "12mb";
+const JSON_BODY_LIMIT = "256kb";
 
 if (!GEMINI_API_KEY) {
   throw new Error(
@@ -28,13 +34,38 @@ const ai = new GoogleGenAI({
 });
 
 /**
- * Fixed-window per-IP limiter. The Gemini endpoints are unauthenticated, so
- * without this anyone reaching the server can burn the project's API quota.
+ * Express derives `req.ip` from the socket unless it is told how many proxies
+ * sit in front of it. Behind a load balancer every request then carries the
+ * proxy's address, so a per-IP rate limit degrades into one shared bucket for
+ * the whole internet. Trusting `X-Forwarded-For` unconditionally is the
+ * opposite mistake — any client could then forge its own address — so the hop
+ * count is configuration, not a guess.
+ */
+function readTrustProxy(): boolean | number | string {
+  const raw = process.env.TRUST_PROXY?.trim();
+  if (!raw) return false;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  const hops = Number(raw);
+  if (Number.isInteger(hops) && hops >= 0) return hops;
+  // Anything else is passed through verbatim: Express also accepts subnet
+  // names ("loopback", "uniquelocal") and comma-separated CIDR lists.
+  return raw;
+}
+
+/**
+ * Fixed-window limiter for the paid Gemini endpoints.
+ *
+ * The bucket is keyed by user id whenever the request is authenticated: the
+ * quota belongs to the account that spends it, and keying by address alone
+ * lets one account burn the project's quota from many addresses while placing
+ * everyone behind a shared NAT in the same bucket. The address is only the
+ * fallback for the development mode where authentication is off.
  */
 function createRateLimiter(options: { windowMs: number; max: number }) {
   const hits = new Map<string, { count: number; resetAt: number }>();
 
-  // Without pruning, the map keeps one entry per client IP for the lifetime of
+  // Without pruning, the map keeps one entry per client for the lifetime of
   // the process and grows without bound.
   const sweeper = setInterval(() => {
     const now = Date.now();
@@ -45,7 +76,7 @@ function createRateLimiter(options: { windowMs: number; max: number }) {
   sweeper.unref();
 
   return (req: Request, res: Response, next: NextFunction) => {
-    const key = req.ip ?? "unknown";
+    const key = req.user?.uid ? `uid:${req.user.uid}` : `ip:${req.ip ?? "unknown"}`;
     const now = Date.now();
     const entry = hits.get(key);
 
@@ -77,11 +108,15 @@ class ValidationError extends Error {
   }
 }
 
+/**
+ * The `hint` is the first stack frame, which names a file inside this server.
+ * It is genuinely useful while developing and is an information leak in
+ * production, so it is only produced outside production.
+ */
 function describeError(error: unknown): { message: string; detail?: string } {
-  if (error instanceof Error) {
-    return { message: error.message, detail: (error as { stack?: string }).stack?.split("\n")[1]?.trim() };
-  }
-  return { message: String(error) };
+  if (!(error instanceof Error)) return { message: String(error) };
+  if (process.env.NODE_ENV === "production") return { message: error.message };
+  return { message: error.message, detail: error.stack?.split("\n")[1]?.trim() };
 }
 
 /** Rejects payloads that are missing, malformed, or too large, with an actionable message. */
@@ -114,8 +149,75 @@ function parseJsonResponse<T>(text: string | undefined, context: string): T {
 
 async function startServer() {
   const app = express();
+  const isProduction = process.env.NODE_ENV === "production";
 
-  app.use(express.json({ limit: "12mb" }));
+  const trustProxy = readTrustProxy();
+  app.set("trust proxy", trustProxy);
+  if (isProduction && trustProxy === false) {
+    console.warn(
+      "[warn] TRUST_PROXY is not set. Behind a load balancer or reverse proxy every request then " +
+        "carries the proxy's address, so the address-keyed rate limit applies to all anonymous " +
+        "callers at once. Set TRUST_PROXY to the number of proxy hops in front of this server."
+    );
+  }
+
+  app.use(
+    helmet({
+      // Google sign-in runs in a popup that posts its result back to this
+      // window; the default `same-origin` opener policy severs that channel.
+      crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+      // Book covers come from Open Library, so the default `same-origin`
+      // resource policy would block them.
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      // Vite's dev middleware serves inline module scripts and needs `eval`
+      // for HMR, so this policy only describes the built application.
+      contentSecurityPolicy: isProduction
+        ? {
+            directives: {
+              "default-src": ["'self'"],
+              // The built index.html references every script by URL; nothing
+              // is inlined, so no hash or nonce is needed here.
+              "script-src": ["'self'"],
+              // Tailwind ships a stylesheet, but Motion animates through inline
+              // `style` attributes, which this directive also governs.
+              "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+              "font-src": ["'self'", "https://fonts.gstatic.com"],
+              // data: and blob: cover the camera frames and the per-spine crops
+              // the scanner draws locally.
+              "img-src": [
+                "'self'",
+                "data:",
+                "blob:",
+                "https://covers.openlibrary.org",
+                "https://images.unsplash.com",
+                "https://lh3.googleusercontent.com",
+              ],
+              "connect-src": [
+                "'self'",
+                "https://openlibrary.org",
+                "https://*.googleapis.com",
+                "https://*.google.com",
+                "wss://*.firebaseio.com",
+              ],
+              // The Firebase auth helper iframe.
+              "frame-src": ["'self'", "https://*.firebaseapp.com", "https://*.google.com"],
+              // The service worker registered by the PWA plugin.
+              "worker-src": ["'self'", "blob:"],
+              "object-src": ["'none'"],
+              "base-uri": ["'self'"],
+              "frame-ancestors": ["'self'"],
+            },
+          }
+        : false,
+    })
+  );
+  app.use(compression());
+
+  // Only the two image endpoints may receive a multi-megabyte body. Parsing is
+  // mounted per route rather than globally so an unauthenticated caller cannot
+  // make the server buffer 12MB on any path it likes.
+  const imageBody = express.json({ limit: IMAGE_BODY_LIMIT });
+  const jsonBody = express.json({ limit: JSON_BODY_LIMIT });
 
   const aiLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
   const auth = await createAuth();
@@ -127,7 +229,7 @@ async function startServer() {
   });
 
   // Shelf photo -> individual book spines (real recognition, replaces the old stub).
-  app.post("/api/gemini/shelf", auth.middleware, aiLimiter, async (req, res) => {
+  app.post("/api/gemini/shelf", auth.middleware, aiLimiter, imageBody, async (req, res) => {
     try {
       const imageBase64 = readImageBase64(req);
 
@@ -167,7 +269,7 @@ Return JSON: {"spines": [...]}. Never invent books you cannot see. If a spine is
   });
 
   // Book page photo -> quote text (OCR).
-  app.post("/api/gemini/quote", auth.middleware, aiLimiter, async (req, res) => {
+  app.post("/api/gemini/quote", auth.middleware, aiLimiter, imageBody, async (req, res) => {
     try {
       const imageBase64 = readImageBase64(req);
 
@@ -197,7 +299,7 @@ Return JSON: {"spines": [...]}. Never invent books you cannot see. If a spine is
   });
 
   // Library -> personalised recommendations.
-  app.post("/api/gemini/recommend", auth.middleware, aiLimiter, async (req, res) => {
+  app.post("/api/gemini/recommend", auth.middleware, aiLimiter, jsonBody, async (req, res) => {
     try {
       const { books } = req.body ?? {};
       if (!Array.isArray(books) || books.length === 0) {
@@ -231,7 +333,7 @@ Return JSON: {"recommendations":[{"title","author","year","category","reason"}]}
     }
   });
 
-  if (process.env.NODE_ENV !== "production") {
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
