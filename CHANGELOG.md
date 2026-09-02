@@ -14,6 +14,10 @@ Newest entries at the top.
 - Fixed an unbounded memory leak in the rate limiter: expired per-IP entries are now swept.
 
 ### Changed
+- `App.tsx` is 1374 lines rather than 1664, and holds 15 pieces of state rather than about 40. The library and its persistence (`useLibrary`), sign-in and cloud sync (`useCloudSync`), the notification queue (`useToasts`), the milestone rules (`useMilestoneToasts`) and the overlay state (`useActiveModal`) are each their own module. What is left in the component is the view state it actually renders from: filters, sort, compare mode and the scan lifecycle.
+- Overlays are one discriminated union instead of ten booleans and three "currently active record" fields. Two dialogs open at once is now unrepresentable — and one path really did it: opening the profile share reused the sheet without clearing the shelf a previous share had left behind, so the profile showed someone's bookshelf. The record-bound variants hold an id and look the record up, so the open book detail can no longer drift from the library; `updateBook` used to patch a second copy by hand to keep them together.
+- The milestone bookkeeping moved from state into refs. It exists only to stop a milestone firing twice, and holding it in state made every book change schedule a second render that changed nothing on screen.
+
 - The matcher evaluation is no longer part of the entry chunk. `SpikeAccuracyDashboard` and its ground-truth dataset are a developer tool reached from one tab and one menu entry, but both were statically imported and the dataset was pulled in a second time by the scanner's demo strip. They load on demand now, and the eager JavaScript drops from 375KB to 334KB (gzip 100KB to 89KB).
 
 - Cloud sync writes only what changed. Every sync used to `set` every book and every shelf, so one edited note cost a Firestore write per book in the library — and the auto-sync fires eight seconds after any change. `planSync` compares a content fingerprint of each record against the last successful push and sends the difference; the fingerprints are persisted, so the saving survives a reload. Because the comparison is on content, it does not depend on a mutation site remembering to bump `updatedAt`. The sync toast reports documents written rather than library size.
@@ -48,7 +52,8 @@ Newest entries at the top.
 - PWA support — installable, with an offline shell that runs the whole library with the server stopped.
 - Incremental rendering for the book grid, 60 at a time.
 - A live benchmark for the catalog matcher, replacing the Phase 0 dashboard's hard-coded figures.
-- Component tests with jsdom and Testing Library; 71 tests in total.
+- A smoke test that actually mounts `App`, so a broken composition fails the build rather than the first person to open the page.
+- Component tests with jsdom and Testing Library; 120 tests in total.
 
 ### Changed
 - A user's cloud library moved from the top-level `books` and `shelves` collections into `users/{uid}/books` and `users/{uid}/shelves`. Ownership is now the document path: records no longer carry a `userId` field, reads need no `where` clause (and so no composite index), and the security rules collapse to a single uid comparison.

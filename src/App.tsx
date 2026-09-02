@@ -1,12 +1,9 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef, lazy } from 'react';
-import { Book, Shelf, SpineCandidate, EditionOption, ReadingStatus, SpikeSample, ReadingGoals } from './types';
-import { INITIAL_BOOKS, INITIAL_SHELVES } from './data/initialLibrary';
+import React, { useState, useMemo, useEffect, useCallback, lazy } from 'react';
+import { Book, Shelf, SpineCandidate, EditionOption, ReadingStatus, SpikeSample } from './types';
 import { recognizeShelf, buildDemoCandidates } from './services/clusteringEngine';
 import { lookupByIsbn, lookupFromQrPayload, BookLookupResult } from './services/bookLookup';
-import { isFirebaseConfigured, firebaseConfigError, loginWithGoogle, logout, observeAuthState, type User } from './lib/firebase';
-import { syncToCloud, fetchFromCloud, mergeLibraries } from './services/cloudSync';
-import { loadLibrary, scheduleSaveLibrary, flushLibrary, isPersistenceAvailable } from './services/localStore';
-import { planSync, planSize, pruneFingerprints, EMPTY_FINGERPRINTS, type SyncFingerprints } from './services/syncPlan';
+import { isFirebaseConfigured } from './lib/firebase';
+import { isPersistenceAvailable } from './services/localStore';
 import { fetchServerCapabilities, type ServerCapabilities } from './services/apiClient';
 import { ShelfStrip } from './components/ShelfStrip';
 import { BookCard } from './components/BookCard';
@@ -30,16 +27,20 @@ import { DailyQuoteDashboard } from './components/DailyQuoteDashboard';
 import { RecommendedBooks } from './components/RecommendedBooks';
 import { QueuedForReading } from './components/QueuedForReading';
 import { ReadingCalendarWidget } from './components/ReadingCalendarWidget';
-import { ToastContainer, ToastMessage } from './components/Toast';
+import { ToastContainer } from './components/Toast';
 import { ReadingGoalsModal } from './components/ReadingGoalsModal';
 import { BookComparisonModal } from './components/BookComparisonModal';
 import { AIRecommendationsModal } from './components/AIRecommendationsModal';
 import { ImportModal } from './components/ImportModal';
 import { LibraryAnnualProgressBar } from './components/LibraryAnnualProgressBar';
-import { calculateReadingStreak } from './utils/streak';
 import { parseNLPSearchQuery } from './utils/searchParser';
 import { haptic } from './services/haptics';
 import { useIncrementalList } from './hooks/useIncrementalList';
+import { useToasts } from './hooks/useToasts';
+import { useMilestoneToasts } from './hooks/useMilestoneToasts';
+import { useActiveModal } from './hooks/useActiveModal';
+import { useLibrary, initialLibrary } from './hooks/useLibrary';
+import { useCloudSync } from './hooks/useCloudSync';
 import { LazyPanel } from './components/LazyPanel';
 import { motion } from 'motion/react';
 import { BookCover } from './components/BookCover';
@@ -67,74 +68,24 @@ const SpikeAccuracyDashboard = lazy(() =>
 
 type ActiveTab = 'library' | 'shelves' | 'shared' | 'eval';
 
-const DEFAULT_GOALS: ReadingGoals = {
-  annualPageCount: 10000,
-  annualBookCount: 50,
-  genreMilestones: [],
-};
-
-/** Reads the persisted library once, falling back to the bundled starter library. */
-function readInitialState() {
-  try {
-    const stored = loadLibrary();
-    if (stored) {
-      return {
-        books: stored.books,
-        shelves: stored.shelves,
-        readingGoals: stored.readingGoals ?? DEFAULT_GOALS,
-        monthlyGoal: stored.monthlyGoal ?? 5,
-        deletedBookIds: stored.deletedBookIds ?? [],
-        deletedShelfIds: stored.deletedShelfIds ?? [],
-        syncFingerprints: stored.syncFingerprints ?? EMPTY_FINGERPRINTS,
-        restored: true,
-        error: null as unknown,
-      };
-    }
-  } catch (error) {
-    return {
-      books: INITIAL_BOOKS,
-      shelves: INITIAL_SHELVES,
-      readingGoals: DEFAULT_GOALS,
-      monthlyGoal: 5,
-      deletedBookIds: [] as string[],
-      deletedShelfIds: [] as string[],
-      syncFingerprints: EMPTY_FINGERPRINTS,
-      restored: false,
-      // Kept raw: readInitialState runs before the provider exists, so the
-      // message is rendered later, in the reader's locale.
-      error: error as unknown,
-    };
-  }
-
-  return {
-    books: INITIAL_BOOKS,
-    shelves: INITIAL_SHELVES,
-    readingGoals: DEFAULT_GOALS,
-    monthlyGoal: 5,
-    deletedBookIds: [] as string[],
-    deletedShelfIds: [] as string[],
-    syncFingerprints: EMPTY_FINGERPRINTS,
-    restored: false,
-    error: null as string | null,
-  };
-}
-
-const initialState = readInitialState();
 
 export default function App() {
   const t = useT();
 
-  // Primary Store State
-  const [books, setBooks] = useState<Book[]>(initialState.books);
-  const [shelves, setShelves] = useState<Shelf[]>(initialState.shelves);
-  const [monthlyGoal, setMonthlyGoal] = useState<number>(initialState.monthlyGoal);
-  const [readingGoals, setReadingGoals] = useState<ReadingGoals>(initialState.readingGoals);
-
-  // Tombstones so deletions propagate to the cloud instead of resurrecting.
-  const [deletedBookIds, setDeletedBookIds] = useState<string[]>(initialState.deletedBookIds);
-  const [deletedShelfIds, setDeletedShelfIds] = useState<string[]>(initialState.deletedShelfIds);
-  // What the last successful push wrote, so the next one sends only the difference.
-  const [syncFingerprints, setSyncFingerprints] = useState<SyncFingerprints>(initialState.syncFingerprints);
+  // The records and their persistence; see useLibrary.
+  const library = useLibrary();
+  const {
+    books,
+    setBooks,
+    shelves,
+    setShelves,
+    readingGoals,
+    setReadingGoals,
+    monthlyGoal,
+    setMonthlyGoal,
+    setDeletedBookIds,
+    setDeletedShelfIds,
+  } = library;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('library');
 
@@ -149,53 +100,45 @@ export default function App() {
   // Compare Mode States
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [compareQueue, setCompareQueue] = useState<Book[]>([]);
-  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  // Overlay state lives in one discriminated union; see useActiveModal.
+  const { modal, openModal, closeModal, closeIf } = useActiveModal();
 
   // Scanning Lifecycle States
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingLabel, setProcessingLabel] = useState<string>('');
   const [pendingScanData, setPendingScanData] = useState<{ imageUrl: string; candidates: SpineCandidate[] } | null>(null);
   const [scanResultsMode, setScanResultsMode] = useState(false);
 
+  // Derived from the union rather than stored: a modal holds the record's id,
+  // so what it shows cannot drift from the list it came from.
+  const activeBookDetail = modal.kind === 'bookDetail' ? books.find((b) => b.id === modal.bookId) ?? null : null;
+  const activeShareShelf =
+    modal.kind === 'share' && modal.shelfId ? shelves.find((s) => s.id === modal.shelfId) ?? null : null;
+  const manualSearchCandidateId = modal.kind === 'manualSearch' ? modal.candidateId : null;
+  const activeReviewCandidate =
+    modal.kind === 'reviewCandidate'
+      ? pendingScanData?.candidates.find((c) => c.id === modal.candidateId) ?? null
+      : null;
+
+
   // Modals & Sheets
-  const [activeReviewCandidate, setActiveReviewCandidate] = useState<SpineCandidate | null>(null);
-  const [manualSearchCandidateId, setManualSearchCandidateId] = useState<string | null>(null);
-  const [isManualAddOpen, setIsManualAddOpen] = useState(false);
-  const [isImportOpen, setIsImportOpen] = useState(false);
-  const [activeBookDetail, setActiveBookDetail] = useState<Book | null>(null);
-  const [activeShareShelf, setActiveShareShelf] = useState<Shelf | null>(null);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [isRecommendationsModalOpen, setIsRecommendationsModalOpen] = useState(false);
-  const [isSpikeDashboardOpen, setIsSpikeDashboardOpen] = useState(false);
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
-  const [isReadingGoalsModalOpen, setIsReadingGoalsModalOpen] = useState(false);
 
   // Toast & Milestone States
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [lastNotifiedCompletedCount, setLastNotifiedCompletedCount] = useState<number>(
-    () => initialState.books.filter((b) => b.status === 'read').length
-  );
-  const [lastNotifiedStreak, setLastNotifiedStreak] = useState<number>(() => calculateReadingStreak(initialState.books));
+  const { toasts, pushToast, removeToast } = useToasts();
   const [isReminderEnabled, setIsReminderEnabled] = useState(false);
-  const reminderTriggeredRef = useRef(false);
 
-  // Auth & Sync States
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
+  // Sign-in, the login merge and pushing changes back up; see useCloudSync.
+  const {
+    currentUser,
+    isSyncing,
+    hasUnsyncedChanges,
+    lastSyncedAt,
+    syncNow: handleSyncToCloud,
+    login: handleLogin,
+    logout: handleLogout,
+  } = useCloudSync(library, pushToast);
+
   const [serverCapabilities, setServerCapabilities] = useState<ServerCapabilities | null>(null);
-  const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-
-  const pushToast = useCallback((toast: Omit<ToastMessage, 'id'> & { id?: string }) => {
-    const id = toast.id ?? `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setToasts((prev) => [...prev, { ...toast, id }]);
-    window.setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 6000);
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
 
   // The server tells us whether the AI endpoints need a signed-in user.
   useEffect(() => {
@@ -212,10 +155,10 @@ export default function App() {
 
   // Surface a storage problem instead of silently losing data.
   useEffect(() => {
-    if (initialState.error) {
+    if (initialLibrary.error) {
       pushToast({
         title: t.toasts.storedLibraryUnreadable,
-        description: formatError(t, initialState.error),
+        description: formatError(t, initialLibrary.error),
         icon: 'error',
       });
     } else if (!isPersistenceAvailable()) {
@@ -227,296 +170,8 @@ export default function App() {
     }
   }, [pushToast, t]);
 
-  // Persist every mutation locally, coalesced: this used to serialise the whole
-  // library synchronously on every keystroke in a note.
-  useEffect(() => {
-    scheduleSaveLibrary({
-      books,
-      shelves,
-      readingGoals,
-      monthlyGoal,
-      deletedBookIds,
-      deletedShelfIds,
-      syncFingerprints,
-    });
-  }, [books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds, syncFingerprints]);
 
-  // A coalesced write must not be lost to a closing or backgrounded tab.
-  // `pagehide` fires where `beforeunload` does not, notably on iOS.
-  useEffect(() => {
-    const flush = () => flushLibrary();
-    const onHidden = () => {
-      if (document.visibilityState === 'hidden') flushLibrary();
-    };
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', onHidden);
-    return () => {
-      window.removeEventListener('pagehide', flush);
-      document.removeEventListener('visibilitychange', onHidden);
-      flushLibrary();
-    };
-  }, []);
-
-  // Flag unsynced work. Skipped on mount so a freshly loaded library is not
-  // reported as dirty before the user has touched anything.
-  const isFirstRenderRef = useRef(true);
-  useEffect(() => {
-    if (isFirstRenderRef.current) {
-      isFirstRenderRef.current = false;
-      return;
-    }
-    setHasUnsyncedChanges(true);
-  }, [books, shelves, readingGoals, monthlyGoal]);
-
-  // Keep shelf volume counts in sync with the actual books.
-  useEffect(() => {
-    setShelves((prev) => {
-      let changed = false;
-      const next = prev.map((shelf) => {
-        const count = books.filter((book) => book.shelfId === shelf.id).length;
-        if (shelf.volumeCount === count) return shelf;
-        changed = true;
-        return { ...shelf, volumeCount: count };
-      });
-      return changed ? next : prev;
-    });
-  }, [books]);
-
-  const booksRef = useRef(books);
-  const shelvesRef = useRef(shelves);
-  const fingerprintsRef = useRef(syncFingerprints);
-  booksRef.current = books;
-  shelvesRef.current = shelves;
-  fingerprintsRef.current = syncFingerprints;
-
-  useEffect(() => {
-    return observeAuthState(
-      async (user) => {
-      setCurrentUser(user);
-      if (!user) return;
-
-      try {
-        setIsSyncing(true);
-        const cloudData = await fetchFromCloud(user.uid);
-        const merged = mergeLibraries(
-          { books: booksRef.current, shelves: shelvesRef.current },
-          cloudData,
-          { bookIds: deletedBookIds, shelfIds: deletedShelfIds },
-          fingerprintsRef.current
-        );
-        setBooks(merged.books);
-        setShelves(merged.shelves);
-        if (cloudData.readingGoals) setReadingGoals(cloudData.readingGoals);
-        if (typeof cloudData.monthlyGoal === 'number') setMonthlyGoal(cloudData.monthlyGoal);
-
-        pushToast({
-          title: t.toasts.librarySynced,
-          description: t.toasts.librarySyncedDetail(merged.addedFromCloud),
-          icon: 'cloud_download',
-        });
-
-        // A silent last-write-wins merge can lose an edit made on another
-        // device, so say what happened instead of hiding it.
-        if (merged.conflicts.length > 0) {
-          const keptCloud = merged.conflicts.filter((entry) => entry.keptSide === 'cloud');
-          pushToast({
-            title: t.toasts.conflictsResolved(merged.conflicts.length),
-            description: t.toasts.conflictsDetail(
-              merged.conflicts.slice(0, 3).map((entry) => entry.title).join(', '),
-              Math.max(0, merged.conflicts.length - 3),
-              keptCloud.length
-            ),
-            icon: 'merge',
-          });
-        }
-      } catch (error) {
-        pushToast({
-          title: t.toasts.cloudFetchFailed,
-          description: formatError(t, error),
-          icon: 'error',
-        });
-        } finally {
-          setIsSyncing(false);
-        }
-      },
-      (error) =>
-        pushToast({
-          title: t.toasts.cloudUnavailable,
-          description: t.toasts.cloudUnavailableDetail(error.message),
-          icon: 'cloud_off',
-        })
-    );
-    // deletedBookIds/deletedShelfIds are read through the closure only at login time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pushToast, t]);
-
-  const handleLogin = async () => {
-    if (!isFirebaseConfigured) {
-      pushToast({
-        title: t.toasts.cloudDisabled,
-        description: firebaseConfigError ? formatError(t, firebaseConfigError) : '',
-        icon: 'cloud_off',
-      });
-      return;
-    }
-    try {
-      await loginWithGoogle();
-    } catch (error) {
-      pushToast({
-        title: t.toasts.signInFailed,
-        description: formatError(t, error),
-        icon: 'error',
-      });
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      pushToast({ title: t.toasts.signedOut, description: t.toasts.signedOutDetail, icon: 'logout' });
-    } catch (error) {
-      pushToast({
-        title: t.toasts.signOutFailed,
-        description: formatError(t, error),
-        icon: 'error',
-      });
-    }
-  };
-
-  const handleSyncToCloud = useCallback(async () => {
-    if (!currentUser) return;
-
-    // Only the records whose content differs from the last successful push. A
-    // full-library write per sync meant one edited note cost a Firestore write
-    // per book in the library.
-    const input = { books, shelves, readingGoals, monthlyGoal };
-    const plan = planSync(input, syncFingerprints);
-    const writes = planSize(plan) + deletedBookIds.length + deletedShelfIds.length;
-
-    try {
-      setIsSyncing(true);
-      await syncToCloud(currentUser.uid, {
-        books: plan.books,
-        shelves: plan.shelves,
-        readingGoals,
-        monthlyGoal,
-        writeMeta: plan.writeMeta,
-        deletedBookIds,
-        deletedShelfIds,
-      });
-      // Tombstones have been applied remotely; drop them.
-      setDeletedBookIds([]);
-      setDeletedShelfIds([]);
-      setSyncFingerprints(pruneFingerprints(plan.next, input));
-      setHasUnsyncedChanges(false);
-      setLastSyncedAt(new Date().toISOString());
-      pushToast({
-        title: t.toasts.syncComplete,
-        description: t.toasts.syncCompleteDetail(writes),
-        icon: 'cloud_done',
-      });
-    } catch (error) {
-      pushToast({
-        title: t.toasts.syncFailed,
-        description: formatError(t, error),
-        icon: 'error',
-      });
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [
-    currentUser,
-    books,
-    shelves,
-    readingGoals,
-    monthlyGoal,
-    syncFingerprints,
-    deletedBookIds,
-    deletedShelfIds,
-    pushToast,
-    t,
-  ]);
-
-  // Debounced auto-sync: without it the cloud copy silently goes stale whenever
-  // the user forgets to press Sync.
-  useEffect(() => {
-    if (!currentUser || !hasUnsyncedChanges || isSyncing) return;
-    const timer = window.setTimeout(() => {
-      void handleSyncToCloud();
-    }, 8000);
-    return () => window.clearTimeout(timer);
-  }, [currentUser, hasUnsyncedChanges, isSyncing, handleSyncToCloud]);
-
-  // Best-effort warning if the tab closes with work that never reached the cloud.
-  useEffect(() => {
-    if (!currentUser || !hasUnsyncedChanges) return;
-    const handler = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [currentUser, hasUnsyncedChanges]);
-
-  useEffect(() => {
-    if (!isReminderEnabled || reminderTriggeredRef.current) return;
-
-    let latestDate = 0;
-    books.forEach((b) => {
-      b.readingSessions?.forEach((s) => {
-        const t = new Date(s.date).getTime();
-        if (t > latestDate) latestDate = t;
-      });
-      b.readHistory?.forEach((dateString) => {
-        const time = new Date(dateString).getTime();
-        if (time > latestDate) latestDate = time;
-      });
-      if (b.readAt) {
-        const time = new Date(b.readAt).getTime();
-        if (time > latestDate) latestDate = time;
-      }
-    });
-
-    if (latestDate > 0 && Date.now() - latestDate > 48 * 60 * 60 * 1000) {
-      reminderTriggeredRef.current = true;
-      pushToast({
-        title: t.toasts.readingReminder,
-        description: t.toasts.readingReminderDetail,
-        icon: 'menu_book',
-      });
-      haptic.success();
-    }
-  }, [isReminderEnabled, books, pushToast, t]);
-
-  useEffect(() => {
-    const currentCompletedCount = books.filter((b) => b.status === 'read').length;
-    if (currentCompletedCount > lastNotifiedCompletedCount) {
-      if (currentCompletedCount % 5 === 0) {
-        pushToast({
-          title: t.toasts.milestone,
-          description: t.toasts.milestoneDetail(currentCompletedCount),
-          icon: 'emoji_events',
-        });
-        haptic.success();
-      }
-      setLastNotifiedCompletedCount(currentCompletedCount);
-    }
-  }, [books, lastNotifiedCompletedCount, pushToast, t]);
-
-  useEffect(() => {
-    const streak = calculateReadingStreak(books);
-    if (streak > lastNotifiedStreak) {
-      if (streak % 7 === 0) {
-        pushToast({
-          title: t.toasts.streak,
-          description: t.toasts.streakDetail(streak),
-          icon: 'local_fire_department',
-        });
-        haptic.success();
-      }
-      setLastNotifiedStreak(streak);
-    }
-  }, [books, lastNotifiedStreak, pushToast, t]);
+  useMilestoneToasts(books, isReminderEnabled, pushToast);
 
   // Filtered books in the current view
   const filteredBooks = useMemo(() => {
@@ -582,7 +237,7 @@ export default function App() {
   const handleBookClick = (book: Book) => {
     haptic.selectionClick();
     if (!isCompareMode) {
-      setActiveBookDetail(book);
+      openModal({ kind: 'bookDetail', bookId: book.id });
       return;
     }
     if (compareQueue.some((b) => b.id === book.id)) {
@@ -592,7 +247,7 @@ export default function App() {
     if (compareQueue.length < 2) {
       const newQueue = [...compareQueue, book];
       setCompareQueue(newQueue);
-      if (newQueue.length === 2) setIsCompareModalOpen(true);
+      if (newQueue.length === 2) openModal({ kind: 'compare' });
     }
   };
 
@@ -612,7 +267,7 @@ export default function App() {
   const exitCompareMode = () => {
     setIsCompareMode(false);
     setCompareQueue([]);
-    setIsCompareModalOpen(false);
+    closeIf('compare');
   };
 
   /** Turns an Open Library result into a library book on the active shelf. */
@@ -650,13 +305,13 @@ export default function App() {
       });
       setDeletedBookIds((prev) => prev.filter((id) => id !== book.id));
     },
-    []
+    [setBooks, setDeletedBookIds]
   );
 
   // Handle Capture from Camera, Upload, Barcode or Demo Sample
   const handleCapture = useCallback(
     async (payload: CapturePayload) => {
-      setIsScannerOpen(false);
+      closeIf('scanner');
 
       if (payload.mode === 'isbn' || payload.mode === 'qr') {
         if (!payload.barcode) {
@@ -676,7 +331,7 @@ export default function App() {
           const book = bookFromLookup(result, payload.mode);
           addBook(book);
           haptic.success();
-          setActiveBookDetail(book);
+          openModal({ kind: 'bookDetail', bookId: book.id });
           pushToast({
             title: t.toasts.bookAdded,
             description: t.toasts.titleAndAuthor(result.title, result.author),
@@ -728,7 +383,7 @@ export default function App() {
         });
       }
     },
-    [addBook, bookFromLookup, pushToast, blockAiWithLoginPrompt, t]
+    [addBook, bookFromLookup, pushToast, blockAiWithLoginPrompt, openModal, closeIf, t]
   );
 
   const handleProcessingComplete = () => {
@@ -820,7 +475,7 @@ export default function App() {
     });
 
     setPendingScanData({ ...pendingScanData, candidates: updated });
-    setActiveReviewCandidate(null);
+    closeIf('reviewCandidate');
   };
 
   const handleSelectManualResult = (result: BookLookupResult) => {
@@ -834,7 +489,7 @@ export default function App() {
         description: t.toasts.titleAndAuthor(result.title, result.author),
         icon: 'library_add',
       });
-      setIsManualAddOpen(false);
+      closeIf('manualAdd');
       return;
     }
 
@@ -869,7 +524,7 @@ export default function App() {
     });
 
     setPendingScanData({ ...pendingScanData, candidates: updated });
-    setManualSearchCandidateId(null);
+    closeIf('manualSearch');
   };
 
   const handleMarkNotBook = (candidateId: string) => {
@@ -878,15 +533,14 @@ export default function App() {
       ...pendingScanData,
       candidates: pendingScanData.candidates.map((c) => (c.id === candidateId ? { ...c, isDismissed: true } : c)),
     });
-    setActiveReviewCandidate(null);
+    closeIf('reviewCandidate');
   };
 
-  /** Applies a partial update to a book and mirrors it into the open detail modal. */
+  /** Applies a partial update to a book. */
   const updateBook = useCallback((bookId: string, patch: (book: Book) => Partial<Book>) => {
     const stamp = new Date().toISOString();
     setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, ...patch(b), updatedAt: stamp } : b)));
-    setActiveBookDetail((prev) => (prev && prev.id === bookId ? { ...prev, ...patch(prev), updatedAt: stamp } : prev));
-  }, []);
+  }, [setBooks]);
 
   const handleUpdateStatus = (bookId: string, status: ReadingStatus) => {
     const now = new Date().toISOString();
@@ -962,7 +616,7 @@ export default function App() {
     setBooks((prev) => prev.filter((b) => b.id !== bookId));
     setDeletedBookIds((prev) => (prev.includes(bookId) ? prev : [...prev, bookId]));
     setCompareQueue((queue) => queue.filter((b) => b.id !== bookId));
-    setActiveBookDetail(null);
+    closeIf('bookDetail');
     pushToast({ title: t.toasts.volumeRemoved, description: t.toasts.volumeRemovedDetail, icon: 'delete' });
   };
 
@@ -1090,8 +744,8 @@ export default function App() {
         <ScanResultsView
           sourceImageUrl={pendingScanData.imageUrl}
           candidates={pendingScanData.candidates}
-          onReviewCandidate={(cand) => setActiveReviewCandidate(cand)}
-          onOpenManualSearch={(id) => setManualSearchCandidateId(id)}
+          onReviewCandidate={(cand) => openModal({ kind: 'reviewCandidate', candidateId: cand.id })}
+          onOpenManualSearch={(id) => openModal({ kind: 'manualSearch', candidateId: id })}
           onSaveMatchedBooks={handleSaveMatchedBooks}
           onDiscard={() => {
             setScanResultsMode(false);
@@ -1102,18 +756,15 @@ export default function App() {
         <ReviewMatchSheet
           candidate={activeReviewCandidate}
           isOpen={!!activeReviewCandidate}
-          onClose={() => setActiveReviewCandidate(null)}
+          onClose={() => closeIf('reviewCandidate')}
           onSelectEdition={handleSelectEdition}
-          onOpenManualSearch={(id) => {
-            setActiveReviewCandidate(null);
-            setManualSearchCandidateId(id);
-          }}
+          onOpenManualSearch={(id) => openModal({ kind: 'manualSearch', candidateId: id })}
           onMarkNotBook={handleMarkNotBook}
         />
 
         <ManualSearchSheet
           isOpen={!!manualSearchCandidateId}
-          onClose={() => setManualSearchCandidateId(null)}
+          onClose={() => closeIf('manualSearch')}
           onSelectResult={handleSelectManualResult}
           initialQuery={
             pendingScanData.candidates.find((c) => c.id === manualSearchCandidateId)?.rawTextForward ?? ''
@@ -1132,13 +783,13 @@ export default function App() {
       <NavigationHeader
         currentView={activeTab}
         books={books}
-        onOpenProfile={() => setIsShareModalOpen(true)}
+        onOpenProfile={() => openModal({ kind: 'share', shelfId: null })}
         onOpenRecommendations={() => {
           if (blockAiWithLoginPrompt()) return;
-          setIsRecommendationsModalOpen(true);
+          openModal({ kind: 'recommendations' });
         }}
-        onOpenSpikeDashboard={() => setIsSpikeDashboardOpen(true)}
-        onOpenOnboarding={() => setIsOnboardingOpen(true)}
+        onOpenSpikeDashboard={() => openModal({ kind: 'spikeDashboard' })}
+        onOpenOnboarding={() => openModal({ kind: 'onboarding' })}
         isAuthenticated={!!currentUser}
         isCloudAvailable={isFirebaseConfigured}
         userName={currentUser?.displayName ?? currentUser?.email ?? undefined}
@@ -1166,8 +817,7 @@ export default function App() {
             onReorderShelves={handleReorderShelves}
             onAutoSort={handleAutoSortGenres}
             onShareShelf={(shelf) => {
-              setActiveShareShelf(shelf);
-              setIsShareModalOpen(true);
+              openModal({ kind: 'share', shelfId: shelf.id });
             }}
           />
         ) : activeTab === 'shared' ? (
@@ -1203,7 +853,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       haptic.lightImpact();
-                      setIsManualAddOpen(true);
+                      openModal({ kind: 'manualAdd' });
                     }}
                     className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
                   >
@@ -1214,7 +864,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       haptic.lightImpact();
-                      setIsImportOpen(true);
+                      openModal({ kind: 'import' });
                     }}
                     className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
                   >
@@ -1225,8 +875,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       haptic.lightImpact();
-                      setActiveShareShelf(null);
-                      setIsShareModalOpen(true);
+                      openModal({ kind: 'share', shelfId: null });
                     }}
                     className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
                   >
@@ -1237,7 +886,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       haptic.mediumImpact();
-                      setIsScannerOpen(true);
+                      openModal({ kind: 'scanner' });
                     }}
                     className="px-4 py-1.5 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] rounded-lg font-mono-ibm text-[11px] font-bold tracking-wider uppercase transition-all shadow-[0_2px_12px_rgba(201,150,63,0.3)] flex items-center gap-1.5"
                   >
@@ -1253,7 +902,7 @@ export default function App() {
                 height={76}
                 onBarClick={(idx: number) => {
                   haptic.selectionClick();
-                  if (books[idx]) setActiveBookDetail(books[idx]);
+                  if (books[idx]) openModal({ kind: 'bookDetail', bookId: books[idx].id });
                 }}
               />
             </section>
@@ -1261,7 +910,7 @@ export default function App() {
             <LibraryAnnualProgressBar books={books} goals={readingGoals} />
 
             <div className="space-y-4">
-              <QueuedForReading books={books} onSelectBook={setActiveBookDetail} />
+              <QueuedForReading books={books} onSelectBook={(book) => openModal({ kind: 'bookDetail', bookId: book.id })} />
 
               <DailyQuoteDashboard />
 
@@ -1281,7 +930,7 @@ export default function App() {
                 <ReadingGoalsDashboard
                   books={books}
                   goals={readingGoals}
-                  onEditGoals={() => setIsReadingGoalsModalOpen(true)}
+                  onEditGoals={() => openModal({ kind: 'readingGoals' })}
                 />
                 <LazyPanel label={t.panels.growth}>
                   <LibraryGrowthDashboard books={books} />
@@ -1486,21 +1135,21 @@ export default function App() {
                   </div>
                   <div className="flex flex-wrap gap-2 justify-center">
                     <button
-                      onClick={() => setIsScannerOpen(true)}
+                      onClick={() => openModal({ kind: 'scanner' })}
                       className="px-5 py-2.5 bg-[#C9963F] text-[#12100E] font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider shadow-lg flex items-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[18px]" aria-hidden="true">photo_camera</span>
                       <span>{t.library.scanNewShelf}</span>
                     </button>
                     <button
-                      onClick={() => setIsManualAddOpen(true)}
+                      onClick={() => openModal({ kind: 'manualAdd' })}
                       className="px-5 py-2.5 bg-[#262119] text-[#C9963F] hairline-border font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider flex items-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[18px]" aria-hidden="true">search</span>
                       <span>{t.library.addBySearchLong}</span>
                     </button>
                     <button
-                      onClick={() => setIsImportOpen(true)}
+                      onClick={() => openModal({ kind: 'import' })}
                       className="px-5 py-2.5 bg-[#262119] text-[#C9963F] hairline-border font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider flex items-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[18px]" aria-hidden="true">upload_file</span>
@@ -1563,8 +1212,7 @@ export default function App() {
                         onClick={() => handleBookClick(book)}
                         onResolve={(e: React.MouseEvent) => {
                           e.stopPropagation();
-                          setManualSearchCandidateId(null);
-                          setActiveBookDetail(book);
+                          openModal({ kind: 'bookDetail', bookId: book.id });
                         }}
                       />
                       {isCompareMode && compareQueue.some((b) => b.id === book.id) && (
@@ -1595,9 +1243,9 @@ export default function App() {
         )}
       </div>
 
-      <BottomNavBar activeTab={activeTab} onTabChange={setActiveTab} onOpenScanner={() => setIsScannerOpen(true)} />
+      <BottomNavBar activeTab={activeTab} onTabChange={setActiveTab} onOpenScanner={() => openModal({ kind: 'scanner' })} />
 
-      <ScanModal isOpen={isScannerOpen} onClose={() => setIsScannerOpen(false)} onCapture={handleCapture} />
+      <ScanModal isOpen={modal.kind === 'scanner'} onClose={() => closeIf('scanner')} onCapture={handleCapture} />
 
       {isProcessing && (
         <ProcessingView
@@ -1612,7 +1260,7 @@ export default function App() {
         book={activeBookDetail}
         shelves={shelves}
         isOpen={!!activeBookDetail}
-        onClose={() => setActiveBookDetail(null)}
+        onClose={() => closeIf('bookDetail')}
         onUpdateStatus={handleUpdateStatus}
         onUpdateProgress={handleUpdateProgress}
         onUpdateCurrentPage={handleUpdateCurrentPage}
@@ -1629,15 +1277,15 @@ export default function App() {
       />
 
       <ReadingGoalsModal
-        isOpen={isReadingGoalsModalOpen}
-        onClose={() => setIsReadingGoalsModalOpen(false)}
+        isOpen={modal.kind === 'readingGoals'}
+        onClose={() => closeIf('readingGoals')}
         goals={readingGoals}
         onSave={(newGoals) => setReadingGoals(newGoals)}
       />
 
       <AIRecommendationsModal
-        isOpen={isRecommendationsModalOpen}
-        onClose={() => setIsRecommendationsModalOpen(false)}
+        isOpen={modal.kind === 'recommendations'}
+        onClose={() => closeIf('recommendations')}
         books={books}
         onAddBook={(recommendation) => {
           const book: Book = {
@@ -1667,9 +1315,9 @@ export default function App() {
       />
 
       <BookComparisonModal
-        isOpen={isCompareModalOpen}
+        isOpen={modal.kind === 'compare'}
         onClose={() => {
-          setIsCompareModalOpen(false);
+          closeIf('compare');
           setCompareQueue([]);
         }}
         books={compareQueue}
@@ -1678,16 +1326,13 @@ export default function App() {
       <ShareModal
         shelf={activeShareShelf || undefined}
         books={books}
-        isOpen={isShareModalOpen}
-        onClose={() => {
-          setIsShareModalOpen(false);
-          setActiveShareShelf(null);
-        }}
+        isOpen={modal.kind === 'share'}
+        onClose={() => closeIf('share')}
       />
 
       <ImportModal
-        isOpen={isImportOpen}
-        onClose={() => setIsImportOpen(false)}
+        isOpen={modal.kind === 'import'}
+        onClose={() => closeIf('import')}
         existingBooks={books}
         targetShelfId={targetShelfId}
         onImport={(imported) => {
@@ -1702,17 +1347,17 @@ export default function App() {
 
       {/* Manual "add by search" flow outside of a scan */}
       <ManualSearchSheet
-        isOpen={isManualAddOpen}
-        onClose={() => setIsManualAddOpen(false)}
+        isOpen={modal.kind === 'manualAdd'}
+        onClose={() => closeIf('manualAdd')}
         onSelectResult={handleSelectManualResult}
       />
 
-      {isSpikeDashboardOpen && (
+      {modal.kind === 'spikeDashboard' && (
         <LazyPanel label={t.nav.eval}>
           <SpikeAccuracyDashboard
-            onClose={() => setIsSpikeDashboardOpen(false)}
+            onClose={() => closeIf('spikeDashboard')}
             onTestSampleInScanner={(sample: SpikeSample) => {
-              setIsSpikeDashboardOpen(false);
+              closeModal();
               void handleCapture({ imageUrl: sample.imageUrl, mode: 'shelf', sample });
             }}
           />
@@ -1720,9 +1365,9 @@ export default function App() {
       )}
 
       <OnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={() => setIsOnboardingOpen(false)}
-        onStartScanning={() => setIsScannerOpen(true)}
+        isOpen={modal.kind === 'onboarding'}
+        onClose={() => closeIf('onboarding')}
+        onStartScanning={() => openModal({ kind: 'scanner' })}
       />
     </div>
   );
