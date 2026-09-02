@@ -52,6 +52,7 @@ Newest entries at the top.
 - PWA support — installable, with an offline shell that runs the whole library with the server stopped.
 - Incremental rendering for the book grid, 60 at a time.
 - A live benchmark for the catalog matcher, replacing the Phase 0 dashboard's hard-coded figures.
+- Integration tests for the HTTP surface. `server.ts` split into an entry point that reads the environment and `src/server/app.ts`, a factory that takes the Gemini client, the auth setup and the environment as arguments — so the routes can be driven without a port or an API key. 30 tests now cover the parts where a mistake is a bill or a breach: that an unauthenticated call never reaches the paid API and never has its body buffered, that one account's burst does not consume another's allowance, that a 9MB image and an oversized recommendation request are refused, that a stack frame does not escape in production, and that production refuses to start with authentication off.
 - A smoke test that actually mounts `App`, so a broken composition fails the build rather than the first person to open the page.
 - Component tests with jsdom and Testing Library; 120 tests in total.
 
