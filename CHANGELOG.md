@@ -13,6 +13,15 @@ Newest entries at the top.
 - The Gemini endpoints now require a Firebase ID token. Enforced by default in production, where `REQUIRE_AUTH=false` refuses to start; development opts out explicitly. The client attaches the token automatically and gates the AI features when the server reports `authRequired`.
 - Fixed an unbounded memory leak in the rate limiter: expired per-IP entries are now swept.
 
+### Accessibility
+- Pinch zoom works again: the viewport tag carried `maximum-scale=1.0, user-scalable=no`, which fails WCAG 1.4.4 and is the difference between usable and unusable for anyone who enlarges text.
+- All 137 Material Symbols spans are `aria-hidden`. The icon font renders its ligature name as text content, so a screen reader was reading out "photo_camera" and "library_books" beside — or instead of — the real label.
+- Every icon-only button has an accessible name. Twenty borrowed the `title` they already carried; twelve had nothing at all, including the close button of six dialogs.
+- The bottom tabs report `aria-current="page"`. Which tab is active was previously conveyed by colour alone. The four copies of the tab markup collapsed into one component.
+- Clickable `div`s are reachable by keyboard: the reading queue card, the two scan-result rows (the second as a `checkbox`, which is what it is), a shared-list card and the accuracy sample picker all take focus and respond to Enter and Space. The shelf coordinate grid instead lost a click handler that fired a haptic tick and nothing else while advertising a pointer cursor.
+- Toasts are a polite live region, so a milestone or a sync failure is announced and not merely drawn.
+- The navigation landmark and the scan button have names; jsx-a11y's markup rules are errors, with the four remaining exemptions each carrying the reason it is one.
+
 ### Added
 - ESLint, with `typescript-eslint`, `eslint-plugin-react-hooks` and `eslint-plugin-jsx-a11y`. `npm run lint` now runs it and `npm run typecheck` runs the type check they used to share; CI runs both. Stale `eslint-disable` comments are themselves an error — the repository had been carrying three of them with no ESLint installed to honour or reject them.
 - Response compression (`compression`).

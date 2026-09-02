@@ -37,7 +37,7 @@ export const DailyQuoteDashboard: React.FC = () => {
       
       <div className="relative z-10 space-y-3">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-[14px] text-[#C9963F]">auto_awesome</span>
+          <span className="material-symbols-outlined text-[14px] text-[#C9963F]" aria-hidden="true">auto_awesome</span>
           <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
             {t.dailyQuote.title}
           </h3>

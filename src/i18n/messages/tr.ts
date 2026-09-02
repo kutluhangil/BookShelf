@@ -40,6 +40,7 @@ export const tr: Messages = {
     shared: 'Paylaşılan',
     eval: 'Faz 0',
     scanShelf: 'Rafı tara',
+    primary: 'Ana gezinme',
   },
 
   header: {
@@ -169,6 +170,7 @@ export const tr: Messages = {
     title: 'Okuma sırasında',
     volumeCount: (count: number) => `${count} CİLT`,
     upNext: 'Sırada',
+    openBook: (title: string) => `${title} kitabını aç`,
   },
 
   recommended: {
@@ -248,6 +250,7 @@ export const tr: Messages = {
   },
 
   quoteScanner: {
+    capture: 'Sayfayı yakala',
     dialogLabel: 'Alıntı tara',
     title: 'Alıntı tara',
     extracting: 'Metin çıkarılıyor…',
@@ -293,6 +296,8 @@ export const tr: Messages = {
   },
 
   goalsModal: {
+    removeMilestone: (genre: string) => `${genre} kilometre taşını kaldır`,
+    addMilestone: 'Kilometre taşı ekle',
     dialogLabel: 'Okuma hedefleri',
     title: 'Okuma hedefleri',
     subtitle: 'Okuma kilometre taşlarını belirle',
@@ -461,6 +466,7 @@ export const tr: Messages = {
     collapse: 'DARALT',
     sourceAlt: 'Kaynak raf',
     spineIndex: (index: number) => `SIRT #${index}`,
+    reviewCandidate: (index: number) => `#${index} numaralı sırtın eşleşmesini incele`,
     needsReview: (count: number) => `Gözden geçirilmeli (${count})`,
     multipleEditions: 'Birden fazla baskı bulundu',
     candidateAlt: 'Aday kırpması',
@@ -482,6 +488,8 @@ export const tr: Messages = {
   },
 
   bookDetail: {
+    removeTag: (tag: string) => `${tag} etiketini kaldır`,
+    removeQuote: 'Alıntıyı sil',
     dialogLabel: (title: string) => `${title} ayrıntıları`,
     removeVolume: 'Cildi kaldır',
     removeConfirm: (title: string) => `"${title}" kitaplıktan kaldırılsın mı?`,

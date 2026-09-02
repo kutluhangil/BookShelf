@@ -74,7 +74,7 @@ export const RecommendedBooks: React.FC<RecommendedBooksProps> = ({ books, onAdd
   return (
     <section className="bg-[#1C1916] rounded-2xl hairline-border p-5 sm:p-6 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="material-symbols-outlined text-[16px] text-[#C9963F]">explore</span>
+        <span className="material-symbols-outlined text-[16px] text-[#C9963F]" aria-hidden="true">explore</span>
         <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold">
           {t.recommended.title}
         </h3>
@@ -141,7 +141,7 @@ export const RecommendedBooks: React.FC<RecommendedBooksProps> = ({ books, onAdd
                   className="px-3 py-1.5 bg-[#C9963F]/10 hover:bg-[#C9963F]/20 text-[#C9963F] rounded text-[11px] font-mono-ibm font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
                   title={t.recommended.addToLibrary}
                 >
-                  <span className="material-symbols-outlined text-[14px]">add</span>
+                  <span className="material-symbols-outlined text-[14px]" aria-hidden="true">add</span>
                   <span>{t.recommended.add}</span>
                 </button>
               )}

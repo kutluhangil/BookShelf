@@ -127,7 +127,7 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
 
                 {activeTrack && (
                   <label className="flex items-center gap-3 w-full max-w-xs mt-2">
-                    <span className="material-symbols-outlined text-white/30 text-[16px]">volume_down</span>
+                    <span className="material-symbols-outlined text-white/30 text-[16px]" aria-hidden="true">volume_down</span>
                     <input
                       type="range"
                       min="0"
@@ -138,7 +138,7 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
                       className="flex-1 accent-[#C9963F] cursor-pointer"
                       aria-label={t.ambient.volumeLabel}
                     />
-                    <span className="material-symbols-outlined text-white/30 text-[16px]">volume_up</span>
+                    <span className="material-symbols-outlined text-white/30 text-[16px]" aria-hidden="true">volume_up</span>
                   </label>
                 )}
 

@@ -17,6 +17,7 @@ import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
 import { useT } from '../i18n/I18nProvider';
 import { formatError } from '../i18n/formatError';
+import { activateOnKey } from '../utils/interactive';
 
 interface SharedListsViewProps {
   books: Book[];
@@ -200,14 +201,17 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
   const renderListCard = (list: SharedList, joinable: boolean) => (
     <div
       key={list.id}
+      role="button"
+      tabIndex={0}
       onClick={() => setActiveListId(list.id)}
+      onKeyDown={activateOnKey(() => setActiveListId(list.id))}
       className="bg-[#1C1916] rounded-xl p-5 border border-[#3A332A] hover:border-[#C9963F]/50 cursor-pointer transition-all group flex flex-col"
     >
       <div className="flex justify-between items-start mb-2 gap-2">
         <h3 className="font-serif-literata text-[18px] text-[#F4EFE6] group-hover:text-[#C9963F] transition-colors">
           {list.name}
         </h3>
-        <span className="material-symbols-outlined text-[16px] text-[#A79C8C]" title={list.isPublic ? t.sharedLists.public : t.sharedLists.inviteOnly}>
+        <span className="material-symbols-outlined text-[16px] text-[#A79C8C]" title={list.isPublic ? t.sharedLists.public : t.sharedLists.inviteOnly} aria-hidden="true">
           {list.isPublic ? 'public' : 'lock'}
         </span>
       </div>
@@ -260,7 +264,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-[#3A332A] pb-4">
             <div>
               <h2 className="font-serif-literata text-[24px] text-[#F4EFE6] font-bold flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#C9963F] text-[28px]">group</span>
+                <span className="material-symbols-outlined text-[#C9963F] text-[28px]" aria-hidden="true">group</span>
                 {t.sharedLists.title}
               </h2>
               <p className="font-sans-inter text-[13px] text-[#A79C8C] mt-0.5">
@@ -275,7 +279,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                 }}
                 className="px-4 py-2 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] font-mono-ibm text-[12px] font-bold rounded-xl tracking-wider transition-all flex items-center gap-1.5 shadow-[0_4px_16px_rgba(201,150,63,0.3)]"
               >
-                <span className="material-symbols-outlined text-[18px]">add</span>
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>
                 <span>{t.sharedLists.createList}</span>
               </button>
             )}
@@ -309,7 +313,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
 
           {!currentUser && (
             <div className="bg-[#262119] border border-[#C9963F]/30 rounded-xl p-6 text-center">
-              <span className="material-symbols-outlined text-[32px] text-[#C9963F] mb-2">lock</span>
+              <span className="material-symbols-outlined text-[32px] text-[#C9963F] mb-2" aria-hidden="true">lock</span>
               <h3 className="text-[#F4EFE6] font-serif-literata text-[18px] mb-2">{t.sharedLists.signInTitle}</h3>
               <p className="text-[#A79C8C] text-[13px] max-w-md mx-auto mb-4">
                 {t.sharedLists.signInBody}
@@ -395,7 +399,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
             onClick={() => setActiveListId(null)}
             className="flex items-center gap-1 text-[#A79C8C] hover:text-[#C9963F] transition-colors text-[13px] font-mono-ibm"
           >
-            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_back</span>
             {t.sharedLists.backToLists}
           </button>
 
@@ -447,8 +451,8 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                       onClick={() => setPendingDeleteId(activeList.id)}
                       className="p-2 rounded-lg bg-[#262119] text-[#A79C8C] hover:text-[#FF6B6B] transition-colors"
                       title={t.sharedLists.deleteList}
-                    >
-                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                     aria-label={t.sharedLists.deleteList}>
+                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
                     </button>
                   ))}
               </div>
@@ -502,8 +506,8 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
                           onClick={() => void handleRemoveBook(activeList.id, book.id)}
                           className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-[#A79C8C] hover:text-[#FF6B6B] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                           title={t.sharedLists.removeFromList}
-                        >
-                          <span className="material-symbols-outlined text-[14px]">close</span>
+                         aria-label={t.sharedLists.removeFromList}>
+                          <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
                         </button>
                       )}
                     </div>

@@ -1144,7 +1144,7 @@ export default function App() {
                     }}
                     className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
                   >
-                    <span className="material-symbols-outlined text-[16px]">add</span>
+                    <span className="material-symbols-outlined text-[16px]" aria-hidden="true">add</span>
                     <span>{t.library.addBySearch}</span>
                   </button>
 
@@ -1155,7 +1155,7 @@ export default function App() {
                     }}
                     className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
                   >
-                    <span className="material-symbols-outlined text-[16px]">upload_file</span>
+                    <span className="material-symbols-outlined text-[16px]" aria-hidden="true">upload_file</span>
                     <span>{t.library.import}</span>
                   </button>
 
@@ -1167,7 +1167,7 @@ export default function App() {
                     }}
                     className="px-3 py-1.5 bg-[#1C1916] hover:bg-[#262119] hairline-border text-[#A79C8C] hover:text-[#C9963F] rounded-lg font-mono-ibm text-[11px] flex items-center gap-1.5 transition-colors"
                   >
-                    <span className="material-symbols-outlined text-[16px]">share</span>
+                    <span className="material-symbols-outlined text-[16px]" aria-hidden="true">share</span>
                     <span>{t.library.shareCollection}</span>
                   </button>
 
@@ -1178,7 +1178,7 @@ export default function App() {
                     }}
                     className="px-4 py-1.5 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] rounded-lg font-mono-ibm text-[11px] font-bold tracking-wider uppercase transition-all shadow-[0_2px_12px_rgba(201,150,63,0.3)] flex items-center gap-1.5"
                   >
-                    <span className="material-symbols-outlined text-[17px] font-bold">photo_camera</span>
+                    <span className="material-symbols-outlined text-[17px] font-bold" aria-hidden="true">photo_camera</span>
                     <span>{t.library.scanShelf}</span>
                   </button>
                 </div>
@@ -1250,7 +1250,7 @@ export default function App() {
             <section className="bg-[#1C1916] p-4 rounded-2xl hairline-border space-y-3.5">
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
-                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#A79C8C] text-[19px]">
+                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#A79C8C] text-[19px]" aria-hidden="true">
                     search
                   </span>
                   <input
@@ -1269,7 +1269,7 @@ export default function App() {
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A79C8C] hover:text-[#F4EFE6]"
                       aria-label={t.manualSearch.clearLabel}
                     >
-                      <span className="material-symbols-outlined text-[16px]">cancel</span>
+                      <span className="material-symbols-outlined text-[16px]" aria-hidden="true">cancel</span>
                     </button>
                   )}
                 </div>
@@ -1353,7 +1353,7 @@ export default function App() {
                     }`}
                     title={t.library.compareBooks}
                   >
-                    <span className="material-symbols-outlined text-[14px]">compare_arrows</span>
+                    <span className="material-symbols-outlined text-[14px]" aria-hidden="true">compare_arrows</span>
                     <span className="hidden sm:inline">
                       {isCompareMode
                         ? compareQueue.length > 0
@@ -1373,8 +1373,8 @@ export default function App() {
                         viewMode === 'list' ? 'bg-[#2C251D] text-[#C9963F]' : 'text-[#A79C8C] hover:text-[#F4EFE6]'
                       } transition-colors`}
                       title={t.library.listView}
-                    >
-                      <span className="material-symbols-outlined text-[16px] block">view_list</span>
+                     aria-label={t.library.listView}>
+                      <span className="material-symbols-outlined text-[16px] block" aria-hidden="true">view_list</span>
                     </button>
                     <button
                       onClick={() => {
@@ -1385,8 +1385,8 @@ export default function App() {
                         viewMode === 'gallery' ? 'bg-[#2C251D] text-[#C9963F]' : 'text-[#A79C8C] hover:text-[#F4EFE6]'
                       } transition-colors`}
                       title={t.library.galleryView}
-                    >
-                      <span className="material-symbols-outlined text-[16px] block">grid_view</span>
+                     aria-label={t.library.galleryView}>
+                      <span className="material-symbols-outlined text-[16px] block" aria-hidden="true">grid_view</span>
                     </button>
                   </div>
 
@@ -1412,7 +1412,7 @@ export default function App() {
 
               {filteredBooks.length === 0 ? (
                 <div className="bg-[#1C1916] rounded-2xl p-12 text-center hairline-border flex flex-col items-center justify-center space-y-4">
-                  <span className="material-symbols-outlined text-5xl text-[#3A332A]">shelves</span>
+                  <span className="material-symbols-outlined text-5xl text-[#3A332A]" aria-hidden="true">shelves</span>
                   <div>
                     <h3 className="font-serif-literata text-[20px] text-[#F4EFE6] font-semibold">
                       {t.library.emptyTitle}
@@ -1426,21 +1426,21 @@ export default function App() {
                       onClick={() => setIsScannerOpen(true)}
                       className="px-5 py-2.5 bg-[#C9963F] text-[#12100E] font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider shadow-lg flex items-center gap-2"
                     >
-                      <span className="material-symbols-outlined text-[18px]">photo_camera</span>
+                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">photo_camera</span>
                       <span>{t.library.scanNewShelf}</span>
                     </button>
                     <button
                       onClick={() => setIsManualAddOpen(true)}
                       className="px-5 py-2.5 bg-[#262119] text-[#C9963F] hairline-border font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider flex items-center gap-2"
                     >
-                      <span className="material-symbols-outlined text-[18px]">search</span>
+                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">search</span>
                       <span>{t.library.addBySearchLong}</span>
                     </button>
                     <button
                       onClick={() => setIsImportOpen(true)}
                       className="px-5 py-2.5 bg-[#262119] text-[#C9963F] hairline-border font-mono-ibm text-[11px] font-bold rounded-xl uppercase tracking-wider flex items-center gap-2"
                     >
-                      <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">upload_file</span>
                       <span>{t.library.importCsv}</span>
                     </button>
                   </div>
@@ -1483,7 +1483,7 @@ export default function App() {
                         </div>
                         {isSelected && (
                           <div className="absolute top-2 right-2 bg-[#C9963F] text-[#12100E] rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
-                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                            <span className="material-symbols-outlined text-[16px] font-bold" aria-hidden="true">check</span>
                           </div>
                         )}
                       </motion.div>
@@ -1508,7 +1508,7 @@ export default function App() {
                         <>
                           <div className="absolute inset-0 rounded-2xl pointer-events-none border-2 border-[#C9963F]" />
                           <div className="absolute top-3 right-3 bg-[#C9963F] text-[#12100E] rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10 pointer-events-none">
-                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                            <span className="material-symbols-outlined text-[16px] font-bold" aria-hidden="true">check</span>
                           </div>
                         </>
                       )}

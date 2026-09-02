@@ -37,7 +37,7 @@ export const LibraryAnnualProgressBar: React.FC<LibraryAnnualProgressBarProps> =
         <div className="flex-1 space-y-2">
           <div className="flex justify-between items-end">
             <span className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[14px]">menu_book</span>
+              <span className="material-symbols-outlined text-[14px]" aria-hidden="true">menu_book</span>
               {t.annualProgress.booksGoal(currentYear)}
             </span>
             <span className="font-serif-literata text-[15px] text-[#F4EFE6] font-bold leading-none">
@@ -57,7 +57,7 @@ export const LibraryAnnualProgressBar: React.FC<LibraryAnnualProgressBarProps> =
         <div className="flex-1 space-y-2">
           <div className="flex justify-between items-end">
             <span className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[14px]">auto_stories</span>
+              <span className="material-symbols-outlined text-[14px]" aria-hidden="true">auto_stories</span>
               {t.annualProgress.pagesGoal(currentYear)}
             </span>
             <span className="font-serif-literata text-[15px] text-[#F4EFE6] font-bold leading-none">

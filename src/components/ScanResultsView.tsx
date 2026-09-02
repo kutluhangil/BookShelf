@@ -5,6 +5,7 @@ import { ConfidenceBadge } from './ConfidenceBadge';
 import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
 import { useT } from '../i18n/I18nProvider';
+import { activateOnKey } from '../utils/interactive';
 
 interface ScanResultsViewProps {
   sourceImageUrl: string;
@@ -75,7 +76,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
               className="text-[#A79C8C] hover:text-[#F4EFE6] font-mono-ibm text-[11px] flex items-center gap-1"
             >
               <span>{isBannerCollapsed ? t.scanResults.expand : t.scanResults.collapse}</span>
-              <span className="material-symbols-outlined text-[16px]">
+              <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
                 {isBannerCollapsed ? 'expand_more' : 'expand_less'}
               </span>
             </button>
@@ -149,10 +150,17 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
               {needsReview.map((cand) => (
                 <div
                   key={cand.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={t.scanResults.reviewCandidate(cand.orderIndex)}
                   onClick={() => {
                     haptic.lightImpact();
                     onReviewCandidate(cand);
                   }}
+                  onKeyDown={activateOnKey(() => {
+                    haptic.lightImpact();
+                    onReviewCandidate(cand);
+                  })}
                   className="bg-[#262119] rounded-xl p-3.5 sm:p-4 hairline-border border-[#C9963F]/40 flex items-center justify-between gap-3 cursor-pointer hover:bg-[#2C251D] transition-colors group"
                 >
                   <div className="flex items-center gap-3.5 min-w-0">
@@ -179,7 +187,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
 
                   <button className="px-3 py-1.5 bg-[#C9963F]/20 text-[#C9963F] font-mono-ibm text-[11px] font-semibold rounded-lg shrink-0 group-hover:bg-[#C9963F] group-hover:text-[#12100E] transition-all flex items-center gap-1">
                     <span>{t.bookCard.resolve}</span>
-                    <span className="material-symbols-outlined text-[15px]">chevron_right</span>
+                    <span className="material-symbols-outlined text-[15px]" aria-hidden="true">chevron_right</span>
                   </button>
                 </div>
               ))}
@@ -220,7 +228,11 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                 return (
                   <div
                     key={cand.id}
+                    role="checkbox"
+                    aria-checked={isSelected}
+                    tabIndex={0}
                     onClick={() => toggleSelect(cand.id)}
+                    onKeyDown={activateOnKey(() => toggleSelect(cand.id))}
                     className={`bg-[#1C1916] rounded-xl p-3 sm:p-3.5 hairline-border flex items-center justify-between gap-3 cursor-pointer transition-all ${
                       isSelected
                         ? 'border-[#6E8F6A]/60 bg-[#22271E]'
@@ -237,7 +249,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                         }`}
                       >
                         {isSelected && (
-                          <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                          <span className="material-symbols-outlined text-[16px] font-bold" aria-hidden="true">check</span>
                         )}
                       </div>
 

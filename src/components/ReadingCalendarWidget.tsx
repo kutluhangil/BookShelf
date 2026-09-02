@@ -100,7 +100,7 @@ export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ bo
       {/* Header & Stats */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-[16px] text-[#C9963F]">calendar_month</span>
+          <span className="material-symbols-outlined text-[16px] text-[#C9963F]" aria-hidden="true">calendar_month</span>
           <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold flex items-center gap-3">
             {t.calendar.title}
             {onToggleReminder && (
@@ -113,7 +113,7 @@ export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ bo
                 }`}
                 title={reminderEnabled ? t.calendar.reminderActiveTooltip : t.calendar.reminderEnableTooltip}
               >
-                <span className="material-symbols-outlined text-[12px]">{reminderEnabled ? 'notifications_active' : 'notifications_off'}</span>
+                <span className="material-symbols-outlined text-[12px]" aria-hidden="true">{reminderEnabled ? 'notifications_active' : 'notifications_off'}</span>
                 <span className="text-[9px] font-mono-ibm uppercase tracking-wider">{reminderEnabled ? t.calendar.reminderOn : t.calendar.reminderOff}</span>
               </button>
             )}

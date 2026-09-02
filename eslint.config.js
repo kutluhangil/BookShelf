@@ -49,14 +49,6 @@ export default tseslint.config(
       'react-hooks/immutability': 'warn',
       'react-hooks/static-components': 'warn',
       'react-hooks/preserve-manual-memoization': 'warn',
-
-      // Warnings only for one commit: the accessibility pass that clears these
-      // lands next and promotes them back to errors. They are listed rather
-      // than left off so the count is visible in CI in the meantime.
-      'jsx-a11y/click-events-have-key-events': 'warn',
-      'jsx-a11y/no-static-element-interactions': 'warn',
-      'jsx-a11y/no-noninteractive-element-interactions': 'warn',
-      'jsx-a11y/no-autofocus': 'warn',
     },
   },
 

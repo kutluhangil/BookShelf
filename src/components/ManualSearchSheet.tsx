@@ -102,7 +102,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
                 className="text-[#A79C8C] hover:text-[#F4EFE6] p-1 rounded-full"
                 aria-label={t.manualSearch.closeLabel}
               >
-                <span className="material-symbols-outlined text-[22px]">close</span>
+                <span className="material-symbols-outlined text-[22px]" aria-hidden="true">close</span>
               </button>
             </div>
             <p className="font-mono-ibm text-[10px] text-[#8C8273] uppercase tracking-widest mb-4">
@@ -111,13 +111,14 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
 
             <div className="relative mb-5">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A79C8C]">
-                <span className="material-symbols-outlined text-[20px]">search</span>
+                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">search</span>
               </div>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder={t.manualSearch.placeholder}
+                // eslint-disable-next-line jsx-a11y/no-autofocus -- the sheet exists to take a search query; the dialog traps focus, so this is where it belongs on open.
                 autoFocus
                 className="w-full pl-11 pr-10 py-3 bg-[#1C1916] hairline-border rounded-xl font-sans-inter text-[15px] text-[#F4EFE6] placeholder:text-[#9C8F7E] focus:outline-none focus:border-[#C9963F] focus:ring-1 focus:ring-[#C9963F]"
               />
@@ -130,7 +131,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
                   className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[#A79C8C] hover:text-[#F4EFE6]"
                   aria-label={t.manualSearch.clearLabel}
                 >
-                  <span className="material-symbols-outlined text-[18px]">cancel</span>
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">cancel</span>
                 </button>
               )}
             </div>
@@ -150,14 +151,14 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
 
               {!isSearching && error && (
                 <div className="py-12 text-center text-[#A79C8C]">
-                  <span className="material-symbols-outlined text-4xl text-[#3A332A] mb-2">menu_book</span>
+                  <span className="material-symbols-outlined text-4xl text-[#3A332A] mb-2" aria-hidden="true">menu_book</span>
                   <p className="font-sans-inter text-[14px] max-w-sm mx-auto">{error}</p>
                 </div>
               )}
 
               {!isSearching && !error && results.length === 0 && searchQuery.trim().length < 2 && (
                 <div className="py-12 text-center text-[#A79C8C]">
-                  <span className="material-symbols-outlined text-4xl text-[#3A332A] mb-2">search</span>
+                  <span className="material-symbols-outlined text-4xl text-[#3A332A] mb-2" aria-hidden="true">search</span>
                   <p className="font-sans-inter text-[14px]">{t.manualSearch.typeMore}</p>
                 </div>
               )}
@@ -185,7 +186,7 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
                       {book.isbn ? ` • ISBN: ${book.isbn}` : ''}
                     </p>
                   </div>
-                  <span className="material-symbols-outlined text-[#A79C8C] group-hover:text-[#C9963F] text-[20px] ml-2">
+                  <span className="material-symbols-outlined text-[#A79C8C] group-hover:text-[#C9963F] text-[20px] ml-2" aria-hidden="true">
                     add_circle
                   </span>
                 </button>

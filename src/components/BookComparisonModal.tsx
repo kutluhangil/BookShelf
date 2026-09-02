@@ -53,9 +53,10 @@ export const BookComparisonModal: React.FC<BookComparisonModalProps> = ({
             </div>
             <button
               onClick={onClose}
+              aria-label={t.common.close}
               className="text-[#A79C8C] hover:text-[#F4EFE6] transition-colors p-1"
             >
-              <span className="material-symbols-outlined">close</span>
+              <span className="material-symbols-outlined" aria-hidden="true">close</span>
             </button>
           </div>
 

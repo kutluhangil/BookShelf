@@ -143,7 +143,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   }}
                   className="w-full py-3 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] rounded-xl font-mono-ibm text-[12px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
                 >
-                  <span className="material-symbols-outlined text-[18px]">photo_camera</span>
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">photo_camera</span>
                   <span>{t.onboarding.startScanning}</span>
                 </button>
               )}

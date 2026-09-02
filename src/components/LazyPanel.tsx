@@ -36,7 +36,7 @@ const PanelFallback: React.FC<{ label: string; onRetry: () => void }> = ({ label
 
   return (
     <div className="bg-[#1C1916] border border-[#3A332A] rounded-2xl p-6 min-h-[180px] flex flex-col items-center justify-center gap-3 text-center">
-      <span className="material-symbols-outlined text-[28px] text-[#C97A3F]">wifi_off</span>
+      <span className="material-symbols-outlined text-[28px] text-[#C97A3F]" aria-hidden="true">wifi_off</span>
       <p className="font-sans-inter text-[13px] text-[#A79C8C] max-w-[240px]">{t.lazyPanel.failed(label)}</p>
       <button
         onClick={onRetry}

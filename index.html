@@ -2,7 +2,9 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!-- No maximum-scale / user-scalable: pinch zoom is the only way some readers
+         can use the app at all, and blocking it fails WCAG 1.4.4. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Book Shelf — Shelf Digitizer & Library Archive</title>
     <meta name="description" content="Digitize physical bookshelves in seconds with camera spine recognition and tactile curation." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

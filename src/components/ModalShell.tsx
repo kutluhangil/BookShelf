@@ -106,6 +106,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   if (!isOpen) return null;
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- clicking the backdrop is a mouse shortcut for dismissal; Escape, handled above, is its keyboard equivalent.
     <div
       ref={containerRef}
       role="dialog"

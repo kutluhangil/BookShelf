@@ -4,6 +4,7 @@ import { SpikeSample } from '../types';
 import { haptic } from '../services/haptics';
 import { runBenchmark, measureSample } from '../services/matchBenchmark';
 import { useT } from '../i18n/I18nProvider';
+import { activateOnKey } from '../utils/interactive';
 
 interface SpikeAccuracyDashboardProps {
   onClose: () => void;
@@ -44,7 +45,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
       <header className="p-4 sm:px-6 bg-[#181512] border-b border-[#3A332A] flex justify-between items-center z-20">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-[#C9963F]/20 hairline-border flex items-center justify-center text-[#C9963F]">
-            <span className="material-symbols-outlined text-[20px]">analytics</span>
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">analytics</span>
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -66,16 +67,17 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
             haptic.lightImpact();
             onClose();
           }}
+          aria-label={t.common.close}
           className="text-[#A79C8C] hover:text-[#F4EFE6] p-2 rounded-full hairline-border hover:bg-[#262119] transition-colors"
         >
-          <span className="material-symbols-outlined text-[22px]">close</span>
+          <span className="material-symbols-outlined text-[22px]" aria-hidden="true">close</span>
         </button>
       </header>
 
       {/* The bundled benchmark set is synthetic sample data, not a measurement of
           the live recognition pipeline. Say so plainly instead of implying otherwise. */}
       <div className="px-4 sm:px-6 py-2.5 bg-[#3A2412] border-b border-[#C9963F]/40 flex items-start gap-2">
-        <span className="material-symbols-outlined text-[18px] text-[#F5BD62] shrink-0">science</span>
+        <span className="material-symbols-outlined text-[18px] text-[#F5BD62] shrink-0" aria-hidden="true">science</span>
         <p className="font-sans-inter text-[12px] text-[#F5BD62] leading-relaxed">
           <strong className="font-semibold">{t.spike.measuredLocallyLead}</strong> {t.spike.measuredLocallyBody}
         </p>
@@ -224,10 +226,18 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
                         return (
                           <div
                             key={sample.id}
+                            role="radio"
+                            aria-checked={isSelected}
+                            tabIndex={0}
+                            aria-label={sample.name}
                             onClick={() => {
                               haptic.selectionClick();
                               setSelectedSample(sample);
                             }}
+                            onKeyDown={activateOnKey(() => {
+                              haptic.selectionClick();
+                              setSelectedSample(sample);
+                            })}
                             className={`p-2 rounded-lg bg-[#12100E] hairline-border cursor-pointer transition-all ${
                               isSelected
                                 ? 'border-[#C9963F] ring-1 ring-[#C9963F]'
@@ -342,7 +352,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
                     }}
                     className="w-full py-2.5 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] rounded-lg font-mono-ibm text-[11px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
                   >
-                    <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                    <span className="material-symbols-outlined text-[16px]" aria-hidden="true">play_arrow</span>
                     <span>{t.spike.testInScanner}</span>
                   </button>
                 )}
@@ -380,7 +390,7 @@ export const SpikeAccuracyDashboard: React.FC<SpikeAccuracyDashboardProps> = ({
                   key={i}
                   className="flex items-center gap-3 p-3 bg-[#12100E] rounded-lg hairline-border"
                 >
-                  <span className="material-symbols-outlined text-[#6E8F6A] text-[20px]">
+                  <span className="material-symbols-outlined text-[#6E8F6A] text-[20px]" aria-hidden="true">
                     check_circle
                   </span>
                   <span className="text-[14px] text-[#F4EFE6]">{label}</span>

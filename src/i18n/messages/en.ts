@@ -44,6 +44,7 @@ export const en = {
     shared: 'Shared',
     eval: 'Phase 0',
     scanShelf: 'Scan Bookshelf',
+    primary: 'Primary',
   },
 
   header: {
@@ -175,6 +176,7 @@ export const en = {
     title: 'Queued for Reading',
     volumeCount: (count: number) => `${count} VOLUME${count !== 1 ? 'S' : ''}`,
     upNext: 'Up Next',
+    openBook: (title: string) => `Open ${title}`,
   },
 
   recommended: {
@@ -254,6 +256,7 @@ export const en = {
   },
 
   quoteScanner: {
+    capture: 'Capture the page',
     dialogLabel: 'Scan a quote',
     title: 'Scan Quote',
     extracting: 'Extracting Text...',
@@ -299,6 +302,8 @@ export const en = {
   },
 
   goalsModal: {
+    removeMilestone: (genre: string) => `Remove the ${genre} milestone`,
+    addMilestone: 'Add milestone',
     dialogLabel: 'Reading goals',
     title: 'Reading Goals',
     subtitle: 'Set your reading milestones',
@@ -467,6 +472,7 @@ export const en = {
     collapse: 'COLLAPSE',
     sourceAlt: 'Source shelf',
     spineIndex: (index: number) => `SPINE #${index}`,
+    reviewCandidate: (index: number) => `Review the match for spine #${index}`,
     needsReview: (count: number) => `Needs Review (${count})`,
     multipleEditions: 'Multiple editions found',
     candidateAlt: 'Candidate crop',
@@ -488,6 +494,8 @@ export const en = {
   },
 
   bookDetail: {
+    removeTag: (tag: string) => `Remove the tag ${tag}`,
+    removeQuote: 'Delete quote',
     dialogLabel: (title: string) => `Details for ${title}`,
     removeVolume: 'Remove Volume',
     removeConfirm: (title: string) => `Remove "${title}" from library?`,

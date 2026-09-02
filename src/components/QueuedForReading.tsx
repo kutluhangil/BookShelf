@@ -3,6 +3,7 @@ import { Book } from '../types';
 import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
 import { useT } from '../i18n/I18nProvider';
+import { activateOnKey } from '../utils/interactive';
 
 interface QueuedForReadingProps {
   books: Book[];
@@ -42,7 +43,7 @@ export const QueuedForReading: React.FC<QueuedForReadingProps> = ({ books, onSel
   return (
     <section className="bg-[#1C1916] rounded-2xl p-4 sm:p-6 hairline-border">
       <div className="flex items-center gap-2 mb-4">
-        <span className="material-symbols-outlined text-[#C9963F] text-[20px]">
+        <span className="material-symbols-outlined text-[#C9963F] text-[20px]" aria-hidden="true">
           queue_play_next
         </span>
         <h3 className="font-serif-literata text-[18px] text-[#F4EFE6] font-semibold">
@@ -55,12 +56,19 @@ export const QueuedForReading: React.FC<QueuedForReadingProps> = ({ books, onSel
 
       <div className="flex overflow-x-auto gap-4 pb-2 no-scrollbar scroll-smooth snap-x">
         {queuedBooks.map((book) => (
-          <div 
+          <div
             key={book.id}
+            role="button"
+            tabIndex={0}
+            aria-label={t.queued.openBook(book.title)}
             onClick={() => {
               haptic.selectionClick();
               onSelectBook(book);
             }}
+            onKeyDown={activateOnKey(() => {
+              haptic.selectionClick();
+              onSelectBook(book);
+            })}
             className="snap-start min-w-[240px] max-w-[240px] flex-shrink-0 bg-[#12100E] border border-[#3A332A] hover:border-[#C9963F] rounded-xl p-4 cursor-pointer transition-all hover:shadow-lg group flex flex-col h-full"
           >
             <div className="flex gap-4 items-start mb-3">
@@ -99,7 +107,7 @@ export const QueuedForReading: React.FC<QueuedForReadingProps> = ({ books, onSel
                   </span>
                 )}
               </div>
-              <span className="material-symbols-outlined text-[16px] text-[#A79C8C] group-hover:text-[#C9963F] group-hover:translate-x-1 transition-all">
+              <span className="material-symbols-outlined text-[16px] text-[#A79C8C] group-hover:text-[#C9963F] group-hover:translate-x-1 transition-all" aria-hidden="true">
                 arrow_forward
               </span>
             </div>

@@ -72,7 +72,7 @@ export const BookCard: React.FC<BookCardProps> = ({
           </>
         ) : (
           <div className="w-12 h-20 border border-dashed border-[#3A332A] rounded flex items-center justify-center bg-[#12100E]">
-            <span className="material-symbols-outlined text-[#A79C8C] text-2xl">menu_book</span>
+            <span className="material-symbols-outlined text-[#A79C8C] text-2xl" aria-hidden="true">menu_book</span>
           </div>
         )}
 
@@ -128,7 +128,7 @@ export const BookCard: React.FC<BookCardProps> = ({
                   {progressPercent === 100 ? t.bookCard.done100 : t.bookCard.percentRead(progressPercent)}
                 </span>
               )}
-              <span className="material-symbols-outlined text-[#A79C8C] text-[18px] opacity-60 group-hover:opacity-100 transition-opacity">
+              <span className="material-symbols-outlined text-[#A79C8C] text-[18px] opacity-60 group-hover:opacity-100 transition-opacity" aria-hidden="true">
                 more_vert
               </span>
             </div>
@@ -163,7 +163,7 @@ export const BookCard: React.FC<BookCardProps> = ({
               className="text-[#C9963F] hover:underline font-semibold tracking-wider flex items-center gap-1"
             >
               <span>{t.bookCard.resolve}</span>
-              <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+              <span className="material-symbols-outlined text-[14px]" aria-hidden="true">chevron_right</span>
             </button>
           ) : isUnknown ? (
             <span className="text-[#A9503F] font-semibold tracking-wider">

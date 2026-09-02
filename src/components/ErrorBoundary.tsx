@@ -50,7 +50,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
       <div className="min-h-screen bg-[#12100E] text-[#F4EFE6] flex items-center justify-center p-6">
         <div className="w-full max-w-xl bg-[#1C1916] border border-[#A9503F]/50 rounded-2xl p-6 sm:p-8 space-y-5">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-[32px] text-[#FF6B6B]">error</span>
+            <span className="material-symbols-outlined text-[32px] text-[#FF6B6B]" aria-hidden="true">error</span>
             <h1 className="font-serif-literata text-[22px] font-bold">{t.errorBoundary.title}</h1>
           </div>
 

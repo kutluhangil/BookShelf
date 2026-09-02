@@ -128,7 +128,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
             }}
             className="flex items-center gap-2 text-[#C9963F] hover:opacity-80 transition-opacity font-mono-ibm text-[11px] font-semibold tracking-widest uppercase"
           >
-            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">arrow_back</span>
             <span>{t.header.discardScan}</span>
           </button>
         ) : (
@@ -140,8 +140,8 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
               }}
               className="text-[#A79C8C] hover:text-[#C9963F] hover:bg-[#1C1916] p-2 rounded-full transition-colors flex items-center justify-center"
               title={t.header.guideTooltip}
-            >
-              <span className="material-symbols-outlined text-[22px]">menu_book</span>
+             aria-label={t.header.guideTooltip}>
+              <span className="material-symbols-outlined text-[22px]" aria-hidden="true">menu_book</span>
             </button>
 
             <button
@@ -216,7 +216,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
                         : t.header.syncTooltip
                 }
               >
-                <span className={`material-symbols-outlined text-[16px] ${isSyncing ? 'animate-spin' : ''}`}>
+                <span className={`material-symbols-outlined text-[16px] ${isSyncing ? 'animate-spin' : ''}`} aria-hidden="true">
                   {isSyncing ? 'sync' : hasUnsyncedChanges ? 'cloud_upload' : 'cloud_done'}
                 </span>
                 <span className="hidden sm:inline">
@@ -236,7 +236,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1916] border border-[#3A332A] text-[#A79C8C] hover:text-[#C9963F] transition-colors font-mono-ibm text-[11px] disabled:opacity-50 disabled:hover:text-[#A79C8C]"
                 title={isCloudAvailable ? t.header.loginTooltip : t.header.cloudUnavailableTooltip}
               >
-                <span className="material-symbols-outlined text-[16px]">cloud_off</span>
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">cloud_off</span>
                 <span className="hidden sm:inline">{isCloudAvailable ? t.header.login : t.header.localOnly}</span>
               </button>
             )
@@ -249,8 +249,8 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
             }}
             className="sm:hidden text-[#A79C8C] hover:text-[#C9963F] p-2 rounded-full transition-colors"
             title={t.header.spikeTooltipShort}
-          >
-            <span className="material-symbols-outlined text-[20px]">analytics</span>
+           aria-label={t.header.spikeTooltipShort}>
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">analytics</span>
           </button>
 
           {onOpenRecommendations && (
@@ -261,8 +261,8 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
               }}
               className="text-[#C9963F] hover:text-[#F4EFE6] hover:bg-[#1C1916] p-2 rounded-full transition-colors flex items-center justify-center"
               title={t.header.recommendationsTooltip}
-            >
-              <span className="material-symbols-outlined text-[24px]">auto_awesome</span>
+             aria-label={t.header.recommendationsTooltip}>
+              <span className="material-symbols-outlined text-[24px]" aria-hidden="true">auto_awesome</span>
             </button>
           )}
 
@@ -280,7 +280,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
               {userPhotoUrl ? (
                 <img src={userPhotoUrl} alt="" className="w-7 h-7 rounded-full object-cover border border-[#3A332A]" />
               ) : (
-                <span className="material-symbols-outlined text-[24px]">account_circle</span>
+                <span className="material-symbols-outlined text-[24px]" aria-hidden="true">account_circle</span>
               )}
             </button>
 
@@ -328,7 +328,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
                   }}
                   className="w-full text-left px-4 py-2.5 text-[13px] text-[#D4CDA8] hover:bg-[#262119] flex items-center gap-2 transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[18px] text-[#C9963F]">share</span>
+                  <span className="material-symbols-outlined text-[18px] text-[#C9963F]" aria-hidden="true">share</span>
                   {t.header.shareAndExport}
                 </button>
 
@@ -339,7 +339,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
                   }}
                   className="w-full text-left px-4 py-2.5 text-[13px] text-[#D4CDA8] hover:bg-[#262119] flex items-center gap-2 transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[18px] text-[#C9963F]">menu_book</span>
+                  <span className="material-symbols-outlined text-[18px] text-[#C9963F]" aria-hidden="true">menu_book</span>
                   {t.header.guideAndOnboarding}
                 </button>
 
@@ -351,7 +351,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
                     }}
                     className="w-full text-left px-4 py-2.5 text-[13px] text-[#FF6B6B] hover:bg-[#2A1A1A] flex items-center gap-2 transition-colors border-t border-[#3A332A]"
                   >
-                    <span className="material-symbols-outlined text-[18px]">logout</span>
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
                     {t.header.signOut}
                   </button>
                 ) : (
@@ -363,7 +363,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
                     disabled={!isCloudAvailable}
                     className="w-full text-left px-4 py-2.5 text-[13px] text-[#C9963F] hover:bg-[#262119] flex items-center gap-2 transition-colors border-t border-[#3A332A] disabled:opacity-50"
                   >
-                    <span className="material-symbols-outlined text-[18px]">login</span>
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">login</span>
                     {isCloudAvailable ? t.header.signInWithGoogle : t.header.cloudSyncNotConfigured}
                   </button>
                 )}

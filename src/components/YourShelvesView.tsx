@@ -212,7 +212,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
               }}
               className="px-4 py-2 bg-[#2C251D] hover:bg-[#3A332A] text-[#C9963F] font-mono-ibm text-[12px] font-bold rounded-xl tracking-wider transition-all flex items-center gap-1.5 border border-[#C9963F]/30 hover:border-[#C9963F]"
             >
-              <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">auto_awesome</span>
               <span className="hidden sm:inline">{t.shelves.autoSort}</span>
             </button>
           )}
@@ -223,7 +223,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
             }}
             className="px-4 py-2 bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] font-mono-ibm text-[12px] font-bold rounded-xl tracking-wider transition-all flex items-center gap-1.5 shadow-[0_4px_16px_rgba(201,150,63,0.3)]"
           >
-            <span className="material-symbols-outlined text-[18px]">add</span>
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>
             <span>{t.shelves.newShelf}</span>
           </button>
         </div>
@@ -241,6 +241,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
               value={newShelfName}
               onChange={(e) => setNewShelfName(e.target.value)}
               placeholder={t.shelves.namePlaceholder}
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- this field is the sole reason the inline shelf editor opened; leaving focus behind would make it unusable by keyboard.
               autoFocus
               className="w-full bg-[#12100E] text-[#F4EFE6] hairline-border rounded-xl px-4 py-2.5 text-[14px] font-sans-inter focus:outline-none focus:border-[#C9963F]"
             />
@@ -362,12 +363,13 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-start gap-2.5">
                       {/* Drag Handle */}
+                      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- the handler only stops the card underneath from opening; the handle itself does nothing on click. */}
                       <div
                         className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-[#A79C8C] hover:text-[#C9963F] rounded transition-colors touch-none"
                         title={t.shelves.dragHandle}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <span className="material-symbols-outlined text-[20px] select-none">
+                        <span className="material-symbols-outlined text-[20px] select-none" aria-hidden="true">
                           drag_indicator
                         </span>
                       </div>
@@ -406,8 +408,8 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                                 : 'text-[#A79C8C] hover:text-[#F4EFE6] hover:bg-[#322B22]'
                             }`}
                             title={t.shelves.moveUp}
-                          >
-                            <span className="material-symbols-outlined text-[16px] leading-none">
+                           aria-label={t.shelves.moveUp}>
+                            <span className="material-symbols-outlined text-[16px] leading-none" aria-hidden="true">
                               arrow_upward
                             </span>
                           </button>
@@ -425,8 +427,8 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                                 : 'text-[#A79C8C] hover:text-[#F4EFE6] hover:bg-[#322B22]'
                             }`}
                             title={t.shelves.moveDown}
-                          >
-                            <span className="material-symbols-outlined text-[16px] leading-none">
+                           aria-label={t.shelves.moveDown}>
+                            <span className="material-symbols-outlined text-[16px] leading-none" aria-hidden="true">
                               arrow_downward
                             </span>
                           </button>
@@ -442,8 +444,8 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                           }}
                           className={`p-1.5 rounded-lg transition-colors ${editingColorShelfId === shelf.id ? 'text-[#C9963F] bg-[#262119]' : 'text-[#A79C8C] hover:text-[#C9963F] hover:bg-[#262119]'}`}
                           title={t.shelves.changeColor}
-                        >
-                          <span className="material-symbols-outlined text-[20px]">palette</span>
+                         aria-label={t.shelves.changeColor}>
+                          <span className="material-symbols-outlined text-[20px]" aria-hidden="true">palette</span>
                         </button>
                       )}
 
@@ -455,12 +457,13 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                         }}
                         className="text-[#A79C8C] hover:text-[#C9963F] p-1.5 rounded-lg hover:bg-[#262119] transition-colors"
                         title={t.shelves.exportCard}
-                      >
-                        <span className="material-symbols-outlined text-[20px]">share</span>
+                       aria-label={t.shelves.exportCard}>
+                        <span className="material-symbols-outlined text-[20px]" aria-hidden="true">share</span>
                       </button>
 
                       {onDeleteShelf && (
                         pendingDeleteShelfId === shelf.id ? (
+                          // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- a wrapper that keeps a press on its two buttons from also opening the shelf behind them.
                           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={(e) => {
@@ -492,8 +495,8 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                             }}
                             className="text-[#A79C8C] hover:text-[#FF6B6B] p-1.5 rounded-lg hover:bg-[#262119] transition-colors"
                             title={shelfBooks.length > 0 ? t.shelves.deleteWithBooks(shelfBooks.length) : t.shelves.deleteEmpty}
-                          >
-                            <span className="material-symbols-outlined text-[20px]">delete</span>
+                           aria-label={shelfBooks.length > 0 ? t.shelves.deleteWithBooks(shelfBooks.length) : t.shelves.deleteEmpty}>
+                            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">delete</span>
                           </button>
                         )
                       )}
@@ -609,7 +612,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                             }}
                             className="text-[10px] font-mono-ibm text-[#C9963F] hover:text-[#E8B660] transition-colors border border-[#C9963F]/30 hover:border-[#C9963F] rounded px-2 py-1 bg-[#100E0C] flex items-center gap-1"
                          >
-                           <span className="material-symbols-outlined text-[12px]">grid_view</span>
+                           <span className="material-symbols-outlined text-[12px]" aria-hidden="true">grid_view</span>
                            {t.shelves.bulkArrange}
                          </button>
                       </div>
@@ -648,7 +651,7 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                   <div className="mt-5 bg-[#12100E] rounded-xl border border-[#3A332A] p-3.5 flex flex-col gap-2.5">
                     <div className="flex justify-between items-center text-[10px] font-mono-ibm tracking-wider">
                       <span className="text-[#A79C8C] flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[14px]">align_horizontal_left</span>
+                        <span className="material-symbols-outlined text-[14px]" aria-hidden="true">align_horizontal_left</span>
                         {t.shelves.capacity(totalPages.toLocaleString(), SHELF_MAX_PAGES.toLocaleString())}
                       </span>
                       <span className={isNearCapacity ? "text-[#E57373] font-bold" : "text-[#C9963F] font-bold"}>{capacityPercentage}%</span>
@@ -664,12 +667,12 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
 
                 <div className="pt-3 border-t border-[#3A332A]/70 flex justify-between items-center text-[12px] font-mono-ibm text-[#9C8F7E]">
                   <span className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[15px] text-[#C9963F]">
+                    <span className="material-symbols-outlined text-[15px] text-[#C9963F]" aria-hidden="true">
                       menu_book
                     </span>
                     <span>{t.shelves.viewArchive}</span>
                   </span>
-                  <span className="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform text-[#C9963F]">
+                  <span className="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform text-[#C9963F]" aria-hidden="true">
                     arrow_forward
                   </span>
                 </div>

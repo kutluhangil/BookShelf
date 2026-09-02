@@ -75,18 +75,18 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
           >
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-serif-literata text-[20px] text-[#F4EFE6] font-bold flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#C9963F]">auto_awesome</span>
+                <span className="material-symbols-outlined text-[#C9963F]" aria-hidden="true">auto_awesome</span>
                 {t.aiRecommendations.title}
               </h2>
-              <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C251D] text-[#A79C8C] hover:text-[#FF6B6B] transition-colors">
-                <span className="material-symbols-outlined text-[18px]">close</span>
+              <button onClick={onClose} aria-label={t.common.close} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C251D] text-[#A79C8C] hover:text-[#FF6B6B] transition-colors">
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto min-h-[300px] pr-2 custom-scrollbar">
               {books.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                  <span className="material-symbols-outlined text-[48px] text-[#3A332A]">library_books</span>
+                  <span className="material-symbols-outlined text-[48px] text-[#3A332A]" aria-hidden="true">library_books</span>
                   <p className="text-[#A79C8C] font-sans-inter text-[14px]">{t.aiRecommendations.emptyLibrary}</p>
                 </div>
               ) : isLoading ? (
@@ -96,7 +96,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
                 </div>
               ) : error ? (
                 <div className="flex flex-col items-center justify-center h-full space-y-4 px-6 text-center">
-                  <span className="material-symbols-outlined text-[48px] text-[#FF6B6B]">error</span>
+                  <span className="material-symbols-outlined text-[48px] text-[#FF6B6B]" aria-hidden="true">error</span>
                   <p className="text-[#FF6B6B] font-mono-ibm text-[12px] leading-relaxed break-words max-w-sm">{error}</p>
                   <button
                     onClick={() => {
@@ -119,7 +119,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
                       className="bg-[#12100E] border border-[#3A332A] rounded-xl p-4 flex gap-4 items-start group hover:border-[#C9963F] transition-colors"
                     >
                       <div className="w-12 h-16 bg-[#2C251D] rounded flex-shrink-0 flex items-center justify-center shadow-inner">
-                        <span className="material-symbols-outlined text-[#A79C8C]/50 text-[24px]">book</span>
+                        <span className="material-symbols-outlined text-[#A79C8C]/50 text-[24px]" aria-hidden="true">book</span>
                       </div>
                       <div className="flex-1 space-y-1 min-w-0">
                         <h4 className="font-serif-literata text-[15px] font-bold text-[#F4EFE6] leading-tight">{rec.title}</h4>
@@ -139,7 +139,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
                             disabled={addedTitles.includes(rec.title)}
                             className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#262119] hover:bg-[#3A332A] text-[#C9963F] rounded-lg font-mono-ibm text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
                           >
-                            <span className="material-symbols-outlined text-[15px]">
+                            <span className="material-symbols-outlined text-[15px]" aria-hidden="true">
                               {addedTitles.includes(rec.title) ? 'check' : 'library_add'}
                             </span>
                             {addedTitles.includes(rec.title) ? t.aiRecommendations.added : t.aiRecommendations.addToLibrary}
@@ -161,7 +161,7 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
                 disabled={isLoading || books.length === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-[#C9963F]/10 text-[#C9963F] rounded-lg hover:bg-[#C9963F]/20 transition-colors text-[13px] font-mono-ibm font-bold uppercase tracking-wider disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-[18px]">refresh</span>
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
                 {t.aiRecommendations.refresh}
               </button>
             </div>

@@ -102,11 +102,11 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
             {/* Header */}
             <div className="flex justify-between items-center p-4 border-b border-[#3A332A] bg-[#12100E]">
               <h2 className="font-serif-literata text-[18px] text-[#F4EFE6] font-bold flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#C9963F]">document_scanner</span>
+                <span className="material-symbols-outlined text-[#C9963F]" aria-hidden="true">document_scanner</span>
                 {t.quoteScanner.title}
               </h2>
-              <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C251D] text-[#A79C8C] hover:text-[#C9963F] transition-colors">
-                <span className="material-symbols-outlined text-[18px]">close</span>
+              <button onClick={onClose} aria-label={t.common.close} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C251D] text-[#A79C8C] hover:text-[#C9963F] transition-colors">
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
               </button>
             </div>
             
@@ -157,10 +157,11 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
               </p>
               <button
                 onClick={captureAndScan}
+                aria-label={t.quoteScanner.capture}
                 disabled={isScanning || !!error}
                 className="w-16 h-16 rounded-full bg-[#C9963F] text-[#12100E] shadow-[0_4px_24px_rgba(201,150,63,0.4)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:scale-100 border-2 border-[#12100E]"
               >
-                <span className="material-symbols-outlined text-[30px] font-bold">photo_camera</span>
+                <span className="material-symbols-outlined text-[30px] font-bold" aria-hidden="true">photo_camera</span>
               </button>
             </div>
           </div>

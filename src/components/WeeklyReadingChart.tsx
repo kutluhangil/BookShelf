@@ -87,7 +87,7 @@ export const WeeklyReadingChart: React.FC<WeeklyReadingChartProps> = ({ books })
   return (
     <section className="bg-[#1C1916] rounded-2xl hairline-border p-5 sm:p-6 space-y-5">
       <div className="flex items-center gap-2">
-        <span className="material-symbols-outlined text-[16px] text-[#C9963F]">bar_chart</span>
+        <span className="material-symbols-outlined text-[16px] text-[#C9963F]" aria-hidden="true">bar_chart</span>
         <h3 className="font-serif-literata text-[20px] sm:text-[22px] text-[#F4EFE6] font-semibold">
           {t.weeklyChart.title}
         </h3>

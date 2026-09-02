@@ -299,7 +299,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
             className="text-[#F4EFE6] bg-black/40 backdrop-blur-md p-2 rounded-full hairline-border hover:bg-black/70 transition-colors"
             aria-label={t.scanner.closeLabel}
           >
-            <span className="material-symbols-outlined text-[24px]">close</span>
+            <span className="material-symbols-outlined text-[24px]" aria-hidden="true">close</span>
           </button>
 
           <div
@@ -325,8 +325,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
                 onClick={enableOrientation}
                 className="p-2 rounded-full backdrop-blur-md hairline-border bg-black/40 text-[#F4EFE6] hover:bg-black/70 transition-colors"
                 title={t.scanner.enableLevel}
-              >
-                <span className="material-symbols-outlined text-[20px]">screen_rotation</span>
+               aria-label={t.scanner.enableLevel}>
+                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">screen_rotation</span>
               </button>
             )}
             {isTorchAvailable && (
@@ -339,8 +339,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
                   isTorchOn ? 'bg-[#C9963F] text-[#12100E]' : 'bg-black/40 text-[#F4EFE6] hover:bg-black/70'
                 }`}
                 title={t.scanner.toggleTorch}
-              >
-                <span className="material-symbols-outlined text-[22px]">{isTorchOn ? 'flash_on' : 'flash_off'}</span>
+               aria-label={t.scanner.toggleTorch}>
+                <span className="material-symbols-outlined text-[22px]" aria-hidden="true">{isTorchOn ? 'flash_on' : 'flash_off'}</span>
               </button>
             )}
           </div>
@@ -378,7 +378,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
 
         {cameraError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center">
-            <span className="material-symbols-outlined text-[44px] text-[#C97A3F]">videocam_off</span>
+            <span className="material-symbols-outlined text-[44px] text-[#C97A3F]" aria-hidden="true">videocam_off</span>
             <p className="font-sans-inter text-[14px] text-[#F4EFE6] max-w-sm leading-relaxed">{cameraError}</p>
             <button
               onClick={() => void startCamera()}
@@ -469,7 +469,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
           onClick={() => setShowDemoShelves((open) => !open)}
           className="self-center font-mono-ibm text-[10px] text-[#A79C8C] hover:text-[#C9963F] uppercase tracking-widest flex items-center gap-1"
         >
-          <span className="material-symbols-outlined text-[14px]">science</span>
+          <span className="material-symbols-outlined text-[14px]" aria-hidden="true">science</span>
           {showDemoShelves ? t.scanner.hideDemo : t.scanner.tryDemo}
         </button>
 
@@ -510,8 +510,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
               }}
               className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md hairline-border text-[#F4EFE6] flex items-center justify-center hover:bg-black/90 transition-colors"
               title={t.scanner.uploadPhoto}
-            >
-              <span className="material-symbols-outlined text-[24px]">photo_library</span>
+             aria-label={t.scanner.uploadPhoto}>
+              <span className="material-symbols-outlined text-[24px]" aria-hidden="true">photo_library</span>
             </button>
           </div>
 
@@ -529,7 +529,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
                 isAligned ? 'bg-[#6E8F6A]' : 'bg-[#C9963F]'
               }`}
             >
-              <span className="material-symbols-outlined text-[32px] font-bold">photo_camera</span>
+              <span className="material-symbols-outlined text-[32px] font-bold" aria-hidden="true">photo_camera</span>
             </div>
           </motion.button>
 
@@ -540,8 +540,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
             }}
             className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md hairline-border text-[#F4EFE6] flex items-center justify-center hover:bg-black/90 transition-colors"
             title={t.common.cancel}
-          >
-            <span className="material-symbols-outlined text-[24px]">close</span>
+           aria-label={t.common.cancel}>
+            <span className="material-symbols-outlined text-[24px]" aria-hidden="true">close</span>
           </button>
         </div>
       </div>

@@ -82,7 +82,7 @@ export const GamificationBadges: React.FC<GamificationBadgesProps> = ({ books })
           <h3 className="font-serif-literata text-[#F4EFE6] font-bold text-[18px]">{t.badges.title}</h3>
           <p className="font-sans-inter text-[#A79C8C] text-[13px]">{t.badges.subtitle}</p>
         </div>
-        <span className="material-symbols-outlined text-[#C9963F] text-[24px]">workspace_premium</span>
+        <span className="material-symbols-outlined text-[#C9963F] text-[24px]" aria-hidden="true">workspace_premium</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -92,7 +92,7 @@ export const GamificationBadges: React.FC<GamificationBadgesProps> = ({ books })
               className="w-12 h-12 rounded-full flex items-center justify-center mb-3 shadow-inner"
               style={{ backgroundColor: badge.locked ? '#1C1916' : `${badge.color}20`, color: badge.locked ? '#5A5042' : badge.color }}
             >
-              <span className="material-symbols-outlined text-[24px]">{badge.icon}</span>
+              <span className="material-symbols-outlined text-[24px]" aria-hidden="true">{badge.icon}</span>
             </div>
             <h4 className={`font-mono-ibm text-[12px] font-bold uppercase tracking-wider ${badge.locked ? 'text-[#5A5042]' : 'text-[#F4EFE6]'}`}>
               {badge.title}

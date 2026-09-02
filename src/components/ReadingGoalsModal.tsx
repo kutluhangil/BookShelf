@@ -74,9 +74,10 @@ export const ReadingGoalsModal: React.FC<ReadingGoalsModalProps> = ({
             </div>
             <button
               onClick={onClose}
+              aria-label={t.common.close}
               className="text-[#A79C8C] hover:text-[#F4EFE6] transition-colors p-1"
             >
-              <span className="material-symbols-outlined">close</span>
+              <span className="material-symbols-outlined" aria-hidden="true">close</span>
             </button>
           </div>
 
@@ -128,9 +129,10 @@ export const ReadingGoalsModal: React.FC<ReadingGoalsModalProps> = ({
                       </div>
                       <button
                         onClick={() => handleRemoveGenre(idx)}
+                        aria-label={t.goalsModal.removeMilestone(gm.genre)}
                         className="text-[#E57373] hover:text-[#ef9a9a] transition-colors p-1"
                       >
-                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
                       </button>
                     </div>
                   ))}
@@ -165,10 +167,11 @@ export const ReadingGoalsModal: React.FC<ReadingGoalsModalProps> = ({
                     haptic.selectionClick();
                     handleAddGenre();
                   }}
+                  aria-label={t.goalsModal.addMilestone}
                   disabled={!newGenre || !newGenreTarget}
                   className="bg-[#262119] hover:bg-[#322B22] border border-[#3A332A] text-[#C9963F] rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[20px]">add</span>
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">add</span>
                 </button>
               </div>
             </div>

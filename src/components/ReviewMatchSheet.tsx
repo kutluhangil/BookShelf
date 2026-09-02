@@ -114,7 +114,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
             {onEnhanceWithAI && (
               <div className="mb-4 p-3 bg-[#1C1916] rounded-xl hairline-border flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="material-symbols-outlined text-[#C9963F] text-[20px]">psychology</span>
+                  <span className="material-symbols-outlined text-[#C9963F] text-[20px]" aria-hidden="true">psychology</span>
                   <div className="min-w-0">
                     <p className="font-sans-inter text-[12px] text-[#F4EFE6] font-medium truncate">
                       {t.reviewMatch.vlmTitle}
@@ -194,7 +194,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
 
                   {/* Arrow Indicator */}
                   <div className="px-3.5 flex items-center justify-center border-l border-[#3A332A]/50 text-[#9C8F7E] group-hover:text-[#C9963F] transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                    <span className="material-symbols-outlined text-[20px]" aria-hidden="true">chevron_right</span>
                   </div>
                 </button>
               ))}
@@ -209,7 +209,7 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
                 }}
                 className="w-full py-3 px-4 bg-transparent hairline-border rounded-lg font-sans-inter text-[14px] font-medium text-[#C9963F] hover:bg-[#1C1916] transition-colors flex items-center justify-center gap-2"
               >
-                <span className="material-symbols-outlined text-[19px]">search</span>
+                <span className="material-symbols-outlined text-[19px]" aria-hidden="true">search</span>
                 <span>{t.reviewMatch.searchManually}</span>
               </button>
 

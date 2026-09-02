@@ -172,8 +172,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 }}
                 className="text-[#A79C8C] hover:text-[#FFB4AB] p-1.5 rounded-lg hover:bg-[#93000A]/20 transition-colors"
                 title={t.bookDetail.removeVolume}
-              >
-                <span className="material-symbols-outlined text-[20px]">delete</span>
+               aria-label={t.bookDetail.removeVolume}>
+                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">delete</span>
               </button>
               <button
                 onClick={() => {
@@ -182,8 +182,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 }}
                 className="text-[#A79C8C] hover:text-[#F4EFE6] p-1.5 rounded-lg hover:bg-[#262119] transition-colors"
                 title={t.common.close}
-              >
-                <span className="material-symbols-outlined text-[22px]">close</span>
+               aria-label={t.common.close}>
+                <span className="material-symbols-outlined text-[22px]" aria-hidden="true">close</span>
               </button>
             </div>
           </div>
@@ -365,7 +365,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             <div className="bg-[#151311] rounded-xl p-3.5 hairline-border space-y-2">
               <div className="flex justify-between items-center text-[11px] font-mono-ibm text-[#A79C8C]">
                 <span className="tracking-wider flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[15px] text-[#C9963F]">camera_alt</span>
+                  <span className="material-symbols-outlined text-[15px] text-[#C9963F]" aria-hidden="true">camera_alt</span>
                   <span>{t.bookDetail.proofOfCapture}</span>
                 </span>
                 <span className="text-[#9C8F7E]">{t.bookDetail.localRaw}</span>
@@ -502,7 +502,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="bg-[#151311] rounded-xl p-4 hairline-border border-[#C9963F]/20 space-y-3">
                 <div className="flex justify-between items-center">
                   <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[14px] text-[#C9963F]">timer</span>
+                    <span className="material-symbols-outlined text-[14px] text-[#C9963F]" aria-hidden="true">timer</span>
                     {t.bookDetail.currentSitting}
                   </h3>
                   <div className={`font-mono-ibm text-[16px] font-bold ${isTimerActive ? 'text-[#C9963F] animate-pulse' : 'text-[#F4EFE6]'}`}>
@@ -519,7 +519,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         : 'bg-[#262119] text-[#C9963F] hover:bg-[#3A332A]'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[16px]">
+                    <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
                       {isTimerActive ? 'stop_circle' : 'play_circle'}
                     </span>
                     {isTimerActive ? t.bookDetail.stopSession : t.bookDetail.startSession}
@@ -532,8 +532,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       }}
                       className="px-3 py-2.5 bg-[#262119] text-[#A79C8C] hover:text-[#C9963F] hover:bg-[#3A332A] rounded-lg transition-colors flex items-center justify-center"
                       title={t.bookDetail.enterAmbient}
-                    >
-                      <span className="material-symbols-outlined text-[18px]">
+                     aria-label={t.bookDetail.enterAmbient}>
+                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
                         dark_mode
                       </span>
                     </button>
@@ -566,7 +566,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             {onUpdateRating && (
               <div className="space-y-1.5">
                 <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[14px] text-[#C9963F]">star</span>
+                  <span className="material-symbols-outlined text-[14px] text-[#C9963F]" aria-hidden="true">star</span>
                   {t.bookDetail.yourRating}
                 </h3>
                 <div className="bg-[#151311] p-3 rounded-xl hairline-border flex items-center gap-2">
@@ -595,7 +595,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             {onUpdateTags && (
               <div className="space-y-1.5">
                 <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[14px] text-[#C9963F]">sell</span>
+                  <span className="material-symbols-outlined text-[14px] text-[#C9963F]" aria-hidden="true">sell</span>
                   {t.bookDetail.customTags}
                 </h3>
                 <div className="bg-[#151311] p-3 rounded-xl hairline-border space-y-3">
@@ -609,9 +609,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                               const newTags = book.tags!.filter((_, i) => i !== idx);
                               onUpdateTags(book.id, newTags);
                             }}
+                            aria-label={t.bookDetail.removeTag(tag)}
                             className="text-[#A79C8C] hover:text-[#C9963F] focus:outline-none transition-colors"
                           >
-                            <span className="material-symbols-outlined text-[14px]">close</span>
+                            <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
                           </button>
                         </span>
                       ))
@@ -656,7 +657,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             {onUpdateLending && (
               <div className="space-y-1.5">
                 <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[14px] text-[#C9963F]">handshake</span>
+                  <span className="material-symbols-outlined text-[14px] text-[#C9963F]" aria-hidden="true">handshake</span>
                   {t.bookDetail.lendingTracker}
                 </h3>
                 <div className="bg-[#151311] p-4 rounded-xl hairline-border space-y-3">
@@ -736,7 +737,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[14px] text-[#C9963F]">format_quote</span>
+                    <span className="material-symbols-outlined text-[14px] text-[#C9963F]" aria-hidden="true">format_quote</span>
                     {t.bookDetail.scannedQuotes}
                   </h3>
                   <button
@@ -746,7 +747,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     }}
                     className="flex items-center gap-1 text-[11px] text-[#C9963F] hover:text-[#F4EFE6] transition-colors"
                   >
-                    <span className="material-symbols-outlined text-[14px]">document_scanner</span>
+                    <span className="material-symbols-outlined text-[14px]" aria-hidden="true">document_scanner</span>
                     {t.bookDetail.scanNew}
                   </button>
                 </div>
@@ -761,9 +762,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                             const newQuotes = book.quotes!.filter((_, i) => i !== idx);
                             onUpdateQuotes(book.id, newQuotes);
                           }}
+                          aria-label={t.bookDetail.removeQuote}
                           className="absolute top-2 right-2 w-6 h-6 bg-[#2C251D] text-[#A79C8C] hover:text-[#FF6B6B] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <span className="material-symbols-outlined text-[14px]">delete</span>
+                          <span className="material-symbols-outlined text-[14px]" aria-hidden="true">delete</span>
                         </button>
                       </div>
                     ))}
@@ -780,7 +782,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             {onUpdateNotes && (
               <div className="space-y-1.5">
                 <h3 className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[14px] text-[#C9963F]">edit_note</span>
+                  <span className="material-symbols-outlined text-[14px] text-[#C9963F]" aria-hidden="true">edit_note</span>
                   {t.bookDetail.personalNotes}
                 </h3>
                 <textarea

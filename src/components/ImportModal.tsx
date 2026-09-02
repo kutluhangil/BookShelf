@@ -132,7 +132,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             <div className="flex justify-between items-center p-5 border-b border-[#3A332A]">
               <div>
                 <h2 className="font-serif-literata text-[20px] text-[#F4EFE6] font-bold flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#C9963F]">upload_file</span>
+                  <span className="material-symbols-outlined text-[#C9963F]" aria-hidden="true">upload_file</span>
                   {t.importModal.title}
                 </h2>
                 <p className="font-mono-ibm text-[10px] text-[#8C8273] uppercase tracking-widest mt-0.5">
@@ -144,7 +144,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C251D] text-[#A79C8C] hover:text-[#C9963F] transition-colors"
                 aria-label={t.importModal.closeLabel}
               >
-                <span className="material-symbols-outlined text-[18px]">close</span>
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
               </button>
             </div>
 
@@ -168,7 +168,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                     onClick={() => fileInputRef.current?.click()}
                     className="w-full py-8 border-2 border-dashed border-[#3A332A] hover:border-[#C9963F] rounded-xl flex flex-col items-center gap-2 text-[#A79C8C] hover:text-[#C9963F] transition-colors"
                   >
-                    <span className="material-symbols-outlined text-[32px]">description</span>
+                    <span className="material-symbols-outlined text-[32px]" aria-hidden="true">description</span>
                     <span className="font-mono-ibm text-[12px] uppercase tracking-wider">{t.importModal.chooseFile}</span>
                   </button>
                 </div>

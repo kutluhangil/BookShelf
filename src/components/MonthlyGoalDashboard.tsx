@@ -79,15 +79,17 @@ export const MonthlyGoalDashboard: React.FC<MonthlyGoalDashboardProps> = ({
               onChange={(e) => setEditValue(e.target.value)}
               onBlur={handleSave}
               onKeyDown={handleKeyDown}
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- the field replaces the button that was just pressed to open it; focus has to follow.
               autoFocus
               className="bg-[#262119] text-[#F4EFE6] border border-[#C9963F] rounded px-2 py-1 w-16 text-center font-mono-ibm focus:outline-none"
             />
             <span className="text-[#A79C8C] text-[12px] font-mono-ibm uppercase">{t.common.books}</span>
           </div>
         ) : (
-          <div
+          <button
+            type="button"
             onClick={() => setIsEditing(true)}
-            className="group cursor-pointer inline-flex flex-col items-start"
+            className="group cursor-pointer inline-flex flex-col items-start text-left"
             title={t.monthlyGoal.editHint}
           >
             <div className="flex items-baseline gap-1.5">
@@ -100,9 +102,9 @@ export const MonthlyGoalDashboard: React.FC<MonthlyGoalDashboardProps> = ({
             </div>
             <div className="text-[#5A5044] text-[10px] font-mono-ibm uppercase mt-1 group-hover:text-[#C9963F] transition-colors flex items-center gap-1">
               <span>{t.monthlyGoal.editGoal}</span>
-              <span className="material-symbols-outlined text-[12px]">edit</span>
+              <span className="material-symbols-outlined text-[12px]" aria-hidden="true">edit</span>
             </div>
-          </div>
+          </button>
         )}
       </div>
 

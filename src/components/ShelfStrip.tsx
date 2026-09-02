@@ -90,12 +90,12 @@ export const ShelfStrip: React.FC<ShelfStripProps> = ({
         >
           <AnimatePresence>
             {gridCells.map((cell) => (
+              // The coordinate grid is a read-only map of the shelf. The cell
+              // used to carry an onClick that fired a haptic tick and nothing
+              // else, with a pointer cursor promising an action there is none.
               <div
                 key={cell.coord}
-                onClick={() => {
-                  haptic.lightImpact();
-                }}
-                className="relative aspect-square rounded-md border border-[#3A332A]/50 flex items-center justify-center overflow-hidden hover:border-[#C9963F] cursor-pointer transition-colors bg-transparent"
+                className="relative aspect-square rounded-md border border-[#3A332A]/50 flex items-center justify-center overflow-hidden hover:border-[#C9963F] transition-colors bg-transparent"
                 title={t.shelfStrip.bin(cell.coord)}
               >
                 {/* Empty cell text layer (always rendered) */}

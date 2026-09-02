@@ -59,8 +59,8 @@ export const ReadingGoalsDashboard: React.FC<ReadingGoalsDashboardProps> = ({
           onClick={onEditGoals}
           className="text-[#5A5044] hover:text-[#C9963F] transition-colors p-1"
           title={t.readingGoals.editGoals}
-        >
-          <span className="material-symbols-outlined text-[18px]">edit</span>
+         aria-label={t.readingGoals.editGoals}>
+          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit</span>
         </button>
       </div>
 

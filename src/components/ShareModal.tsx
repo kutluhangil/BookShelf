@@ -184,9 +184,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 haptic.lightImpact();
                 onClose();
               }}
+              aria-label={t.common.close}
               className="text-[#A79C8C] hover:text-[#F4EFE6] p-1 rounded-full"
             >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
             </button>
           </div>
 
@@ -241,7 +242,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 onClick={() => void handleCopyLink()}
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
-                <span className="material-symbols-outlined text-[#C9963F] text-[22px]">link</span>
+                <span className="material-symbols-outlined text-[#C9963F] text-[22px]" aria-hidden="true">link</span>
                 <span className="font-mono-ibm text-[10px] tracking-wider uppercase">
                   {copied ? t.share.copied : t.share.copyLink}
                 </span>
@@ -251,7 +252,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 onClick={() => void handleSaveImage('card')}
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
-                <span className="material-symbols-outlined text-[#C9963F] text-[22px]">download</span>
+                <span className="material-symbols-outlined text-[#C9963F] text-[22px]" aria-hidden="true">download</span>
                 <span className="font-mono-ibm text-[10px] tracking-wider uppercase">{t.share.saveImage}</span>
               </button>
 
@@ -259,7 +260,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 onClick={() => void handleSaveImage('story')}
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
-                <span className="material-symbols-outlined text-[#C9963F] text-[22px]">auto_stories</span>
+                <span className="material-symbols-outlined text-[#C9963F] text-[22px]" aria-hidden="true">auto_stories</span>
                 <span className="font-mono-ibm text-[10px] tracking-wider uppercase">{t.share.story}</span>
               </button>
 
@@ -267,7 +268,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 onClick={() => void handleShare()}
                 className="p-3 bg-[#262119] hover:bg-[#304E2E]/30 hairline-border rounded-xl flex flex-col items-center justify-center gap-1.5 text-[#F4EFE6] transition-colors"
               >
-                <span className="material-symbols-outlined text-[#C9963F] text-[22px]">send</span>
+                <span className="material-symbols-outlined text-[#C9963F] text-[22px]" aria-hidden="true">send</span>
                 <span className="font-mono-ibm text-[10px] tracking-wider uppercase">{t.share.share}</span>
               </button>
             </div>
@@ -287,7 +288,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               onClick={handleExportCSV}
               className="w-full p-3.5 bg-[#1C1916] hover:bg-[#C9963F]/10 border border-[#3A332A] hover:border-[#C9963F]/50 rounded-xl flex items-center justify-center gap-2 text-[#C9963F] transition-all group"
             >
-              <span className="material-symbols-outlined text-[18px]">table_view</span>
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">table_view</span>
               <span className="font-mono-ibm text-[11px] font-bold tracking-widest uppercase">
                 {t.share.exportCsv}
               </span>

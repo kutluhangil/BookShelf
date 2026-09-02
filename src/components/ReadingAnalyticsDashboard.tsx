@@ -82,7 +82,7 @@ export const ReadingAnalyticsDashboard: React.FC<ReadingAnalyticsDashboardProps>
   return (
     <div className="bg-[#1C1916] border border-[#3A332A] rounded-2xl p-6 relative overflow-hidden">
       <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
-        <span className="material-symbols-outlined text-[120px]">speed</span>
+        <span className="material-symbols-outlined text-[120px]" aria-hidden="true">speed</span>
       </div>
 
       <div className="relative z-10 space-y-6">
