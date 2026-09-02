@@ -1,6 +1,7 @@
 import { getFirestoreApi } from '../lib/firebase';
 import type { WriteBatch } from 'firebase/firestore';
 import { Book, Shelf, ReadingGoals } from '../types';
+import { fingerprint, SyncFingerprints } from './syncPlan';
 
 /** Firestore rejects `undefined`; strip those keys before writing. */
 function stripUndefined(value: object): Record<string, unknown> {
@@ -12,10 +13,13 @@ function stripUndefined(value: object): Record<string, unknown> {
 }
 
 export interface SyncPayload {
+  /** Only the books that changed since the last push, not the whole library. */
   books: Book[];
   shelves: Shelf[];
   readingGoals?: ReadingGoals;
   monthlyGoal?: number;
+  /** Skipped when the goals are unchanged, so an idle sync writes nothing. */
+  writeMeta?: boolean;
   deletedBookIds?: string[];
   deletedShelfIds?: string[];
 }
@@ -30,12 +34,29 @@ const bookPath = (userId: string, bookId: string) => ['users', userId, 'books', 
 const shelfPath = (userId: string, shelfId: string) => ['users', userId, 'shelves', shelfId] as const;
 
 /**
- * Pushes the local library to Firestore and removes documents the user deleted
+ * Pushes the given records to Firestore and removes documents the user deleted
  * locally, so deletions do not resurrect on the next fetch.
+ *
+ * The caller decides what to send: see `planSync`, which narrows a library down
+ * to the records whose content actually changed. Passing everything still works
+ * and is what a first sync does.
  */
 export const syncToCloud = async (userId: string, payload: SyncPayload): Promise<void> => {
+  const {
+    books,
+    shelves,
+    readingGoals,
+    monthlyGoal,
+    writeMeta = true,
+    deletedBookIds = [],
+    deletedShelfIds = [],
+  } = payload;
+
+  if (books.length === 0 && shelves.length === 0 && !writeMeta && deletedBookIds.length === 0 && deletedShelfIds.length === 0) {
+    return;
+  }
+
   const { db, doc, writeBatch } = await getFirestoreApi();
-  const { books, shelves, readingGoals, monthlyGoal, deletedBookIds = [], deletedShelfIds = [] } = payload;
 
   const operations: Array<(batch: WriteBatch) => void> = [];
 
@@ -51,17 +72,19 @@ export const syncToCloud = async (userId: string, payload: SyncPayload): Promise
   for (const shelfId of deletedShelfIds) {
     operations.push((batch) => batch.delete(doc(db, ...shelfPath(userId, shelfId))));
   }
-  operations.push((batch) =>
-    batch.set(
-      doc(db, 'users', userId),
-      stripUndefined({
-        lastSync: new Date().toISOString(),
-        readingGoals: readingGoals ?? null,
-        monthlyGoal: monthlyGoal ?? null,
-      }),
-      { merge: true }
-    )
-  );
+  if (writeMeta) {
+    operations.push((batch) =>
+      batch.set(
+        doc(db, 'users', userId),
+        stripUndefined({
+          lastSync: new Date().toISOString(),
+          readingGoals: readingGoals ?? null,
+          monthlyGoal: monthlyGoal ?? null,
+        }),
+        { merge: true }
+      )
+    );
+  }
 
   // Firestore batches are capped at 500 writes; chunk to stay well inside the limit.
   const CHUNK_SIZE = 400;
@@ -117,7 +140,13 @@ export interface MergeResult {
 export function mergeLibraries(
   local: { books: Book[]; shelves: Shelf[] },
   cloud: CloudSnapshot,
-  deleted: { bookIds: string[]; shelfIds: string[] }
+  deleted: { bookIds: string[]; shelfIds: string[] },
+  /**
+   * Fingerprints of the last successful push. They turn the shelf merge into a
+   * three-way one: a shelf the cloud changed but this device did not is a
+   * remote edit to accept, not a conflict to overwrite.
+   */
+  lastSynced: SyncFingerprints = { books: {}, shelves: {}, meta: '' }
 ): MergeResult {
   const deletedBooks = new Set(deleted.bookIds);
   const deletedShelves = new Set(deleted.shelfIds);
@@ -150,12 +179,39 @@ export function mergeLibraries(
     bookMap.set(book.id, keepLocal ? book : existing);
   }
 
+  // Shelves carry no timestamp, so the books' newest-wins rule does not apply.
+  // The last-synced fingerprint supplies the missing third point of reference:
+  // if the local copy still matches what this device pushed, any difference in
+  // the cloud copy is someone else's newer edit. Local edits still win, but a
+  // remote rename is no longer silently thrown away, and either way it is
+  // reported rather than resolved in silence.
   const shelfMap = new Map<string, Shelf>();
+
   for (const shelf of cloud.shelves) {
-    if (!deletedShelves.has(shelf.id)) shelfMap.set(shelf.id, shelf);
-  }
-  for (const shelf of local.shelves) {
+    if (deletedShelves.has(shelf.id)) continue;
     shelfMap.set(shelf.id, shelf);
+  }
+
+  for (const shelf of local.shelves) {
+    const remote = shelfMap.get(shelf.id);
+    if (!remote) {
+      shelfMap.set(shelf.id, shelf);
+      continue;
+    }
+
+    const localPrint = fingerprint(shelf);
+    const remotePrint = fingerprint(remote);
+    if (localPrint === remotePrint) {
+      shelfMap.set(shelf.id, shelf);
+      continue;
+    }
+
+    const pushedPrint = lastSynced.shelves[shelf.id];
+    const localIsUntouched = pushedPrint !== undefined && pushedPrint === localPrint;
+    const keepLocal = !localIsUntouched;
+
+    conflicts.push({ id: shelf.id, title: shelf.name, keptSide: keepLocal ? 'local' : 'cloud' });
+    shelfMap.set(shelf.id, keepLocal ? shelf : remote);
   }
 
   return {

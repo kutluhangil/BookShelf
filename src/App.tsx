@@ -5,7 +5,8 @@ import { recognizeShelf, buildDemoCandidates } from './services/clusteringEngine
 import { lookupByIsbn, lookupFromQrPayload, BookLookupResult } from './services/bookLookup';
 import { isFirebaseConfigured, firebaseConfigError, loginWithGoogle, logout, observeAuthState, type User } from './lib/firebase';
 import { syncToCloud, fetchFromCloud, mergeLibraries } from './services/cloudSync';
-import { loadLibrary, saveLibrary, isPersistenceAvailable } from './services/localStore';
+import { loadLibrary, scheduleSaveLibrary, flushLibrary, isPersistenceAvailable } from './services/localStore';
+import { planSync, planSize, pruneFingerprints, EMPTY_FINGERPRINTS, type SyncFingerprints } from './services/syncPlan';
 import { fetchServerCapabilities, type ServerCapabilities } from './services/apiClient';
 import { ShelfStrip } from './components/ShelfStrip';
 import { BookCard } from './components/BookCard';
@@ -78,6 +79,7 @@ function readInitialState() {
         monthlyGoal: stored.monthlyGoal ?? 5,
         deletedBookIds: stored.deletedBookIds ?? [],
         deletedShelfIds: stored.deletedShelfIds ?? [],
+        syncFingerprints: stored.syncFingerprints ?? EMPTY_FINGERPRINTS,
         restored: true,
         error: null as unknown,
       };
@@ -90,6 +92,7 @@ function readInitialState() {
       monthlyGoal: 5,
       deletedBookIds: [] as string[],
       deletedShelfIds: [] as string[],
+      syncFingerprints: EMPTY_FINGERPRINTS,
       restored: false,
       // Kept raw: readInitialState runs before the provider exists, so the
       // message is rendered later, in the reader's locale.
@@ -104,6 +107,7 @@ function readInitialState() {
     monthlyGoal: 5,
     deletedBookIds: [] as string[],
     deletedShelfIds: [] as string[],
+    syncFingerprints: EMPTY_FINGERPRINTS,
     restored: false,
     error: null as string | null,
   };
@@ -123,6 +127,8 @@ export default function App() {
   // Tombstones so deletions propagate to the cloud instead of resurrecting.
   const [deletedBookIds, setDeletedBookIds] = useState<string[]>(initialState.deletedBookIds);
   const [deletedShelfIds, setDeletedShelfIds] = useState<string[]>(initialState.deletedShelfIds);
+  // What the last successful push wrote, so the next one sends only the difference.
+  const [syncFingerprints, setSyncFingerprints] = useState<SyncFingerprints>(initialState.syncFingerprints);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('library');
 
@@ -215,10 +221,35 @@ export default function App() {
     }
   }, [pushToast, t]);
 
-  // Persist every mutation locally.
+  // Persist every mutation locally, coalesced: this used to serialise the whole
+  // library synchronously on every keystroke in a note.
   useEffect(() => {
-    saveLibrary({ books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds });
-  }, [books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds]);
+    scheduleSaveLibrary({
+      books,
+      shelves,
+      readingGoals,
+      monthlyGoal,
+      deletedBookIds,
+      deletedShelfIds,
+      syncFingerprints,
+    });
+  }, [books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds, syncFingerprints]);
+
+  // A coalesced write must not be lost to a closing or backgrounded tab.
+  // `pagehide` fires where `beforeunload` does not, notably on iOS.
+  useEffect(() => {
+    const flush = () => flushLibrary();
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') flushLibrary();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHidden);
+      flushLibrary();
+    };
+  }, []);
 
   // Flag unsynced work. Skipped on mount so a freshly loaded library is not
   // reported as dirty before the user has touched anything.
@@ -247,8 +278,10 @@ export default function App() {
 
   const booksRef = useRef(books);
   const shelvesRef = useRef(shelves);
+  const fingerprintsRef = useRef(syncFingerprints);
   booksRef.current = books;
   shelvesRef.current = shelves;
+  fingerprintsRef.current = syncFingerprints;
 
   useEffect(() => {
     return observeAuthState(
@@ -262,7 +295,8 @@ export default function App() {
         const merged = mergeLibraries(
           { books: booksRef.current, shelves: shelvesRef.current },
           cloudData,
-          { bookIds: deletedBookIds, shelfIds: deletedShelfIds }
+          { bookIds: deletedBookIds, shelfIds: deletedShelfIds },
+          fingerprintsRef.current
         );
         setBooks(merged.books);
         setShelves(merged.shelves);
@@ -345,24 +379,34 @@ export default function App() {
 
   const handleSyncToCloud = useCallback(async () => {
     if (!currentUser) return;
+
+    // Only the records whose content differs from the last successful push. A
+    // full-library write per sync meant one edited note cost a Firestore write
+    // per book in the library.
+    const input = { books, shelves, readingGoals, monthlyGoal };
+    const plan = planSync(input, syncFingerprints);
+    const writes = planSize(plan) + deletedBookIds.length + deletedShelfIds.length;
+
     try {
       setIsSyncing(true);
       await syncToCloud(currentUser.uid, {
-        books,
-        shelves,
+        books: plan.books,
+        shelves: plan.shelves,
         readingGoals,
         monthlyGoal,
+        writeMeta: plan.writeMeta,
         deletedBookIds,
         deletedShelfIds,
       });
       // Tombstones have been applied remotely; drop them.
       setDeletedBookIds([]);
       setDeletedShelfIds([]);
+      setSyncFingerprints(pruneFingerprints(plan.next, input));
       setHasUnsyncedChanges(false);
       setLastSyncedAt(new Date().toISOString());
       pushToast({
         title: t.toasts.syncComplete,
-        description: t.toasts.syncCompleteDetail(books.length),
+        description: t.toasts.syncCompleteDetail(writes),
         icon: 'cloud_done',
       });
     } catch (error) {
@@ -374,7 +418,18 @@ export default function App() {
     } finally {
       setIsSyncing(false);
     }
-  }, [currentUser, books, shelves, readingGoals, monthlyGoal, deletedBookIds, deletedShelfIds, pushToast, t]);
+  }, [
+    currentUser,
+    books,
+    shelves,
+    readingGoals,
+    monthlyGoal,
+    syncFingerprints,
+    deletedBookIds,
+    deletedShelfIds,
+    pushToast,
+    t,
+  ]);
 
   // Debounced auto-sync: without it the cloud copy silently goes stale whenever
   // the user forgets to press Sync.

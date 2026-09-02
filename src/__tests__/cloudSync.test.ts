@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mergeLibraries } from '../services/cloudSync';
+import { fingerprint } from '../services/syncPlan';
 import { Book, Shelf } from '../types';
 
 function book(id: string, overrides: Partial<Book> = {}): Book {
@@ -150,5 +151,65 @@ describe('firestore layout', () => {
     ]);
 
     vi.doUnmock('../lib/firebase');
+  });
+});
+
+describe('mergeLibraries: shelves', () => {
+  const local: Shelf = { id: 'shelf-1', name: 'Renamed here', volumeCount: 0, dominantColors: [], sortOrder: 1 };
+  const remote: Shelf = { id: 'shelf-1', name: 'Renamed there', volumeCount: 0, dominantColors: [], sortOrder: 1 };
+  const pushed: Shelf = { id: 'shelf-1', name: 'Fiction', volumeCount: 0, dominantColors: [], sortOrder: 1 };
+
+  it('keeps the local edit and says so', () => {
+    // Local differs from what this device last pushed, so it is the newer edit.
+    const merged = mergeLibraries(
+      { books: [], shelves: [local] },
+      { books: [], shelves: [remote] },
+      { bookIds: [], shelfIds: [] },
+      { books: {}, shelves: { 'shelf-1': fingerprint(pushed) }, meta: '' }
+    );
+
+    expect(merged.shelves[0].name).toBe('Renamed here');
+    expect(merged.conflicts).toContainEqual({ id: 'shelf-1', title: 'Renamed here', keptSide: 'local' });
+  });
+
+  it('accepts a remote rename this device never touched', () => {
+    // The local copy still matches the last push, so the difference is theirs.
+    const merged = mergeLibraries(
+      { books: [], shelves: [pushed] },
+      { books: [], shelves: [remote] },
+      { bookIds: [], shelfIds: [] },
+      { books: {}, shelves: { 'shelf-1': fingerprint(pushed) }, meta: '' }
+    );
+
+    expect(merged.shelves[0].name).toBe('Renamed there');
+    expect(merged.conflicts).toContainEqual({ id: 'shelf-1', title: 'Fiction', keptSide: 'cloud' });
+  });
+
+  it('reports nothing when both sides agree', () => {
+    const merged = mergeLibraries(
+      { books: [], shelves: [pushed] },
+      { books: [], shelves: [{ ...pushed }] },
+      { bookIds: [], shelfIds: [] },
+      { books: {}, shelves: { 'shelf-1': fingerprint(pushed) }, meta: '' }
+    );
+    expect(merged.conflicts).toHaveLength(0);
+  });
+
+  it('falls back to keeping the local copy with no fingerprint to compare', () => {
+    const merged = mergeLibraries(
+      { books: [], shelves: [local] },
+      { books: [], shelves: [remote] },
+      { bookIds: [], shelfIds: [] }
+    );
+    expect(merged.shelves[0].name).toBe('Renamed here');
+  });
+
+  it('never resurrects a locally deleted shelf', () => {
+    const merged = mergeLibraries(
+      { books: [], shelves: [] },
+      { books: [], shelves: [remote] },
+      { bookIds: [], shelfIds: ['shelf-1'] }
+    );
+    expect(merged.shelves).toHaveLength(0);
   });
 });

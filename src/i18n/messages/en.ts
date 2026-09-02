@@ -831,7 +831,8 @@ Scope: the local catalog matching layer only. Accuracy is computed over the book
     signedOutDetail: 'Your library stays on this device.',
     signOutFailed: 'Sign-out failed',
     syncComplete: 'Sync complete',
-    syncCompleteDetail: (count: number) => `${count} volumes backed up to the cloud.`,
+    syncCompleteDetail: (count: number) =>
+      count === 0 ? 'The cloud copy was already up to date.' : `${count} change(s) backed up to the cloud.`,
     syncFailed: 'Sync Failed',
     readingReminder: 'Reading Reminder',
     readingReminderDetail: 'It has been over 48 hours since your last reading session. Keep your streak alive!',

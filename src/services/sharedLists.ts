@@ -14,26 +14,56 @@ export const updateSharedList = async (listId: string, updates: Partial<SharedLi
   await updateDoc(doc(db, COLLECTION_NAME, listId), updates);
 };
 
-/** Lists the signed-in user owns or has been invited to. */
-export const getSharedListsForUser = async (userId: string): Promise<SharedList[]> => {
-  const { db, collection, getDocs, query, where } = await getFirestoreApi();
-  const snap = await getDocs(query(collection(db, COLLECTION_NAME), where('memberIds', 'array-contains', userId)));
+/**
+ * How many lists a browse fetches at once. Both queries used to read the whole
+ * matching set: the public one grows with every list anyone in the deployment
+ * has ever published, and each document carries its books inline.
+ */
+export const SHARED_LIST_PAGE_SIZE = 50;
+
+/** Lists the signed-in user owns or has been invited to, newest first. */
+export const getSharedListsForUser = async (userId: string, max = SHARED_LIST_PAGE_SIZE): Promise<SharedList[]> => {
+  const { db, collection, getDocs, query, where, orderBy, limit } = await getFirestoreApi();
+  const snap = await getDocs(
+    query(
+      collection(db, COLLECTION_NAME),
+      where('memberIds', 'array-contains', userId),
+      orderBy('createdAt', 'desc'),
+      limit(max)
+    )
+  );
   const lists: SharedList[] = [];
   snap.forEach((entry) => lists.push(entry.data() as SharedList));
-  return lists.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return lists;
 };
 
-/** Public lists anyone can browse. */
-export const getPublicSharedLists = async (excludeMemberId?: string): Promise<SharedList[]> => {
-  const { db, collection, getDocs, query, where } = await getFirestoreApi();
-  const snap = await getDocs(query(collection(db, COLLECTION_NAME), where('isPublic', '==', true)));
+/**
+ * Public lists anyone can browse, newest first.
+ *
+ * Lists the caller already belongs to are filtered out here rather than in the
+ * query, because Firestore cannot express "array does not contain". One page is
+ * over-fetched so that filtering cannot empty an otherwise full page.
+ */
+export const getPublicSharedLists = async (
+  excludeMemberId?: string,
+  max = SHARED_LIST_PAGE_SIZE
+): Promise<SharedList[]> => {
+  const { db, collection, getDocs, query, where, orderBy, limit } = await getFirestoreApi();
+  const snap = await getDocs(
+    query(
+      collection(db, COLLECTION_NAME),
+      where('isPublic', '==', true),
+      orderBy('createdAt', 'desc'),
+      limit(excludeMemberId ? max * 2 : max)
+    )
+  );
   const lists: SharedList[] = [];
   snap.forEach((entry) => {
     const list = entry.data() as SharedList;
     if (excludeMemberId && list.memberIds?.includes(excludeMemberId)) return;
     lists.push(list);
   });
-  return lists.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return lists.slice(0, max);
 };
 
 export const getSharedList = async (listId: string): Promise<SharedList | null> => {

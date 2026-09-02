@@ -13,6 +13,13 @@ Newest entries at the top.
 - The Gemini endpoints now require a Firebase ID token. Enforced by default in production, where `REQUIRE_AUTH=false` refuses to start; development opts out explicitly. The client attaches the token automatically and gates the AI features when the server reports `authRequired`.
 - Fixed an unbounded memory leak in the rate limiter: expired per-IP entries are now swept.
 
+### Changed
+- Cloud sync writes only what changed. Every sync used to `set` every book and every shelf, so one edited note cost a Firestore write per book in the library — and the auto-sync fires eight seconds after any change. `planSync` compares a content fingerprint of each record against the last successful push and sends the difference; the fingerprints are persisted, so the saving survives a reload. Because the comparison is on content, it does not depend on a mutation site remembering to bump `updatedAt`. The sync toast reports documents written rather than library size.
+- Local persistence is coalesced. It ran on every state change and serialised the whole library synchronously on the main thread — once per keystroke in a note. Writes are now collapsed over 400ms and flushed on `pagehide` and on the tab being hidden, so a closing tab still loses nothing.
+- The stored library has a migration path. A schema bump used to throw, and the caller's fallback is the bundled starter library, so shipping a new field would have silently replaced every existing reader's library. Only a record from a newer schema than this build knows is refused.
+- Shelves merge three ways. They carry no timestamp, so the cloud copy was discarded unconditionally and a rename made on another device vanished without a word. The last-synced fingerprint supplies the missing reference point: a shelf this device has not touched accepts the remote edit, a shelf it has edited keeps the local one, and either way the resolution is reported like a book conflict.
+- Both shared-list queries are ordered and limited to 50. They read the entire matching set, and every list document carries its books inline. **This needs two composite indexes in Firestore — see `MANUAL-STEPS.md`.**
+
 ### Accessibility
 - Pinch zoom works again: the viewport tag carried `maximum-scale=1.0, user-scalable=no`, which fails WCAG 1.4.4 and is the difference between usable and unusable for anyone who enlarges text.
 - All 137 Material Symbols spans are `aria-hidden`. The icon font renders its ligature name as text content, so a screen reader was reading out "photo_camera" and "library_books" beside — or instead of — the real label.

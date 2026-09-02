@@ -825,7 +825,8 @@ Kapsam: yalnızca yerel katalog eşleştirme katmanı. Doğruluk, kataloğun ger
     signedOutDetail: 'Kitaplığın bu cihazda kalır.',
     signOutFailed: 'Çıkış başarısız',
     syncComplete: 'Eşitleme tamam',
-    syncCompleteDetail: (count: number) => `${count} cilt buluta yedeklendi.`,
+    syncCompleteDetail: (count: number) =>
+      count === 0 ? 'Bulut kopyası zaten güncel.' : `${count} değişiklik buluta yedeklendi.`,
     syncFailed: 'Eşitleme başarısız',
     readingReminder: 'Okuma hatırlatması',
     readingReminderDetail: 'Son okuma seansının üzerinden 48 saatten fazla geçti. Serini bozma!',
