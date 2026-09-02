@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SPIKE_DATASET } from '../data/spikeDataset';
-import { SpikeSample } from '../types';
+import type { SpikeSample } from '../types';
 import { haptic } from '../services/haptics';
 import { createBarcodeReader, type BarcodeReader } from '../services/barcodeScanner';
 import { useT } from '../i18n/I18nProvider';
@@ -44,6 +43,11 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
   const [barcodeEngine, setBarcodeEngine] = useState<BarcodeReader['engine'] | null>(null);
   const [barcodeError, setBarcodeError] = useState<string | null>(null);
   const [showDemoShelves, setShowDemoShelves] = useState(false);
+  // The evaluation dataset is ~30KB of ground truth for a developer feature
+  // behind a toggle, so it is fetched on the first expand instead of riding in
+  // the entry chunk of every reader who never opens it.
+  const [demoSamples, setDemoSamples] = useState<SpikeSample[] | null>(null);
+  const [demoError, setDemoError] = useState<string | null>(null);
   const [roll, setRoll] = useState<number | null>(null);
   const [pitch, setPitch] = useState<number | null>(null);
   const [orientationPermissionNeeded, setOrientationPermissionNeeded] = useState(false);
@@ -466,7 +470,15 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
       {/* Bottom controls */}
       <div className="relative z-20 p-4 sm:px-8 pb-8 pt-3 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col gap-3">
         <button
-          onClick={() => setShowDemoShelves((open) => !open)}
+          onClick={() => {
+            const opening = !showDemoShelves;
+            setShowDemoShelves(opening);
+            if (!opening || demoSamples) return;
+            setDemoError(null);
+            import('../data/spikeDataset')
+              .then((module) => setDemoSamples(module.SPIKE_DATASET))
+              .catch((error) => setDemoError(formatError(t, error)));
+          }}
           className="self-center font-mono-ibm text-[10px] text-[#A79C8C] hover:text-[#C9963F] uppercase tracking-widest flex items-center gap-1"
         >
           <span className="material-symbols-outlined text-[14px]" aria-hidden="true">science</span>
@@ -484,7 +496,13 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
               <span className="font-mono-ibm text-[10px] text-[#C97A3F] shrink-0 uppercase tracking-widest">
                 {t.scanner.demoData}
               </span>
-              {SPIKE_DATASET.slice(0, 8).map((sample, index) => (
+              {demoError && (
+                <span className="font-mono-ibm text-[10px] text-[#FF6B6B] shrink-0">{demoError}</span>
+              )}
+              {!demoSamples && !demoError && (
+                <span className="font-mono-ibm text-[10px] text-[#A79C8C] shrink-0">{t.common.loading}</span>
+              )}
+              {(demoSamples ?? []).slice(0, 8).map((sample, index) => (
                 <button
                   key={sample.id}
                   onClick={() => {

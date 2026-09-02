@@ -19,7 +19,6 @@ import { ReviewMatchSheet } from './components/ReviewMatchSheet';
 import { ManualSearchSheet } from './components/ManualSearchSheet';
 import { BookDetailModal } from './components/BookDetailModal';
 import { ShareModal } from './components/ShareModal';
-import { SpikeAccuracyDashboard } from './components/SpikeAccuracyDashboard';
 import { OnboardingModal } from './components/OnboardingModal';
 import { YourShelvesView } from './components/YourShelvesView';
 import { SharedListsView } from './components/SharedListsView';
@@ -57,6 +56,13 @@ const ReadingAnalyticsDashboard = lazy(() =>
 );
 const WeeklyReadingChart = lazy(() =>
   import('./components/WeeklyReadingChart').then((m) => ({ default: m.WeeklyReadingChart }))
+);
+
+// The matcher evaluation is a developer tool reached from one tab and one menu
+// entry. It pulls in the whole ground-truth dataset, so it stays out of the
+// entry chunk of a reader who only wants their library.
+const SpikeAccuracyDashboard = lazy(() =>
+  import('./components/SpikeAccuracyDashboard').then((m) => ({ default: m.SpikeAccuracyDashboard }))
 );
 
 type ActiveTab = 'library' | 'shelves' | 'shared' | 'eval';
@@ -1170,13 +1176,15 @@ export default function App() {
           </div>
         ) : activeTab === 'eval' ? (
           <div className="p-4 sm:p-6 max-w-[1200px] mx-auto w-full">
-            <SpikeAccuracyDashboard
-              onClose={() => setActiveTab('library')}
-              onTestSampleInScanner={(sample: SpikeSample) => {
-                setActiveTab('library');
-                void handleCapture({ imageUrl: sample.imageUrl, mode: 'shelf', sample });
-              }}
-            />
+            <LazyPanel label={t.nav.eval}>
+              <SpikeAccuracyDashboard
+                onClose={() => setActiveTab('library')}
+                onTestSampleInScanner={(sample: SpikeSample) => {
+                  setActiveTab('library');
+                  void handleCapture({ imageUrl: sample.imageUrl, mode: 'shelf', sample });
+                }}
+              />
+            </LazyPanel>
           </div>
         ) : (
           <main className="max-w-[1200px] mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 space-y-7">
@@ -1700,13 +1708,15 @@ export default function App() {
       />
 
       {isSpikeDashboardOpen && (
-        <SpikeAccuracyDashboard
-          onClose={() => setIsSpikeDashboardOpen(false)}
-          onTestSampleInScanner={(sample: SpikeSample) => {
-            setIsSpikeDashboardOpen(false);
-            void handleCapture({ imageUrl: sample.imageUrl, mode: 'shelf', sample });
-          }}
-        />
+        <LazyPanel label={t.nav.eval}>
+          <SpikeAccuracyDashboard
+            onClose={() => setIsSpikeDashboardOpen(false)}
+            onTestSampleInScanner={(sample: SpikeSample) => {
+              setIsSpikeDashboardOpen(false);
+              void handleCapture({ imageUrl: sample.imageUrl, mode: 'shelf', sample });
+            }}
+          />
+        </LazyPanel>
       )}
 
       <OnboardingModal

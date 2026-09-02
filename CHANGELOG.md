@@ -14,6 +14,8 @@ Newest entries at the top.
 - Fixed an unbounded memory leak in the rate limiter: expired per-IP entries are now swept.
 
 ### Changed
+- The matcher evaluation is no longer part of the entry chunk. `SpikeAccuracyDashboard` and its ground-truth dataset are a developer tool reached from one tab and one menu entry, but both were statically imported and the dataset was pulled in a second time by the scanner's demo strip. They load on demand now, and the eager JavaScript drops from 375KB to 334KB (gzip 100KB to 89KB).
+
 - Cloud sync writes only what changed. Every sync used to `set` every book and every shelf, so one edited note cost a Firestore write per book in the library — and the auto-sync fires eight seconds after any change. `planSync` compares a content fingerprint of each record against the last successful push and sends the difference; the fingerprints are persisted, so the saving survives a reload. Because the comparison is on content, it does not depend on a mutation site remembering to bump `updatedAt`. The sync toast reports documents written rather than library size.
 - Local persistence is coalesced. It ran on every state change and serialised the whole library synchronously on the main thread — once per keystroke in a note. Writes are now collapsed over 400ms and flushed on `pagehide` and on the tab being hidden, so a closing tab still loses nothing.
 - The stored library has a migration path. A schema bump used to throw, and the caller's fallback is the bundled starter library, so shipping a new field would have silently replaced every existing reader's library. Only a record from a newer schema than this build knows is refused.
