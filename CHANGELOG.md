@@ -4,6 +4,11 @@ Newest entries at the top.
 
 ## Unreleased
 
+### Documentation
+- `MANUAL-STEPS.md`: what has to be done outside the repository — the two Firestore composite indexes the ordered shared-list queries now need, `TRUST_PROXY` in production, deploying the rules, and the browser checks this pass could not run.
+- README badges said React 18 and Tailwind 3; the project is on React 19 and Tailwind 4. The layout, command card and environment table are current again.
+- Removed `APP_URL` from `.env.example`. Nothing has ever read it.
+
 ### Security
 - The AI rate limiter is keyed by user id, not by address. The quota belongs to the account that spends it: one account could previously burn it from many addresses, while everyone behind a shared NAT shared a single bucket. The address is now only the fallback for the development mode where authentication is off.
 - `trust proxy` is configurable through `TRUST_PROXY`. Express previously read `req.ip` off the socket, so behind a load balancer every request carried the proxy's address and the address-keyed limit collapsed into one bucket for all callers. Production warns when it is unset.

@@ -4,9 +4,9 @@
 
 <img src="https://img.shields.io/badge/Status-In_development-C9963F?style=for-the-badge&logoColor=white" alt="status" />
 <img src="https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="vite" />
-<img src="https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=black" alt="react" />
+<img src="https://img.shields.io/badge/React-19-61dafb?style=for-the-badge&logo=react&logoColor=black" alt="react" />
 <img src="https://img.shields.io/badge/TypeScript-5.x-3178c6?style=for-the-badge&logo=typescript&logoColor=white" alt="typescript" />
-<img src="https://img.shields.io/badge/Tailwind_CSS-3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="tailwind" />
+<img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="tailwind" />
 <img src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge" alt="license" />
 
 <br /><br />
@@ -86,11 +86,12 @@ Three more layers sit on top of your library:
 ## 🛠️ Tech
 
 ```
-Frontend   →  Vite · React 18 · TypeScript
-Styling    →  Tailwind CSS 3
+Frontend   →  Vite 6 · React 19 · TypeScript
+Styling    →  Tailwind CSS 4
 Animation  →  Motion (framer-motion)
 Icons      →  Google Material Symbols
-State      →  React useState / Context (Local State Engine)
+State      →  React hooks (useLibrary, useCloudSync, useActiveModal) + Context for i18n
+Server     →  Express · helmet · Firebase Admin (ID token verification)
 ```
 
 ---
@@ -124,15 +125,20 @@ Book Shelf/
 │   │   ├── Toast.tsx           # Milestone notification system
 │   │   └── ...                 # Dashboards, Cards, Layouts
 │   ├── data/                   # Starter library and recommendation catalog
+│   ├── hooks/                  # useLibrary (records + persistence), useCloudSync,
+│   │                           # useActiveModal, useToasts, useMilestoneToasts
 │   ├── i18n/                   # Locale detection, provider, and the tr/en message catalogs
+│   ├── server/                 # app.ts (the API surface) and auth.ts (ID token verification)
 │   ├── services/               # bookLookup (Open Library), clusteringEngine (spine matching),
-│   │                           # cloudSync, localStore, ambientAudio, shelfCard, haptics
+│   │                           # cloudSync, syncPlan, localStore, ambientAudio, haptics
 │   ├── utils/                  # Helper functions (streak, search parser)
-│   ├── __tests__/              # Vitest unit tests
-│   ├── App.tsx                 # Main application state and router
+│   ├── __tests__/              # Vitest unit and integration tests
+│   ├── App.tsx                 # View state, the scan flow and the layout
 │   ├── index.css               # Tailwind & global styles
 │   └── types.ts                # TypeScript interfaces (Book, Shelf, ReadingSession)
-├── server.ts                   # Express server + Gemini endpoints (shelf, quote, recommend)
+├── server.ts                   # Entry point: environment, Gemini client, listen
+├── eslint.config.js            # ESLint (typescript-eslint, react-hooks, jsx-a11y)
+├── MANUAL-STEPS.md             # What has to be done outside the repository
 ├── firestore.rules             # Firestore security rules
 ├── package.json
 └── vite.config.ts
@@ -175,8 +181,9 @@ the login button is disabled and says so.
 | `npm run dev` | Starts the Express + Vite dev server on `localhost:3000` |
 | `npm run build` | Builds the client into `dist/` and bundles the server to `dist/server.cjs` |
 | `npm start` | Runs the production build |
-| `npm test` | Runs the Vitest unit tests |
-| `npm run lint` | Type-checks the project with `tsc --noEmit` |
+| `npm test` | Runs the Vitest unit and integration tests |
+| `npm run lint` | Runs ESLint |
+| `npm run typecheck` | Type-checks the project with `tsc --noEmit` |
 
 ### Environment variables
 
@@ -184,6 +191,7 @@ the login button is disabled and says so.
 |---|:-:|---|
 | `GEMINI_API_KEY` | yes | Server-side key for shelf recognition, OCR and recommendations. The server refuses to start without it. |
 | `GEMINI_MODEL` | no | Defaults to `gemini-2.5-flash`. |
+| `TRUST_PROXY` | behind a proxy | Number of proxies in front of the server. Without it Express reads the proxy's address as the client's, and the address-keyed rate limit applies to every anonymous caller at once. |
 | `REQUIRE_AUTH` | no | Defaults to on in production. `false` is refused in production, because the AI endpoints cost money per call. |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT` | when auth is on | Used to verify Firebase ID tokens server-side. |
 | `VITE_FIREBASE_*` | no | Client credentials. Without them the app runs fully offline against local storage and says so. |
@@ -206,6 +214,8 @@ the login button is disabled and says so.
 | Cloud Persistence (Firebase) | ✅ Optional |
 | Shared Lists (public + invite-only) | ✅ Optional |
 | Unit tests (Vitest) | ✅ |
+| Server integration tests (supertest) | ✅ |
+| Lint + accessibility rules in CI | ✅ |
 | Offline / installable (PWA) | ✅ |
 | CSV & Goodreads import | ✅ |
 | API authentication (Firebase ID token) | ✅ |
