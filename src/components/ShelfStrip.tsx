@@ -17,7 +17,7 @@ interface ShelfStripProps {
 
 const getShelfStripBackgroundStyle = (themeColor?: string, texture?: string): React.CSSProperties => {
   const baseBg = '#100E0C';
-  let backgroundStyle: React.CSSProperties = { backgroundColor: baseBg };
+  const backgroundStyle: React.CSSProperties = { backgroundColor: baseBg };
 
   const colorPrefix = themeColor ? `linear-gradient(to bottom right, ${themeColor}15, ${themeColor}05), ` : '';
 
@@ -89,7 +89,7 @@ export const ShelfStrip: React.FC<ShelfStripProps> = ({
           style={{ ...getShelfStripBackgroundStyle(themeColor, texture), gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
         >
           <AnimatePresence>
-            {gridCells.map((cell, idx) => (
+            {gridCells.map((cell) => (
               <div
                 key={cell.coord}
                 onClick={() => {

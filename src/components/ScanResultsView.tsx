@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SpineCandidate, EditionOption, Book } from '../types';
+import { SpineCandidate } from '../types';
 import { ShelfStrip } from './ShelfStrip';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { haptic } from '../services/haptics';

@@ -40,7 +40,7 @@ export const AmbientReadingMode: React.FC<AmbientReadingModeProps> = ({ book, el
       setAudioError(formatError(t, error));
       setActiveTrack(null);
     }
-  }, [activeTrack]);
+  }, [activeTrack, t]);
 
   useEffect(() => {
     engineRef.current?.setVolume(volume);

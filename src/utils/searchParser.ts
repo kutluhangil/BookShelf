@@ -29,7 +29,7 @@ export function parseNLPSearchQuery(query: string, book: Book): boolean {
 
   // Strip common filler words to extract the core search intent
   const fillers = /\b(books|book|by|about|with|i|have|that|are|is|my|show me|find|all)\b/g;
-  let searchTerms = q.replace(fillers, ' ').replace(/\s+/g, ' ').trim();
+  const searchTerms = q.replace(fillers, ' ').replace(/\s+/g, ' ').trim();
 
   // If a status intent was detected, enforce it
   if (requiredStatus && book.status !== requiredStatus) {

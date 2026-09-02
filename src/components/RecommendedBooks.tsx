@@ -114,16 +114,29 @@ export const RecommendedBooks: React.FC<RecommendedBooksProps> = ({ books, onAdd
                 <button
                   onClick={() => {
                     haptic.selectionClick();
+                    // The catalog only knows title, author, category and a
+                    // colour, but a Book has to be complete: the detail view
+                    // and the pacing maths read these fields directly, and an
+                    // undefined one used to surface as "NaN" in the UI. The
+                    // shelf is decided by the caller.
                     onAddBook({
                       title: rec.title,
                       author: rec.author,
                       category: rec.category,
-                      coverUrl: '', // Could be actual cover URL if available
+                      description: rec.description,
+                      isbn: '',
+                      publisher: '',
+                      publishYear: 0,
+                      pageCount: 0,
+                      coverUrl: '',
+                      spineCropUrl: '',
                       spineColor: rec.coverColor,
-                      shelfId: 'shelf-fiction', // default fallback
+                      shelfId: '',
                       status: 'unread',
-                      addedAt: new Date().toISOString(),
-                    } as any); // using any for missing minor fields like isbn etc or passing just what we have
+                      confidence: 'matched',
+                      score: 1,
+                      isManual: true,
+                    });
                   }}
                   className="px-3 py-1.5 bg-[#C9963F]/10 hover:bg-[#C9963F]/20 text-[#C9963F] rounded text-[11px] font-mono-ibm font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
                   title={t.recommended.addToLibrary}

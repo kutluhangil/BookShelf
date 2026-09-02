@@ -143,7 +143,10 @@ function parseJsonResponse<T>(text: string | undefined, context: string): T {
   try {
     return JSON.parse(candidate) as T;
   } catch (error) {
-    throw new Error(`${context}: Gemini response was not valid JSON. Raw response: ${candidate.slice(0, 400)}`);
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${context}: Gemini response was not valid JSON (${reason}). Raw response: ${candidate.slice(0, 400)}`
+    );
   }
 }
 

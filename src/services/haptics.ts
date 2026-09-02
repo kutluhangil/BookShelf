@@ -12,6 +12,25 @@ class HapticFeedbackService {
   private isAudioTactileEnabled: boolean = true;
   private audioCtx: AudioContext | null = null;
 
+  /**
+   * Fires a vibration pattern where the platform supports one.
+   *
+   * The failure is deliberately not propagated: haptics are decoration on top
+   * of an action that has already happened, and browsers reject `vibrate` for
+   * reasons the caller cannot act on — no user gesture yet, a cross-origin
+   * frame, a device with no vibrator. Letting that throw would abort the
+   * button handler that invoked it. It is logged at debug level so the reason
+   * is still recoverable from the console.
+   */
+  private vibrate(pattern: number | number[]): void {
+    if (typeof navigator === 'undefined' || !('vibrate' in navigator)) return;
+    try {
+      navigator.vibrate(pattern);
+    } catch (error) {
+      console.debug('[haptics] vibrate() rejected by the platform', error);
+    }
+  }
+
   private getAudioContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
     try {
@@ -65,11 +84,7 @@ class HapticFeedbackService {
    * Used for radio/checkbox toggles, filter pills, and edition selection
    */
   public selectionClick(): void {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate(8);
-      } catch {}
-    }
+    this.vibrate(8);
     this.playMicroClick(850, 0.006, 0.035);
   }
 
@@ -78,11 +93,7 @@ class HapticFeedbackService {
    * Used for general card taps, spine strip segments, tab switches, and icon buttons
    */
   public lightImpact(): void {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate(12);
-      } catch {}
-    }
+    this.vibrate(12);
     this.playMicroClick(520, 0.009, 0.045);
   }
 
@@ -91,11 +102,7 @@ class HapticFeedbackService {
    * Used for shutter capture button, resolve action, confirmation triggers
    */
   public mediumImpact(): void {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate(28);
-      } catch {}
-    }
+    this.vibrate(28);
     this.playMicroClick(340, 0.015, 0.07);
   }
 
@@ -104,11 +111,7 @@ class HapticFeedbackService {
    * Used for batch ingestion, committing changes, deleting items
    */
   public heavyImpact(): void {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate(45);
-      } catch {}
-    }
+    this.vibrate(45);
     this.playMicroClick(220, 0.022, 0.09);
   }
 
@@ -117,12 +120,8 @@ class HapticFeedbackService {
    * Subtle tactile feedback when camera roll/pitch enters valid alignment threshold
    */
   public alignmentLock(): void {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        // Short, crisp twin micro-ticks (8ms pulse, 30ms gap, 12ms pulse)
-        navigator.vibrate([8, 30, 12]);
-      } catch {}
-    }
+    // Short, crisp twin micro-ticks (8ms pulse, 30ms gap, 12ms pulse)
+    this.vibrate([8, 30, 12]);
     // High-pitched soft resonance chime indicating optical lock
     this.playTone(780, 0.04, 0.045, 'sine');
     setTimeout(() => {
@@ -136,13 +135,9 @@ class HapticFeedbackService {
    * OCR extraction, and catalog matching tasks have successfully finished.
    */
   public completedScan(): void {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        // Distinct completed-scan multi-phase tactile pulse sequence:
-        // [30ms preparation pulse, 40ms interval, 45ms peak pulse, 40ms interval, 75ms resonant finish]
-        navigator.vibrate([30, 40, 45, 40, 75]);
-      } catch {}
-    }
+    // Distinct completed-scan multi-phase tactile pulse sequence:
+    // [30ms preparation pulse, 40ms interval, 45ms peak pulse, 40ms interval, 75ms resonant finish]
+    this.vibrate([30, 40, 45, 40, 75]);
     // Deep warm resonance with smooth harmonic cascade (C5 -> E5 -> G5 -> C6)
     this.playTone(523.25, 0.12, 0.055, 'sine');
     setTimeout(() => this.playTone(659.25, 0.12, 0.06, 'sine'), 50);
@@ -165,12 +160,8 @@ class HapticFeedbackService {
    * and physical spines are successfully isolated & matched
    */
   public scanSuccess(): void {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        // Distinct 3-phase ascending pulse sequence
-        navigator.vibrate([25, 45, 30, 45, 65]);
-      } catch {}
-    }
+    // Distinct 3-phase ascending pulse sequence
+    this.vibrate([25, 45, 30, 45, 65]);
     // Warm harmonic ascending chord triad (C5 -> E5 -> G5)
     this.playTone(523.25, 0.09, 0.06, 'sine');
     setTimeout(() => this.playTone(659.25, 0.09, 0.07, 'sine'), 50);
@@ -210,11 +201,7 @@ class HapticFeedbackService {
    * Double-pulse celebration pattern when items or shelves are saved
    */
   public success(): void {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate([15, 45, 25]);
-      } catch {}
-    }
+    this.vibrate([15, 45, 25]);
     this.playMicroClick(680, 0.01, 0.05);
     setTimeout(() => this.playMicroClick(920, 0.012, 0.06), 65);
   }
@@ -224,11 +211,7 @@ class HapticFeedbackService {
    * Rejection or failed action
    */
   public error(): void {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate([35, 40, 40]);
-      } catch {}
-    }
+    this.vibrate([35, 40, 40]);
     this.playMicroClick(180, 0.02, 0.08);
   }
 }

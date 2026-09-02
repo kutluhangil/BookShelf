@@ -17,7 +17,7 @@ const SHELF_MAX_PAGES = 5000; // Estimated linear capacity per shelf
 
 const getShelfBackgroundStyle = (themeColor?: string, texture?: string): React.CSSProperties => {
   const baseBg = '#1C1916';
-  let backgroundStyle: React.CSSProperties = { backgroundColor: baseBg };
+  const backgroundStyle: React.CSSProperties = { backgroundColor: baseBg };
 
   const colorPrefix = themeColor ? `linear-gradient(to bottom right, ${themeColor}15, ${themeColor}05), ` : '';
 

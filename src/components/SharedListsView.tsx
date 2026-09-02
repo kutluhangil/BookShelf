@@ -74,7 +74,7 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser, t]);
 
   useEffect(() => {
     void loadLists();

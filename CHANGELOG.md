@@ -14,6 +14,7 @@ Newest entries at the top.
 - Fixed an unbounded memory leak in the rate limiter: expired per-IP entries are now swept.
 
 ### Added
+- ESLint, with `typescript-eslint`, `eslint-plugin-react-hooks` and `eslint-plugin-jsx-a11y`. `npm run lint` now runs it and `npm run typecheck` runs the type check they used to share; CI runs both. Stale `eslint-disable` comments are themselves an error — the repository had been carrying three of them with no ESLint installed to honour or reject them.
 - Response compression (`compression`).
 - Coded service-layer errors: services now raise `AppError` with a code and typed params (`src/services/appError.ts`) instead of an English sentence, and `formatError` renders it from the active locale's catalog (`src/i18n/messages/errors.{en,tr}.ts`). The technical detail (HTTP body, SDK message, URL) is kept on the error and appended in parentheses, so failures are readable in Turkish without losing diagnosability. A mapped type makes a new code without a message a compile error.
 - Turkish interface with a TR/EN switch. Every string the app renders itself lives in a typed message catalog (`src/i18n/`); the locale is picked from the browser language on first load, and an explicit choice is remembered in local storage. Turkish is typed against the English catalog, so a missing key fails the build rather than showing a blank label. Dates, weekday names and number formatting follow the active locale.
@@ -38,6 +39,11 @@ Newest entries at the top.
 - Eagerly loaded JavaScript is down from one 1.65MB chunk to 634KB across three (gzip 447KB to 183KB): Firebase, ZXing and Recharts all load on demand.
 
 ### Fixed
+- `QuoteScannerModal` called `startCamera`/`stopCamera` from an effect declared above both of them, so neither could be a dependency, and `stopCamera` read the `stream` state it was also setting. The stream is never rendered, so it moved into a ref and the effect now declares what it uses.
+- The recommendation card built a `Book` behind `as any`, leaving `isbn`, `pageCount`, `confidence` and `score` undefined on every book added that way — fields the detail view and the pacing maths read directly. It now hands over a complete record and `App` drops its matching cast.
+- The Open Library responses are typed instead of `Record<string, any>`, which had also hidden that `notes` arrives either as a string or as a `{value}` record; the description was silently dropped in the second case.
+- Effects in `AmbientReadingMode` and `SharedListsView` formatted errors through `t` without depending on it, so a failure raised before a language switch kept rendering in the old language.
+- The nine copies of "vibrate, swallow whatever the platform throws" in `haptics` collapsed into one helper that explains why the failure is not propagated and logs it at debug level.
 - `BookDetailModal` nested the quote scanner inside its own `AnimatePresence`, giving it two unkeyed children; React logged a duplicate-key error on every open.
 - `ModalShell` filtered focusable elements with `offsetParent`, which is null for `position: fixed` elements — exactly what these dialogs are — so the focus trap could stop wrapping.
 - A lazily loaded chart panel that failed to fetch took the whole app down through the root error boundary; each panel now degrades on its own.

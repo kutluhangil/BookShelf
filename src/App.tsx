@@ -1234,7 +1234,7 @@ export default function App() {
                 books={books}
                 onAddBook={(newBook) => {
                   const bookToAdd: Book = {
-                    ...(newBook as Book),
+                    ...newBook,
                     id: `rec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
                     shelfId: targetShelfId,
                     addedAt: new Date().toISOString(),

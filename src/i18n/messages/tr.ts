@@ -759,7 +759,7 @@ Kapsam: yalnızca yerel katalog eşleştirme katmanı. Doğruluk, kataloğun ger
     import: 'İÇE AKTAR',
     shareCollection: 'KOLEKSİYONU PAYLAŞ',
     scanShelf: 'RAF TARA',
-    searchPlaceholder: "'Orwell\'in okunmamış kitapları' ya da 'şu an okuduklarım' dene…",
+    searchPlaceholder: "'Orwell'in okunmamış kitapları' ya da 'şu an okuduklarım' dene…",
     filterByShelf: 'Rafa göre süz',
     allShelves: (count: number) => `Tüm raflar (${count})`,
     statusLabel: 'DURUM:',

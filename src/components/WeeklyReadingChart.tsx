@@ -62,7 +62,15 @@ export const WeeklyReadingChart: React.FC<WeeklyReadingChartProps> = ({ books })
     }));
   }, [books, locale, t]);
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  // Recharts calls this with its internal tooltip props; only these three are
+  // read here, so the shape is declared rather than widened to `any`.
+  interface TooltipProps {
+    active?: boolean;
+    payload?: Array<{ value: number }>;
+    label?: string;
+  }
+
+  const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-[#151311] border border-[#3A332A] p-3 rounded-xl shadow-lg">

@@ -17,6 +17,36 @@ export interface BookLookupResult {
 
 import { AppError, toDetail } from './appError';
 
+/**
+ * The Open Library payloads, as much of them as this module reads. They are
+ * declared rather than widened to `any` so a field the API stops sending shows
+ * up as a type error here instead of as `undefined` in a book record.
+ */
+interface OpenLibraryNamed {
+  name?: string;
+}
+
+interface OpenLibraryBookEntry {
+  title?: string;
+  authors?: OpenLibraryNamed[];
+  publishers?: OpenLibraryNamed[];
+  publish_date?: string | number;
+  number_of_pages?: number;
+  cover?: { small?: string; medium?: string; large?: string };
+  notes?: string | { value?: string };
+  subjects?: OpenLibraryNamed[];
+}
+
+interface OpenLibrarySearchDoc {
+  title?: string;
+  author_name?: string[];
+  first_publish_year?: number;
+  publisher?: string[];
+  isbn?: string[];
+  cover_i?: number;
+  number_of_pages_median?: number;
+}
+
 const SEARCH_ENDPOINT = 'https://openlibrary.org/search.json';
 const BOOKS_ENDPOINT = 'https://openlibrary.org/api/books';
 const COVER_ENDPOINT = 'https://covers.openlibrary.org/b';
@@ -61,23 +91,30 @@ export async function lookupByIsbn(rawIsbn: string): Promise<BookLookupResult> {
   const data = (await fetchJson(
     `${BOOKS_ENDPOINT}?bibkeys=${encodeURIComponent(key)}&format=json&jscmd=data`,
     isbn
-  )) as Record<string, any>;
+  )) as Record<string, OpenLibraryBookEntry | undefined>;
 
   const entry = data[key];
   if (!entry) {
     throw new AppError('lookup.notFound', { isbn });
   }
 
+  const names = (entries: OpenLibraryNamed[] | undefined): string =>
+    (entries ?? []).map((item) => item.name).filter((name): name is string => Boolean(name)).join(', ');
+
   return {
     title: entry.title ?? 'Untitled',
-    author: entry.authors?.map((a: { name: string }) => a.name).join(', ') || 'Unknown Author',
+    author: names(entry.authors) || 'Unknown Author',
     isbn,
-    publisher: entry.publishers?.map((p: { name: string }) => p.name).join(', ') || 'Unknown Publisher',
+    publisher: names(entry.publishers) || 'Unknown Publisher',
     publishYear: parseYear(entry.publish_date),
     pageCount: typeof entry.number_of_pages === 'number' ? entry.number_of_pages : 0,
     coverUrl: entry.cover?.large || entry.cover?.medium || '',
-    description: typeof entry.notes === 'string' ? entry.notes : undefined,
-    subjects: entry.subjects?.slice(0, 5).map((s: { name: string }) => s.name),
+    // Open Library returns notes either as a plain string or as a {value} record.
+    description: typeof entry.notes === 'string' ? entry.notes : entry.notes?.value,
+    subjects: entry.subjects
+      ?.slice(0, 5)
+      .map((subject) => subject.name)
+      .filter((name): name is string => Boolean(name)),
   };
 }
 
@@ -102,7 +139,7 @@ export async function searchBooks(query: string, limit = 12): Promise<BookLookup
   });
 
   const data = (await fetchJson(`${SEARCH_ENDPOINT}?${params.toString()}`, trimmed)) as {
-    docs?: Array<Record<string, any>>;
+    docs?: OpenLibrarySearchDoc[];
   };
 
   return (data.docs ?? []).map((doc) => ({

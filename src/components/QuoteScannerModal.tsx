@@ -16,18 +16,16 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
   const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  // The stream is only ever used to attach and tear down the camera, never
+  // rendered, so a ref keeps `stopCamera` free of reactive dependencies.
+  const streamRef = useRef<MediaStream | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      startCamera();
-    } else {
-      stopCamera();
-    }
-    return () => stopCamera();
-  }, [isOpen]);
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
 
   const startCamera = useCallback(async () => {
     setError(null);
@@ -35,7 +33,7 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment', width: { ideal: 1920 } } 
       });
-      setStream(mediaStream);
+      streamRef.current = mediaStream;
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
       }
@@ -51,12 +49,14 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
     }
   }, [t]);
 
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
+  useEffect(() => {
+    if (isOpen) {
+      void startCamera();
+    } else {
+      stopCamera();
     }
-  };
+    return () => stopCamera();
+  }, [isOpen, startCamera, stopCamera]);
 
   const captureAndScan = async () => {
     if (!videoRef.current || !canvasRef.current) return;

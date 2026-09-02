@@ -11,7 +11,7 @@ interface ReadingCalendarWidgetProps {
 export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ books, reminderEnabled = false, onToggleReminder }) => {
   const { t, locale } = useI18n();
 
-  const { activityMap, cells, currentStreak, maxStreak, activeDays } = useMemo(() => {
+  const { cells, currentStreak, maxStreak, activeDays } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const msPerDay = 1000 * 60 * 60 * 24;
@@ -78,7 +78,8 @@ export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ bo
       generateCells.push({ date: d, duration, key });
     }
 
-    return { activityMap: map, cells: generateCells, currentStreak: cStreak, maxStreak: mStreak, activeDays: activeDaysCount };
+    // The map itself stays internal: the cells already carry each day's duration.
+    return { cells: generateCells, currentStreak: cStreak, maxStreak: mStreak, activeDays: activeDaysCount };
   }, [books]);
 
   const getColor = (durationSeconds: number) => {

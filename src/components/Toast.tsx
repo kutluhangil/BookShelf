@@ -1,6 +1,5 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { haptic } from '../services/haptics';
 
 export interface ToastMessage {
   id: string;
