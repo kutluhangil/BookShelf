@@ -436,3 +436,67 @@ describe('tombstone documents', () => {
     vi.doUnmock('../lib/firebase');
   });
 });
+
+describe('clearing a field', () => {
+  it('deletes a field the reader cleared instead of leaving the old value in the cloud', async () => {
+    const writes: Array<{ path: string[]; payload: Record<string, unknown> }> = [];
+
+    vi.resetModules();
+    vi.doMock('../lib/firebase', () => ({
+      getFirestoreApi: async () => ({
+        db: {},
+        doc: (_db: unknown, ...segments: string[]) => segments,
+        collection: (_db: unknown, ...segments: string[]) => segments,
+        getDocs: async () => ({ forEach: () => undefined }),
+        getDoc: async () => ({ exists: () => false }),
+        deleteField: () => 'DELETE_FIELD',
+        writeBatch: () => ({
+          set: (path: string[], payload: Record<string, unknown>) => writes.push({ path, payload }),
+          delete: () => undefined,
+          commit: async () => undefined,
+        }),
+      }),
+    }));
+
+    const { syncToCloud: sync } = await import('../services/cloudSync');
+    const returned = book('lent-back', { lentTo: undefined, lentAt: undefined, rating: undefined, notes: 'kept' });
+    await sync('uid-1', { books: [returned], shelves: [], writeMeta: false });
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0].path).toEqual(['users', 'uid-1', 'books', 'lent-back']);
+    expect(writes[0].payload.lentTo).toBe('DELETE_FIELD');
+    expect(writes[0].payload.lentAt).toBe('DELETE_FIELD');
+    expect(writes[0].payload.rating).toBe('DELETE_FIELD');
+    expect(writes[0].payload.notes).toBe('kept');
+
+    vi.doUnmock('../lib/firebase');
+  });
+
+  it('leaves a field that was never set out of the write', async () => {
+    const writes: Array<{ path: string[]; payload: Record<string, unknown> }> = [];
+
+    vi.resetModules();
+    vi.doMock('../lib/firebase', () => ({
+      getFirestoreApi: async () => ({
+        db: {},
+        doc: (_db: unknown, ...segments: string[]) => segments,
+        collection: (_db: unknown, ...segments: string[]) => segments,
+        getDocs: async () => ({ forEach: () => undefined }),
+        getDoc: async () => ({ exists: () => false }),
+        deleteField: () => 'DELETE_FIELD',
+        writeBatch: () => ({
+          set: (path: string[], payload: Record<string, unknown>) => writes.push({ path, payload }),
+          delete: () => undefined,
+          commit: async () => undefined,
+        }),
+      }),
+    }));
+
+    const { syncToCloud: sync } = await import('../services/cloudSync');
+    await sync('uid-1', { books: [book('plain')], shelves: [], writeMeta: false });
+
+    expect(Object.keys(writes[0].payload)).not.toContain('lentTo');
+
+    vi.doUnmock('../lib/firebase');
+  });
+});

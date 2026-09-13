@@ -35,6 +35,7 @@ import { AIRecommendationsModal } from './components/AIRecommendationsModal';
 import { ImportModal } from './components/ImportModal';
 import { LibraryAnnualProgressBar } from './components/LibraryAnnualProgressBar';
 import { parseNLPSearchQuery } from './utils/searchParser';
+import { releaseBin } from './utils/shelfLayout';
 import { haptic } from './services/haptics';
 import { useIncrementalList } from './hooks/useIncrementalList';
 import { useToasts } from './hooks/useToasts';
@@ -317,16 +318,22 @@ export default function App() {
     [targetShelfId]
   );
 
+  /**
+   * Files a book, unless the library already holds that ISBN. The caller is
+   * told which happened and which record it ended up with: reporting a book as
+   * added when it was dropped as a duplicate points the reader at a record that
+   * is not there.
+   */
   const addBook = useCallback(
-    (book: Book) => {
-      setBooks((prev) => {
-        const duplicate = book.isbn && prev.find((b) => b.isbn && b.isbn === book.isbn);
-        if (duplicate) return prev;
-        return [book, ...prev];
-      });
+    (book: Book): { added: boolean; book: Book } => {
+      const duplicate = book.isbn ? books.find((b) => b.isbn && b.isbn === book.isbn) : undefined;
+      if (duplicate) return { added: false, book: duplicate };
+
+      setBooks((prev) => [book, ...prev]);
       setDeletedBookIds((prev) => prev.filter((id) => id !== book.id));
+      return { added: true, book };
     },
-    [setBooks, setDeletedBookIds]
+    [books, setBooks, setDeletedBookIds]
   );
 
   // Handle Capture from Camera, Upload, Barcode or Demo Sample
@@ -349,14 +356,13 @@ export default function App() {
         try {
           const result =
             payload.mode === 'isbn' ? await lookupByIsbn(payload.barcode) : await lookupFromQrPayload(payload.barcode);
-          const book = bookFromLookup(result, payload.mode);
-          addBook(book);
+          const { added, book } = addBook(bookFromLookup(result, payload.mode));
           haptic.success();
           openModal({ kind: 'bookDetail', bookId: book.id });
           pushToast({
-            title: t.toasts.bookAdded,
-            description: t.toasts.titleAndAuthor(result.title, result.author),
-            icon: 'library_add',
+            title: added ? t.toasts.bookAdded : t.toasts.alreadyInLibrary,
+            description: t.toasts.titleAndAuthor(book.title, book.author),
+            icon: added ? 'library_add' : 'library_books',
           });
         } catch (error) {
           pushToast({
@@ -500,13 +506,12 @@ export default function App() {
   const handleSelectManualResult = (result: BookLookupResult) => {
     // Manual add from the library toolbar (no scan in progress).
     if (!manualSearchCandidateId || !pendingScanData) {
-      const book = bookFromLookup(result, 'manual');
-      addBook(book);
+      const { added, book } = addBook(bookFromLookup(result, 'manual'));
       haptic.success();
       pushToast({
-        title: t.toasts.bookAdded,
-        description: t.toasts.titleAndAuthor(result.title, result.author),
-        icon: 'library_add',
+        title: added ? t.toasts.bookAdded : t.toasts.alreadyInLibrary,
+        description: t.toasts.titleAndAuthor(book.title, book.author),
+        icon: added ? 'library_add' : 'library_books',
       });
       closeIf('manualAdd');
       return;
@@ -615,7 +620,11 @@ export default function App() {
     }));
   };
 
-  const handleUpdateShelf = (bookId: string, shelfId: string) => updateBook(bookId, () => ({ shelfId }));
+  const handleUpdateShelf = (bookId: string, shelfId: string) => {
+    // The bin belongs to the shelf the book is leaving, not to the book.
+    setShelves((prev) => releaseBin(prev, bookId));
+    updateBook(bookId, () => ({ shelfId }));
+  };
 
   const handleUpdateCoordinate = (bookId: string, shelfId: string, x: number | undefined, y: number | undefined) => {
     setShelves((prev) =>
@@ -631,6 +640,7 @@ export default function App() {
 
   const handleDeleteBook = (bookId: string) => {
     setBooks((prev) => prev.filter((b) => b.id !== bookId));
+    setShelves((prev) => releaseBin(prev, bookId));
     setDeletedBookIds((prev) => (prev.includes(bookId) ? prev : [...prev, bookId]));
     setCompareQueue((queue) => queue.filter((b) => b.id !== bookId));
     closeIf('bookDetail');
@@ -655,7 +665,10 @@ export default function App() {
     const orphanCount = books.filter((b) => b.shelfId === shelfId).length;
     const fallbackShelf = shelves.find((s) => s.id !== shelfId);
 
-    if (!fallbackShelf && orphanCount > 0) {
+    // A library with no shelf has nowhere to file the next book: every add path
+    // reaches for the first shelf, and with none left it invented an id that no
+    // shelf record carries, so the book landed out of reach of every filter.
+    if (!fallbackShelf) {
       pushToast({
         title: t.toasts.cannotDeleteLastShelf,
         description: t.toasts.cannotDeleteLastShelfDetail,

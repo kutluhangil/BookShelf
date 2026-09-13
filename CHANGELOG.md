@@ -4,6 +4,24 @@ Newest entries at the top.
 
 ## Unreleased
 
+### Fixed — a cleared field came back from the cloud
+- Every record was pushed with `set(..., { merge: true })` after its `undefined` keys were stripped, and a merge leaves a key it is not given exactly as it was. A field the reader cleared — a loan that came back, a rating taken away, a completion date dropped when a book was marked unread — is precisely such a key, so the old value stayed in the cloud and the next device to fetch got it back and showed the book as still lent. Those keys are now written as an explicit field deletion; a field that was never set stays out of the write.
+
+### Fixed — scanning a book you already own
+- The barcode path built a book, handed it to `addBook`, which dropped it as a duplicate ISBN, and then reported "Book added" and opened a dialog on a record that was never inserted, so the reader was told about a book they could not find. `addBook` now says whether it filed the book and which record it ended up with: a duplicate reports "Already in your library" and opens the copy the library holds.
+
+### Fixed — a bin coordinate off the map
+- The bin boxes stored whatever was typed, `min`/`max` being only a hint a keyboard ignores. The coordinate map draws bins inside the grid, so column 9 of a six-column shelf filed the book nowhere at all, with nothing said about where it went. A coordinate is now held inside the shelf's grid.
+
+### Fixed — bulk arrange hid most of the shelf
+- "Bulk arrange" packed the books into the grid the shelf already had, so a shelf arranged once and then grown put more books in a row than the row has columns — 40 books in a 6×3 grid landed on 18 bins, and the map draws one book per bin, so 22 of them were no longer on it. `utils/shelfLayout` grows the grid to fit the books and gives every book a bin of its own.
+
+### Fixed — bins outlived their books
+- A coordinate stayed on the shelf record after the book it pointed at was deleted or moved to another shelf. Nothing ever removed it, so it was carried locally and pushed to the cloud for good. Deleting or moving a book now releases the bin it held.
+
+### Fixed — deleting the last shelf
+- The last shelf could be deleted as long as it was empty, leaving a library with no shelves — and every path that files a book reaches for the first shelf, which then fell back to an id no shelf record carried, so the book was filed out of reach of every shelf filter. A library now keeps at least one shelf.
+
 ### Fixed — quote scanner stuck after a scan
 - The quote scanner keeps its state between scans, and the spinner was only cleared on failure. A scan that worked left `isScanning` true, so the next time the scanner opened it showed the extracting overlay over a capture button that could no longer be pressed. Opening it now clears the overlay and the last error, and the capture path clears the spinner in a `finally`.
 - A browser with no 2D canvas did nothing at all: the whole capture sat inside `if (ctx)`, so the spinner ran forever with no request sent and no message shown. That case now raises `device.canvasUnavailable`, which the scanner renders.

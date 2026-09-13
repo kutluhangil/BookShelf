@@ -10,6 +10,19 @@ import { ModalShell } from './ModalShell';
 import { useI18n } from '../i18n/I18nProvider';
 import { calendarDateToIso, isoToCalendarDate } from '../utils/calendarDate';
 
+/** The grid a shelf falls back to when it has no dimensions of its own. */
+const DEFAULT_GRID = { cols: 6, rows: 3 } as const;
+
+/**
+ * Reads a bin number from the coordinate box, held inside the grid. A value
+ * past the last column used to be stored exactly as typed, and the map only
+ * draws bins that are inside the grid, so the book disappeared from the shelf
+ * it was filed on with nothing to say where it went.
+ */
+function toBin(value: string, limit: number): number {
+  return Math.max(1, Math.min(limit, Math.round(Number(value))));
+}
+
 interface BookDetailModalProps {
   book: Book | null;
   shelves: Shelf[];
@@ -400,6 +413,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               </label>
               <select
                 value={book.shelfId}
+                aria-label={t.bookDetail.assignedShelf}
                 onChange={(e) => {
                   haptic.selectionClick();
                   onUpdateShelf(book.id, e.target.value);
@@ -414,7 +428,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               </select>
             </div>
 
-            {currentShelf?.layout === 'coordinate' && (
+            {currentShelf?.layout === 'coordinate' && (() => {
+              const gridCols = currentShelf.gridDimensions?.cols || DEFAULT_GRID.cols;
+              const gridRows = currentShelf.gridDimensions?.rows || DEFAULT_GRID.rows;
+              return (
               <div className="flex flex-col gap-1.5">
                 <label className="font-mono-ibm text-[11px] text-[#A79C8C] uppercase tracking-wider">
                   {t.bookDetail.binCoordinates}
@@ -425,19 +442,17 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <input
                       type="number"
                       min={1}
-                      max={currentShelf.gridDimensions?.cols || 10}
+                      max={gridCols}
+                      aria-label={t.bookDetail.colLabel}
                       value={currentShelf.coordinates?.[book.id]?.x || ''}
                       onChange={(e) => {
-                        if (onUpdateCoordinate) {
-                          const val = e.target.value;
-                          if (val === '') {
-                            onUpdateCoordinate(book.id, currentShelf.id, undefined, undefined);
-                          } else {
-                            const x = parseInt(val);
-                            const currentY = currentShelf.coordinates?.[book.id]?.y || 1;
-                            onUpdateCoordinate(book.id, currentShelf.id, x, currentY);
-                          }
+                        if (!onUpdateCoordinate) return;
+                        const val = e.target.value;
+                        if (val === '') {
+                          onUpdateCoordinate(book.id, currentShelf.id, undefined, undefined);
+                          return;
                         }
+                        onUpdateCoordinate(book.id, currentShelf.id, toBin(val, gridCols), currentShelf.coordinates?.[book.id]?.y || 1);
                       }}
                       className="w-full bg-transparent text-[#F4EFE6] text-[13px] font-sans-inter focus:outline-none text-right"
                       placeholder={t.bookDetail.coordinatePlaceholder}
@@ -448,19 +463,17 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <input
                       type="number"
                       min={1}
-                      max={currentShelf.gridDimensions?.rows || 10}
+                      max={gridRows}
+                      aria-label={t.bookDetail.rowLabel}
                       value={currentShelf.coordinates?.[book.id]?.y || ''}
                       onChange={(e) => {
-                        if (onUpdateCoordinate) {
-                          const val = e.target.value;
-                          if (val === '') {
-                            onUpdateCoordinate(book.id, currentShelf.id, undefined, undefined);
-                          } else {
-                            const y = parseInt(val);
-                            const currentX = currentShelf.coordinates?.[book.id]?.x || 1;
-                            onUpdateCoordinate(book.id, currentShelf.id, currentX, y);
-                          }
+                        if (!onUpdateCoordinate) return;
+                        const val = e.target.value;
+                        if (val === '') {
+                          onUpdateCoordinate(book.id, currentShelf.id, undefined, undefined);
+                          return;
                         }
+                        onUpdateCoordinate(book.id, currentShelf.id, currentShelf.coordinates?.[book.id]?.x || 1, toBin(val, gridRows));
                       }}
                       className="w-full bg-transparent text-[#F4EFE6] text-[13px] font-sans-inter focus:outline-none text-right"
                       placeholder={t.bookDetail.coordinatePlaceholder}
@@ -471,7 +484,8 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   {t.bookDetail.coordinateHint}
                 </p>
               </div>
-            )}
+              );
+            })()}
 
             {/* Reading Timeline */}
             {(book.readHistory?.length || book.readingSessions?.length) ? (

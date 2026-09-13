@@ -3,13 +3,20 @@ import type { DocumentData, DocumentReference, WriteBatch } from 'firebase/fires
 import { Book, Shelf, ReadingGoals } from '../types';
 import { fingerprint, SyncFingerprints } from './syncPlan';
 
-/** Firestore rejects `undefined`; strip those keys before writing. */
-function stripUndefined(value: object): Record<string, unknown> {
-  const cleaned: Record<string, unknown> = {};
+/**
+ * Firestore rejects `undefined`, and a merge write leaves every key it is not
+ * given untouched. A field the reader cleared — a loan that came back, a rating
+ * taken away — is exactly that key, so dropping it would keep the old value in
+ * the cloud and hand it back to the next device that fetches. Those keys are
+ * therefore written as an explicit deletion; a field that was never set has no
+ * key here at all and stays out of the write.
+ */
+function withClearedFields(value: object, clear: () => unknown): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value)) {
-    if (entry !== undefined) cleaned[key] = entry;
+    payload[key] = entry === undefined ? clear() : entry;
   }
-  return cleaned;
+  return payload;
 }
 
 export interface SyncPayload {
@@ -85,15 +92,19 @@ export const syncToCloud = async (userId: string, payload: SyncPayload): Promise
     return;
   }
 
-  const { db, doc, writeBatch } = await getFirestoreApi();
+  const { db, doc, writeBatch, deleteField } = await getFirestoreApi();
 
   const operations: Array<(batch: WriteBatch) => void> = [];
 
   for (const shelf of shelves) {
-    operations.push((batch) => batch.set(doc(db, ...shelfPath(userId, shelf.id)), stripUndefined(shelf), { merge: true }));
+    operations.push((batch) =>
+      batch.set(doc(db, ...shelfPath(userId, shelf.id)), withClearedFields(shelf, deleteField), { merge: true })
+    );
   }
   for (const book of books) {
-    operations.push((batch) => batch.set(doc(db, ...bookPath(userId, book.id)), stripUndefined(book), { merge: true }));
+    operations.push((batch) =>
+      batch.set(doc(db, ...bookPath(userId, book.id)), withClearedFields(book, deleteField), { merge: true })
+    );
   }
   // Each deletion is two writes: the document goes, and a tombstone records
   // that it went, so another device stops pushing its own copy back up.
@@ -114,11 +125,11 @@ export const syncToCloud = async (userId: string, payload: SyncPayload): Promise
     operations.push((batch) =>
       batch.set(
         doc(db, 'users', userId),
-        stripUndefined({
+        {
           lastSync: new Date().toISOString(),
           readingGoals: readingGoals ?? null,
           monthlyGoal: monthlyGoal ?? null,
-        }),
+        },
         { merge: true }
       )
     );

@@ -4,6 +4,7 @@ import { Shelf, Book } from '../types';
 import { ShelfStrip } from './ShelfStrip';
 import { haptic } from '../services/haptics';
 import { useT } from '../i18n/I18nProvider';
+import { arrangeIntoGrid } from '../utils/shelfLayout';
 
 const SHELF_COLORS = ['#C9963F', '#304E2E', '#2C251D', '#8B2323', '#4A5B69', '#63456B', '#4D4336', '#3E5C76', '#E29578'];
 /**
@@ -14,6 +15,8 @@ const SHELF_TEXTURES = ['Solid', 'Oak', 'Minimalist Metal', 'Dark Walnut'] as co
 
 type ShelfTexture = (typeof SHELF_TEXTURES)[number];
 const SHELF_MAX_PAGES = 5000; // Estimated linear capacity per shelf
+/** The grid a shelf is arranged into when it has none of its own. */
+const DEFAULT_GRID = { cols: 6, rows: 3 };
 
 const getShelfBackgroundStyle = (themeColor?: string, texture?: string): React.CSSProperties => {
   const baseBg = '#1C1916';
@@ -582,33 +585,11 @@ export const YourShelvesView: React.FC<YourShelvesViewProps> = ({
                             onClick={(e) => {
                               e.stopPropagation();
                               haptic.selectionClick();
-                              const cols = shelf.gridDimensions?.cols || 6;
-                              const rows = shelf.gridDimensions?.rows || Math.max(3, Math.ceil(shelfBooks.length / (shelf.gridDimensions?.cols || 6)));
-                              const newCoords: Record<string, {x: number, y: number}> = {};
-                              
-                              const booksPerRow = Math.ceil(shelfBooks.length / rows);
-                              let currentBook = 0;
-
-                              for (let y = 1; y <= rows; y++) {
-                                const booksInThisRow = Math.min(booksPerRow, shelfBooks.length - currentBook);
-                                if (booksInThisRow <= 0) break;
-                                
-                                const step = cols / booksInThisRow;
-                                for (let i = 0; i < booksInThisRow; i++) {
-                                  const x = Math.max(1, Math.min(cols, Math.round((i * step) + (step / 2))));
-                                  const book = shelfBooks[currentBook];
-                                  if (book) {
-                                    newCoords[book.id] = { x, y };
-                                  }
-                                  currentBook++;
-                                }
-                              }
-
-                              onUpdateShelf?.(shelf.id, { 
-                                layout: 'coordinate',
-                                gridDimensions: { cols, rows },
-                                coordinates: newCoords 
-                              });
+                              const arranged = arrangeIntoGrid(
+                                shelfBooks.map((b) => b.id),
+                                shelf.gridDimensions ?? DEFAULT_GRID
+                              );
+                              onUpdateShelf?.(shelf.id, { layout: 'coordinate', ...arranged });
                             }}
                             className="text-[10px] font-mono-ibm text-[#C9963F] hover:text-[#E8B660] transition-colors border border-[#C9963F]/30 hover:border-[#C9963F] rounded px-2 py-1 bg-[#100E0C] flex items-center gap-1"
                          >

@@ -108,3 +108,64 @@ describe('BookDetailModal lending', () => {
     expect(stored.getMonth()).toBe(11);
   });
 });
+
+const coordinateShelf: Shelf = {
+  ...shelf,
+  layout: 'coordinate',
+  gridDimensions: { cols: 6, rows: 3 },
+  coordinates: { b1: { x: 2, y: 2 } },
+};
+
+function renderCoordinateEditor(onUpdateCoordinate: (
+  bookId: string,
+  shelfId: string,
+  x: number | undefined,
+  y: number | undefined
+) => void) {
+  return render(
+    <I18nProvider>
+      <BookDetailModal
+        book={book}
+        shelves={[coordinateShelf]}
+        isOpen
+        onClose={() => {}}
+        onUpdateStatus={() => {}}
+        onUpdateCurrentPage={() => {}}
+        onUpdateProgress={() => {}}
+        onUpdateShelf={() => {}}
+        onUpdateCoordinate={onUpdateCoordinate}
+        onDeleteBook={() => {}}
+      />
+    </I18nProvider>
+  );
+}
+
+describe('BookDetailModal bin coordinates', () => {
+  it('clamps a column past the last one instead of filing the book off the map', () => {
+    const written: Array<[number | undefined, number | undefined]> = [];
+    const view = renderCoordinateEditor((_id, _shelfId, x, y) => written.push([x, y]));
+
+    // The grid only draws columns 1..6, so a 9 put the book nowhere at all.
+    fireEvent.change(view.getByLabelText(en.bookDetail.colLabel), { target: { value: '9' } });
+
+    expect(written).toEqual([[6, 2]]);
+  });
+
+  it('clamps a row past the last one', () => {
+    const written: Array<[number | undefined, number | undefined]> = [];
+    const view = renderCoordinateEditor((_id, _shelfId, x, y) => written.push([x, y]));
+
+    fireEvent.change(view.getByLabelText(en.bookDetail.rowLabel), { target: { value: '12' } });
+
+    expect(written).toEqual([[2, 3]]);
+  });
+
+  it('clears the coordinate when the box is emptied', () => {
+    const written: Array<[number | undefined, number | undefined]> = [];
+    const view = renderCoordinateEditor((_id, _shelfId, x, y) => written.push([x, y]));
+
+    fireEvent.change(view.getByLabelText(en.bookDetail.colLabel), { target: { value: '' } });
+
+    expect(written).toEqual([[undefined, undefined]]);
+  });
+});

@@ -853,6 +853,7 @@ Kapsam: yalnızca yerel katalog eşleştirme katmanı. Doğruluk, kataloğun ger
     noCode: 'Kod algılanmadı',
     noCodeDetail: 'Bu karede barkod çözülemedi. Kodu daha yakın çerçeveleyip tekrar dene.',
     bookAdded: 'Kitap eklendi',
+    alreadyInLibrary: 'Zaten kitaplığında',
     titleAndAuthor: (title: string, author: string) => `${title} — ${author}`,
     lookupFailed: 'Arama başarısız',
     noSpines: 'Sırt algılanmadı',
@@ -865,7 +866,8 @@ Kapsam: yalnızca yerel katalog eşleştirme katmanı. Doğruluk, kataloğun ger
     volumeRemoved: 'Cilt kaldırıldı',
     volumeRemovedDetail: 'Kitap kitaplığından silindi.',
     cannotDeleteLastShelf: 'Son raf silinemez',
-    cannotDeleteLastShelfDetail: 'Önce başka bir raf oluştur ki kitapları gidecek bir yer bulsun.',
+    cannotDeleteLastShelfDetail:
+      'Kitaplıkta en az bir raf kalmalı: yeni ve taşınan kitaplar oraya gider. Önce başka bir raf oluştur.',
     shelfRemoved: 'Raf kaldırıldı',
     shelfRemovedMoved: (count: number, shelfName: string) => `${count} cilt "${shelfName}" rafına taşındı.`,
     emptyShelfDeleted: 'Boş raf silindi.',

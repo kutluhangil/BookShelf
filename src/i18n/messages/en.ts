@@ -859,6 +859,7 @@ Scope: the local catalog matching layer only. Accuracy is computed over the book
     noCode: 'No code detected',
     noCodeDetail: 'No barcode was decoded from that frame. Frame the code more tightly and try again.',
     bookAdded: 'Book added',
+    alreadyInLibrary: 'Already in your library',
     titleAndAuthor: (title: string, author: string) => `${title} — ${author}`,
     lookupFailed: 'Lookup failed',
     noSpines: 'No spines detected',
@@ -871,7 +872,8 @@ Scope: the local catalog matching layer only. Accuracy is computed over the book
     volumeRemoved: 'Volume removed',
     volumeRemovedDetail: 'The book was deleted from your library.',
     cannotDeleteLastShelf: 'Cannot delete the last shelf',
-    cannotDeleteLastShelfDetail: 'Create another shelf first so its books have somewhere to go.',
+    cannotDeleteLastShelfDetail:
+      'A library keeps at least one shelf: new and moved books are filed there. Create another shelf first.',
     shelfRemoved: 'Shelf removed',
     shelfRemovedMoved: (count: number, shelfName: string) => `${count} volume(s) moved to "${shelfName}".`,
     emptyShelfDeleted: 'Empty shelf deleted.',
