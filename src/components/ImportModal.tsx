@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Book } from '../types';
 import { parseLibraryCsv, rowsToBooks, type ImportResult } from '../services/libraryImport';
@@ -33,8 +33,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [fetchCovers, setFetchCovers] = useState(true);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
+  // Cover enrichment is a loop outside React, so each run takes a number.
+  // Closing the sheet or picking another file bumps it; a run that finds its
+  // number stale stops instead of importing books the reader walked away from.
+  const enrichSessionRef = useRef(0);
 
   const reset = () => {
+    enrichSessionRef.current += 1;
     setStage('pick');
     setResult(null);
     setFileName('');
@@ -46,6 +51,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     reset();
     onClose();
   };
+
+  // Escape, a backdrop tap or the parent closing the sheet never runs
+  // handleClose, so cancel any enrichment still in flight here too.
+  useEffect(() => {
+    if (!isOpen) enrichSessionRef.current += 1;
+  }, [isOpen]);
 
   const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -89,10 +100,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
     // Enrich sequentially: Open Library is a free service, so do not hammer it.
     const withIsbn = books.filter((book) => book.isbn);
+    const session = (enrichSessionRef.current += 1);
     setStage('enriching');
     setEnrichProgress({ done: 0, total: withIsbn.length });
 
     for (let i = 0; i < withIsbn.length; i++) {
+      if (session !== enrichSessionRef.current) return;
       const book = withIsbn[i];
       try {
         const found = await lookupByIsbn(book.isbn);
@@ -103,9 +116,11 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       } catch {
         // A missing catalog entry is expected for some ISBNs; keep the CSV data.
       }
+      if (session !== enrichSessionRef.current) return;
       setEnrichProgress({ done: i + 1, total: withIsbn.length });
     }
 
+    if (session !== enrichSessionRef.current) return;
     onImport(books);
     haptic.success();
     handleClose();

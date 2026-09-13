@@ -8,6 +8,7 @@ import { haptic } from '../services/haptics';
 import { BookCover } from './BookCover';
 import { ModalShell } from './ModalShell';
 import { useI18n } from '../i18n/I18nProvider';
+import { calendarDateToIso, isoToCalendarDate } from '../utils/calendarDate';
 
 interface BookDetailModalProps {
   book: Book | null;
@@ -64,7 +65,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   useEffect(() => {
     if (book) {
       setLentToInput(book.lentTo || '');
-      setLentDueInput(book.lentDueAt ? book.lentDueAt.slice(0, 10) : '');
+      setLentDueInput(isoToCalendarDate(book.lentDueAt));
       setPageCountDraft(book.pageCount ? String(book.pageCount) : '');
     }
   }, [book]);
@@ -346,7 +347,14 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                               min={0}
                               max={book.pageCount}
                               value={book.currentPage ?? Math.round((book.pageCount * (book.progress ?? 0)) / 100)}
-                              onChange={(event) => onUpdateCurrentPage(book.id, Number(event.target.value))}
+                              onChange={(event) => {
+                                // An empty box is a reader clearing it to type a
+                                // new number, not page zero. Treating it as zero
+                                // reset the book to unread and dropped the date
+                                // it was finished on.
+                                if (event.target.value === '') return;
+                                onUpdateCurrentPage(book.id, Number(event.target.value));
+                              }}
                               className="w-16 bg-[#12100E] border border-[#3A332A] rounded px-2 py-1 text-right focus:outline-none focus:border-[#C9963F]"
                               aria-label={t.bookDetail.currentPage}
                             />
@@ -361,7 +369,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
             </div>
 
             {/* Proof of Capture Crop — only meaningful for scanned volumes */}
-            {(book.proofOfCaptureUrl || book.spineCropUrl) && (
+            {book.spineCropUrl && (
             <div className="bg-[#151311] rounded-xl p-3.5 hairline-border space-y-2">
               <div className="flex justify-between items-center text-[11px] font-mono-ibm text-[#A79C8C]">
                 <span className="tracking-wider flex items-center gap-1.5">
@@ -373,7 +381,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
               <div className="w-full h-24 rounded-lg overflow-hidden relative bg-[#100E0C] border border-[#3A332A]">
                 <img
-                  src={book.proofOfCaptureUrl || book.spineCropUrl}
+                  src={book.spineCropUrl}
                   alt={t.bookDetail.proofAlt}
                   className="w-full h-full object-cover grayscale-[30%]"
                 />
@@ -717,7 +725,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                               book.id,
                               lentToInput.trim(),
                               new Date().toISOString(),
-                              lentDueInput ? new Date(lentDueInput).toISOString() : undefined
+                              calendarDateToIso(lentDueInput)
                             );
                           }}
                           disabled={!lentToInput.trim()}

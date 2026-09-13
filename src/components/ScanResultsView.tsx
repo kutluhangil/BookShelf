@@ -165,11 +165,13 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                 >
                   <div className="flex items-center gap-3.5 min-w-0">
                     <div className="w-12 h-16 shrink-0 bg-[#100E0C] rounded overflow-hidden border border-[#3A332A]">
-                      <img
-                        src={cand.cropUrl}
-                        alt={t.scanResults.candidateAlt}
-                        className="w-full h-full object-cover grayscale-[20%]"
-                      />
+                      {cand.cropUrl && (
+                        <img
+                          src={cand.cropUrl}
+                          alt={t.scanResults.candidateAlt}
+                          className="w-full h-full object-cover grayscale-[20%]"
+                        />
+                      )}
                     </div>
 
                     <div className="min-w-0">
@@ -307,11 +309,13 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-14 shrink-0 bg-[#100E0C] rounded overflow-hidden border border-[#3A332A]">
-                      <img
-                        src={cand.cropUrl}
-                        alt={t.scanResults.unrecognizedAlt}
-                        className="w-full h-full object-cover grayscale"
-                      />
+                      {cand.cropUrl && (
+                        <img
+                          src={cand.cropUrl}
+                          alt={t.scanResults.unrecognizedAlt}
+                          className="w-full h-full object-cover grayscale"
+                        />
+                      )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">

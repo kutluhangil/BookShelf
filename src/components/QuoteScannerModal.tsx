@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { haptic } from '../services/haptics';
 import { postJson } from '../services/apiClient';
+import { AppError } from '../services/appError';
 import { ModalShell } from './ModalShell';
 import { useT } from '../i18n/I18nProvider';
 import { formatError } from '../i18n/formatError';
@@ -19,20 +20,31 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
   // The stream is only ever used to attach and tear down the camera, never
   // rendered, so a ref keeps `stopCamera` free of reactive dependencies.
   const streamRef = useRef<MediaStream | null>(null);
+  // Each start takes a number. Closing bumps it, so a start still waiting on
+  // getUserMedia can see that its stream is no longer wanted and release it
+  // instead of leaving the camera live behind a closed scanner.
+  const cameraSessionRef = useRef(0);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
+    cameraSessionRef.current += 1;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
   }, []);
 
   const startCamera = useCallback(async () => {
+    const session = (cameraSessionRef.current += 1);
     setError(null);
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment', width: { ideal: 1920 } } 
       });
+      if (session !== cameraSessionRef.current) {
+        // The scanner closed (or restarted) while the camera was warming up.
+        mediaStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = mediaStream;
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
@@ -51,6 +63,12 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
 
   useEffect(() => {
     if (isOpen) {
+      // The spinner is state, and this component stays mounted between scans:
+      // without this, a scan that succeeded left `isScanning` true and the next
+      // time the scanner opened it showed the extracting overlay over a capture
+      // button that could no longer be pressed.
+      setIsScanning(false);
+      setError(null);
       void startCamera();
     } else {
       stopCamera();
@@ -66,25 +84,27 @@ export const QuoteScannerModal: React.FC<QuoteScannerModalProps> = ({ isOpen, on
     
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
+
+    try {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      // A browser with no 2D context used to leave the spinner running forever:
+      // the work was inside `if (ctx)` and nothing ran when it was null.
+      if (!ctx) throw new AppError('device.canvasUnavailable', {});
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const imageBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-      
-      try {
-        const payload = await postJson<{ text?: string }>('/api/gemini/quote', { imageBase64 });
-        if (!payload?.text) {
-          throw new Error(t.quoteScanner.noText);
-        }
-        onScanComplete(payload.text);
-        onClose();
-      } catch (err) {
-        setError(formatError(t, err));
-        setIsScanning(false);
+
+      const payload = await postJson<{ text?: string }>('/api/gemini/quote', { imageBase64 });
+      if (!payload?.text) {
+        throw new Error(t.quoteScanner.noText);
       }
+      onScanComplete(payload.text);
+      onClose();
+    } catch (err) {
+      setError(formatError(t, err));
+    } finally {
+      setIsScanning(false);
     }
   };
 

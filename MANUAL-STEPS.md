@@ -77,6 +77,10 @@ pushed:
 firebase deploy --only firestore:rules
 ```
 
+This deploy is required, not optional: deletions now write a tombstone to
+`users/{uid}/deletions/{kind}:{id}`, and until the rules that grant that
+subcollection to its owner are live, every delete is rejected.
+
 ---
 
 ## 4. Verify in a real browser

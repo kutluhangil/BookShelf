@@ -7,6 +7,7 @@ import {
   deleteSharedList,
   addBookToSharedList,
   removeBookFromSharedList,
+  toSharedListBook,
   inviteByEmail,
   claimInvitations,
   joinPublicList,
@@ -153,7 +154,9 @@ export const SharedListsView: React.FC<SharedListsViewProps> = ({ books, current
   const handleAddBook = (listId: string, book: Book) =>
     run(async () => {
       await addBookToSharedList(listId, book);
-      setMyLists((prev) => prev.map((l) => (l.id === listId ? { ...l, books: [...l.books, book] } : l)));
+      setMyLists((prev) =>
+        prev.map((l) => (l.id === listId ? { ...l, books: [...l.books, toSharedListBook(book)] } : l))
+      );
       haptic.selectionClick();
     });
 

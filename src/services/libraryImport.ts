@@ -32,12 +32,26 @@ export interface ImportResult {
   detectedFormat: 'bookshelf' | 'goodreads' | 'generic';
 }
 
-/** RFC 4180 style parser: handles quoted fields, escaped quotes and newlines. */
-export function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
+/** One parsed row, tagged with the line of the source file it started on. */
+export interface CsvRow {
+  cells: string[];
+  /** 1-based line in the original file, so a skip report can be looked up. */
+  line: number;
+}
+
+/**
+ * RFC 4180 style parser: handles quoted fields, escaped quotes and newlines.
+ * Rows keep their source line because blank lines are dropped and a quoted
+ * field may span several lines, so a position in the result says nothing about
+ * where the row sits in the file the reader has open.
+ */
+export function parseCsvRows(text: string): CsvRow[] {
+  const rows: CsvRow[] = [];
   let row: string[] = [];
   let field = '';
   let inQuotes = false;
+  let line = 1;
+  let rowLine = 1;
 
   const source = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
@@ -53,6 +67,7 @@ export function parseCsv(text: string): string[][] {
           inQuotes = false;
         }
       } else {
+        if (char === '\n') line++;
         field += char;
       }
       continue;
@@ -65,9 +80,11 @@ export function parseCsv(text: string): string[][] {
       field = '';
     } else if (char === '\n') {
       row.push(field);
-      rows.push(row);
+      rows.push({ cells: row, line: rowLine });
       row = [];
       field = '';
+      line++;
+      rowLine = line;
     } else {
       field += char;
     }
@@ -75,10 +92,15 @@ export function parseCsv(text: string): string[][] {
 
   if (field.length > 0 || row.length > 0) {
     row.push(field);
-    rows.push(row);
+    rows.push({ cells: row, line: rowLine });
   }
 
-  return rows.filter((entry) => entry.some((cell) => cell.trim().length > 0));
+  return rows.filter((entry) => entry.cells.some((cell) => cell.trim().length > 0));
+}
+
+/** The cells alone, for callers that do not report on source positions. */
+export function parseCsv(text: string): string[][] {
+  return parseCsvRows(text).map((entry) => entry.cells);
 }
 
 function normalizeHeader(value: string): string {
@@ -110,12 +132,12 @@ function ownStatus(value: string | undefined): ReadingStatus {
 }
 
 export function parseLibraryCsv(text: string): ImportResult {
-  const rows = parseCsv(text);
+  const rows = parseCsvRows(text);
   if (rows.length < 2) {
     return { rows: [], skipped: [{ line: 1, reason: 'no-data-rows' }], detectedFormat: 'generic' };
   }
 
-  const headers = rows[0].map(normalizeHeader);
+  const headers = rows[0].cells.map(normalizeHeader);
   const index = (...names: string[]): number => {
     for (const name of names) {
       const position = headers.indexOf(name);
@@ -129,7 +151,7 @@ export function parseLibraryCsv(text: string): ImportResult {
   if (titleIdx === -1) {
     return {
       rows: [],
-      skipped: [{ line: 1, reason: 'no-title-column' }],
+      skipped: [{ line: rows[0].line, reason: 'no-title-column' }],
       detectedFormat: 'generic',
     };
   }
@@ -154,11 +176,11 @@ export function parseLibraryCsv(text: string): ImportResult {
   const skipped: ImportResult['skipped'] = [];
 
   for (let i = 1; i < rows.length; i++) {
-    const cells = rows[i];
+    const { cells, line } = rows[i];
     const title = cells[titleIdx]?.trim();
 
     if (!title) {
-      skipped.push({ line: i + 1, reason: 'missing-title' });
+      skipped.push({ line, reason: 'missing-title' });
       continue;
     }
 

@@ -90,11 +90,13 @@ export const ReviewMatchSheet: React.FC<ReviewMatchSheetProps> = ({
 
             {/* The Captured Spine Segment preview with crop marks */}
             <div className="relative w-full h-44 sm:h-48 mb-5 rounded-lg overflow-hidden hairline-border bg-[#100E0C]">
-              <img
-                src={candidate.cropUrl}
-                alt={t.reviewMatch.spineAlt}
-                className="w-full h-full object-cover grayscale-[30%] opacity-90 transition-all duration-500"
-              />
+              {candidate.cropUrl && (
+                <img
+                  src={candidate.cropUrl}
+                  alt={t.reviewMatch.spineAlt}
+                  className="w-full h-full object-cover grayscale-[30%] opacity-90 transition-all duration-500"
+                />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-[#262119] via-transparent to-transparent pointer-events-none" />
 
               {/* Crop mark corner brackets */}

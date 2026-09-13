@@ -28,6 +28,20 @@ describe('calculateSimilarity', () => {
   it('scores unrelated strings low', () => {
     expect(calculateSimilarity('Dune', 'Cooking with Fire')).toBeLessThan(0.3);
   });
+
+  it('still credits a catalog title contained in the spine text', () => {
+    expect(calculateSimilarity('Dune Frank Herbert Ace Books', 'Dune')).toBe(0.88);
+  });
+
+  it('does not credit a fragment that lands inside a longer word', () => {
+    // `it` sits inside `city`. Treating that as containment made a two-letter
+    // spine an 88% match for an unrelated book.
+    expect(calculateSimilarity('IT', 'The City We Became')).toBeLessThan(0.3);
+  });
+
+  it('does not credit a word too short to identify anything', () => {
+    expect(calculateSimilarity('The', 'The City We Became')).toBeLessThan(0.3);
+  });
 });
 
 describe('scoreToConfidence', () => {
@@ -40,7 +54,7 @@ describe('scoreToConfidence', () => {
 
 describe('buildCandidatesFromRecognition', () => {
   it('produces one candidate per recognized spine with clamped geometry', () => {
-    const candidates = buildCandidatesFromRecognition('data:image/jpeg;base64,AAA', [
+    const candidates = buildCandidatesFromRecognition([
       { rawText: 'Dune Frank Herbert', confidence: 0.95, dominantColor: '#112233', bbox: { x: -5, y: 10, width: 200, height: 80 } },
       { rawText: '', confidence: 0.05 },
     ]);
@@ -55,11 +69,37 @@ describe('buildCandidatesFromRecognition', () => {
   });
 
   it('gives every candidate a unique matched book id', () => {
-    const candidates = buildCandidatesFromRecognition('img', [
+    const candidates = buildCandidatesFromRecognition([
       { rawText: 'Dune Frank Herbert', confidence: 0.95 },
       { rawText: 'Dune Frank Herbert', confidence: 0.95 },
     ]);
     const ids = candidates.map((c) => c.matchedBook?.id).filter(Boolean);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('does not file a confidently read but unidentifiable spine as matched', () => {
+    // The reading is certain, the identification is not: the catalog has no
+    // such book. A `matched` candidate is pre-selected in the results view, so
+    // this used to save an unrelated catalog entry under the reader's spine.
+    const [candidate] = buildCandidatesFromRecognition([
+      { rawText: 'IT', title: 'It', author: 'Stephen King', confidence: 0.95 },
+    ]);
+
+    expect(candidate.confidence).not.toBe('matched');
+    expect(candidate.matchedBook?.title ?? 'It').toBe('It');
+  });
+
+  it('never seeds a candidate or its book with the shelf photo', () => {
+    // The shelf photo is a multi-megabyte data URL. Using it as a per-spine
+    // thumbnail stored one copy of it per book and filled the storage quota.
+    const candidates = buildCandidatesFromRecognition([
+      { rawText: 'Dune Frank Herbert', confidence: 0.95 },
+      { rawText: '', confidence: 0.05 },
+    ]);
+
+    for (const candidate of candidates) {
+      expect(candidate.cropUrl).toBeNull();
+      expect(candidate.matchedBook?.spineCropUrl ?? '').toBe('');
+    }
   });
 });

@@ -247,6 +247,7 @@ export const tr: Messages = {
     permissionDenied: 'Kamera izni reddedildi. Tarayıcı ayarlarından kamera erişimine izin ver.',
     notFound: 'Bu cihazda kamera bulunamadı.',
     startFailed: (detail: string) => `Kamera başlatılamadı: ${detail}`,
+    orientationFailed: (detail: string) => `Terazi göstergesi açılamadı: ${detail}`,
   },
 
   quoteScanner: {
@@ -444,6 +445,8 @@ export const tr: Messages = {
     levelLocked: (roll: string, pitch: string) => `TERAZİ KİLİTLİ (${roll}° YATIŞ / ${pitch}° EĞİM)`,
     tilted: (roll: string) => `EĞİK: YATIŞ ${roll}° — PARALEL TUT`,
     enableLevel: 'Terazi göstergesini aç',
+    orientationDenied:
+      'Hareket erişimi reddedildi; terazi göstergesi kapalı kalıyor. Kullanmak için tarayıcı ayarlarından izin ver.',
     toggleTorch: 'Feneri aç/kapat',
     retryCamera: 'Kamerayı tekrar dene',
     softwareDecoder: 'Yazılımsal çözücü — sabit tut',
@@ -806,6 +809,11 @@ Kapsam: yalnızca yerel katalog eşleştirme katmanı. Doğruluk, kataloğun ger
     serverUnreachable: 'Sunucuya ulaşılamıyor',
     serverUnreachableDetail: (detail: string) => `Tarama ve yapay zekâ özellikleri kullanılamıyor: ${detail}`,
     storedLibraryUnreadable: 'Kayıtlı kitaplık okunamadı',
+    storedLibraryQuarantined: (reason: string, key: string) =>
+      `${reason} Kayıt üzerine yazılmasın diye "${key}" anahtarına taşındı; bu oturum örnek kitaplıkla başlıyor.`,
+    storedLibraryLocked: (reason: string, cause: string) =>
+      `${reason} Kayıt bir kenara da kopyalanamadı (${cause}); üzerine yazmamak için bu oturumda kaydetme kapalı.`,
+    saveFailed: 'Kitaplık kaydedilemedi',
     storageUnavailable: 'Yerel depolama kullanılamıyor',
     storageUnavailableDetail:
       'Tarayıcın yerel depolamayı engelliyor; değişiklikler sayfa yenilenince kaybolacak. Bulut kopyası için giriş yap.',
@@ -816,6 +824,12 @@ Kapsam: yalnızca yerel katalog eşleştirme katmanı. Doğruluk, kataloğun ger
       `En yeni düzenleme korundu: ${titles}` +
       (more > 0 ? ` ve ${more} tane daha.` : '.') +
       (supersededLocal > 0 ? ` ${supersededLocal} yerel değişiklik bulut kopyasıyla değiştirildi.` : ''),
+    removedByRemote: (count: number) => `${count} kayıt kaldırıldı`,
+    removedByRemoteDetail: (titles: string, more: number) =>
+      `Başka bir cihazda silinmiş: ${titles}` + (more > 0 ? ` ve ${more} tane daha.` : '.'),
+    accountSwitched: 'Farklı hesaba geçildi',
+    accountSwitchedDetail: (count: number) =>
+      `Bu cihazdaki kitaplık başka bir hesaba aitti; birleştirilmedi. Bu hesabın bulut kopyası yüklendi (${count} cilt).`,
     cloudFetchFailed: 'Buluttan çekme başarısız',
     cloudUnavailable: 'Bulut özellikleri kullanılamıyor',
     cloudUnavailableDetail: (detail: string) => `Firebase SDK yüklenemedi: ${detail}`,

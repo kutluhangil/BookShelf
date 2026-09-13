@@ -10,6 +10,7 @@
 /** Every raisable failure, mapped to the values its message interpolates. */
 export interface ErrorPayloads {
   'lookup.network': { subject: string };
+  'lookup.timeout': { subject: string; seconds: number };
   'lookup.http': { subject: string; status: number };
   'lookup.invalidIsbn': { value: string };
   'lookup.notFound': { isbn: string };
@@ -27,8 +28,12 @@ export interface ErrorPayloads {
   'sharedList.invalidEmail': { email: string };
   'sharedList.alreadyInvited': { email: string };
   'sharedList.inviteOnly': Record<string, never>;
+  'sharedList.full': { listId: string; limit: number };
 
   'storage.schemaMismatch': { found: unknown; expected: number; key: string };
+  'storage.quotaExceeded': { megabytes: string; key: string };
+
+  'capture.decodeFailed': Record<string, never>;
 
   'device.audioUnavailable': Record<string, never>;
   'device.canvasUnavailable': Record<string, never>;

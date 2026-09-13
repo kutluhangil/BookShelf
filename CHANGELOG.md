@@ -4,6 +4,60 @@ Newest entries at the top.
 
 ## Unreleased
 
+### Fixed — quote scanner stuck after a scan
+- The quote scanner keeps its state between scans, and the spinner was only cleared on failure. A scan that worked left `isScanning` true, so the next time the scanner opened it showed the extracting overlay over a capture button that could no longer be pressed. Opening it now clears the overlay and the last error, and the capture path clears the spinner in a `finally`.
+- A browser with no 2D canvas did nothing at all: the whole capture sat inside `if (ctx)`, so the spinner ran forever with no request sent and no message shown. That case now raises `device.canvasUnavailable`, which the scanner renders.
+- The camera had the same start/close race the shelf scanner had: the stream was stored only after `getUserMedia` resolved, so closing the scanner first left the camera live for the rest of the session. Starts now carry a session number and a stream that arrives after a close is stopped on arrival.
+
+### Fixed — the due date came back a day early
+- A lending due date was stored with `new Date('2025-12-25')`, which is UTC midnight and therefore the 24th anywhere west of Greenwich, and read back with a UTC `slice(0, 10)`. The date the reader picked and the date the book showed could differ by a day in opposite directions. `utils/calendarDate` converts both ways in the reader's own timezone.
+
+### Fixed — clearing the page box marked a book unread
+- The current-page input read an empty box as page 0, and a reader has to empty it before typing a new number. For a finished book that meant progress 0, status `unread` and the completion date dropped, between one keystroke and the next. An empty box is now ignored until a number is typed.
+
+### Fixed — deletions resurrected on a second device
+- Deleting a book removed its document and nothing else, so a second device — which only ever sees what the cloud holds — could not tell a deleted record from one it had never pushed, kept its own copy, and pushed it straight back up. Every deletion now also writes a tombstone under `users/{uid}/deletions`, the fetch reads them, and the merge drops a local record a tombstone covers. A record edited here *after* the deletion outranks it and survives, so re-adding a book still works. Shelves carry no timestamp and so cannot outrank one. Anything the merge removes is reported as a toast rather than vanishing quietly. Tombstones are swept on read after 180 days; a device offline for longer resurrects its records, which is where every device stood before this change. `firestore.rules` grants the new subcollection to its owner only.
+
+### Fixed — the reader's page moved on its own
+- The page number was stored only as a whole percentage and derived back out of it, so the reader's own bookmark moved: page 151 of 300 is 50.33%, kept as 50, read back as page 150. Page and percentage are now derived together in `services/readingProgress`, and a page the reader typed is stored as typed. The status comes from the exact percentage instead of the rounded one, so page 1 of an 800-page book counts as reading rather than unread.
+
+### Fixed — silent level-indicator failure
+- `enableOrientation` awaited `DeviceOrientationEvent.requestPermission()` with nothing around it. iOS rejects that call when it does not come from a user gesture, and a rejection from a click handler reaches nobody: the button appeared dead and the console took an unhandled rejection. A refusal and a rejection now each put a message on the scanner, in both locales.
+
+### Fixed — orientation listener leak
+- The iOS permission grant attached its own inline `deviceorientation` handler, which nothing removed: the effect's cleanup only knew about the handler the effect itself had created. Every grant added another listener that kept running `setRoll`/`setPitch` behind a closed scanner for the rest of the page's life. The grant now just records that permission is held, and the single effect owns attaching and removing the listener.
+
+### Fixed — import after cancel
+- Closing the import sheet while covers were being fetched did not stop the run. The enrichment loop kept requesting covers and, when it reached the end, still called `onImport`, so books the reader had walked away from appeared in the library. Enrichment now carries a session number that closing the sheet (or picking another file) bumps, and a run whose number is stale stops without importing.
+
+### Fixed — hung lookups
+- `bookLookup` had no deadline on its Open Library requests, so a request the server accepted and never answered blocked the sequential import loop indefinitely. Requests now abort after 10 seconds and raise a coded `lookup.timeout` error in both locales.
+
+### Fixed — skipped row line numbers
+- A skipped row was reported with its index in the parsed result, which is not its line in the file: blank lines are dropped and a quoted field may span several lines, so the number sent the reader to the wrong place in their CSV. `parseCsvRows` now tags every row with the source line it started on, and the skip report uses it.
+
+### Fixed — camera left running
+- Closing the scanner before the camera finished starting left the camera on for the rest of the session. `startCamera` assigned `streamRef` only after `getUserMedia` resolved, while the close path ran `stopCamera` on a ref that was still `null`; the stream then arrived with nobody holding it, so its tracks were never stopped — the capture light stayed lit and reopening the scanner leaked another stream on top. A camera start now takes a session number that `stopCamera` bumps, and a stream that belongs to a session that has ended is stopped on arrival instead of being stored.
+
+### Fixed — cross-account leak
+- Signing out left the library on the device, and the sign-in merge had no idea whose it was. Signing in with a second account merged the first reader's books into the second's library and, eight seconds later, the auto-sync pushed them into that account's cloud — along with the first account's tombstones, which delete by document id. The persisted record now carries `ownerUid` (schema 3 → 4; an existing record migrates to `null`, meaning unclaimed). A sign-in that does not match the owner no longer merges: it adopts that account's cloud copy, resets the tombstones and the push fingerprints, and says so. A library with no owner yet is still the reader's own offline one and still merges, which is what a first sign-in needs.
+  - Trade-off, stated rather than hidden: work the previous account never pushed is not carried across the switch. It is at most the last few seconds of edits, since a push runs eight seconds after any change.
+
+### Fixed — wrong data
+- A spine the vision model read confidently but that the local catalog does not hold could be filed as `matched` and saved as an unrelated book. `calculateSimilarity` scored any substring relation at 0.88, so `IT` — which sits inside `city` — matched `The City We Became`; blended with a confident reading that reached 0.892, past the 0.82 match threshold, and the scan results view pre-selects every `matched` candidate. Containment now has to fall on word boundaries and be at least four characters; anything shorter falls through to the trigram comparison, which puts such a spine back in the review list carrying what the model actually read.
+
+### Fixed — data loss
+- A scanned library could fill the local storage quota and then stop being saved without a word. Three faults compounded: every scanned book stored its spine crop twice (`spineCropUrl` and `proofOfCaptureUrl` held the same base64 JPEG), a box that failed to crop fell back to the entire shelf photo — a multi-megabyte data URL written once per book — and `saveLibrary` called `setItem` bare, so the `QuotaExceededError` was thrown from a `setTimeout` where no error boundary or caller could see it. The reader kept working on a library that was no longer being persisted.
+  - `proofOfCaptureUrl` is gone. One field holds the crop, and a schema 2 → 3 migration strips the duplicate from libraries that already exist, so the space is reclaimed on the next write rather than only for new scans.
+  - `cropRegions` returns `string | null` and never the source photo. A box too thin to be a spine, or a tainted canvas, costs that one thumbnail; a photo that will not decode or a browser with no 2D canvas raises a coded error instead of being papered over. The scan result rows, the review sheet and the book detail panel render the framed empty box they already sit in when there is no thumbnail.
+  - A full quota now raises `storage.quotaExceeded`, which names the size, the storage key and what to delete. Because the write runs from a timer and from `pagehide`, where a throw reaches nobody, `localStore` exposes `onPersistenceError`; `useLibrary` subscribes and `App` raises a toast. A recurring identical failure is reported once, not once per keystroke.
+
+- A shared list carried whole `Book` records inline, spine crop and all. A Firestore document is capped at 1MB, so a list of a few dozen scanned books crossed it and every write to that list failed from then on — including removing a book, the one action that could have brought it back under the cap. Lists now store a `SharedListBook`: the id, title, author, cover URL and spine colour the list actually renders, which is all the view has ever read. Documents written the old way are projected down on read and rewritten on the first edit, so the oversized copies leave on their own. Adding past `SHARED_LIST_MAX_BOOKS` (500) raises `sharedList.full` instead of quietly writing a document that can never be written again.
+- A book deleted while a sync was in flight came back. `syncNow` cleared the whole tombstone list on success, including the ids recorded after the push had already been sent, so those documents stayed in Firestore and the next fetch merged them back into the library. The push now clears exactly the ids it sent and leaves the rest waiting. Shelves had the same hole.
+- Edits made during a push were reported as synced. The success handler cleared `hasUnsyncedChanges` unconditionally, so a note typed while the request was open left the auto-sync timer unscheduled and the cloud copy stale until the reader happened to edit something else. A revision counter now tells the two apart. `syncNow` also refuses to start on top of a push that is still running — `isSyncing` is state and lags behind the call.
+- A stored library this build cannot read was replaced by the bundled starter library — and then written over it. `readInitialLibrary` falls back to the starter records on any read failure (a record from a newer schema, damaged JSON), and the coalesced save fired 400ms later at the same storage key, so the reader's own library was gone for good and a signed-in reader pushed the demo books to the cloud on top. The unreadable record is now copied to `bookshelf.library.v1.unreadable` before anything can overwrite it, and if even that copy fails, saving stays off for the session rather than trade the library for the sample one. The startup toast says which of the two happened.
+- `fetchFromCloud` deletes `proofOfCaptureUrl` from the cloud copies that still carry it, with `deleteField`. Dropping the field on read protected the local library but left the duplicate in Firestore, where it went on consuming the document's 1MB budget and was downloaded again on every sync.
+
 ### Documentation
 - `MANUAL-STEPS.md`: what has to be done outside the repository — the two Firestore composite indexes the ordered shared-list queries now need, `TRUST_PROXY` in production, deploying the rules, and the browser checks this pass could not run.
 - README badges said React 18 and Tailwind 3; the project is on React 19 and Tailwind 4. The layout, command card and environment table are current again.

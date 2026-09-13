@@ -62,7 +62,6 @@ export const INITIAL_BOOKS: Book[] = [
     score: 0.98,
     category: 'Historical Fiction',
     addedAt: '2026-08-15T18:40:00Z',
-    proofOfCaptureUrl: 'https://images.unsplash.com/photo-1507842229451-79b1be8d6293?q=80&w=900&auto=format&fit=crop',
   },
   {
     id: 'book-2',
@@ -86,7 +85,6 @@ export const INITIAL_BOOKS: Book[] = [
     score: 0.97,
     category: 'Literary Fiction',
     addedAt: '2026-08-18T14:20:00Z',
-    proofOfCaptureUrl: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?q=80&w=900&auto=format&fit=crop',
   },
   {
     id: 'book-3',
@@ -109,7 +107,6 @@ export const INITIAL_BOOKS: Book[] = [
     score: 0.98,
     category: 'Dystopian',
     addedAt: '2026-08-20T09:12:00Z',
-    proofOfCaptureUrl: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=900&auto=format&fit=crop',
   },
   {
     id: 'book-4',
@@ -132,7 +129,6 @@ export const INITIAL_BOOKS: Book[] = [
     score: 0.95,
     category: 'Classic Fiction',
     addedAt: '2026-08-21T11:05:00Z',
-    proofOfCaptureUrl: 'https://images.unsplash.com/photo-1507842229451-79b1be8d6293?q=80&w=900&auto=format&fit=crop',
   },
   {
     id: 'book-5',
@@ -155,7 +151,6 @@ export const INITIAL_BOOKS: Book[] = [
     score: 0.96,
     category: 'Türk Edebiyatı',
     addedAt: '2026-08-22T16:30:00Z',
-    proofOfCaptureUrl: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?q=80&w=900&auto=format&fit=crop',
   },
   {
     id: 'book-6',
@@ -178,7 +173,6 @@ export const INITIAL_BOOKS: Book[] = [
     score: 0.94,
     category: 'Türk Edebiyatı',
     addedAt: '2026-08-23T10:15:00Z',
-    proofOfCaptureUrl: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=900&auto=format&fit=crop',
   },
   {
     id: 'book-7',
@@ -200,7 +194,6 @@ export const INITIAL_BOOKS: Book[] = [
     score: 0.96,
     category: 'Design & UX',
     addedAt: '2026-08-24T08:00:00Z',
-    proofOfCaptureUrl: 'https://images.unsplash.com/photo-1507842229451-79b1be8d6293?q=80&w=900&auto=format&fit=crop',
   },
   {
     id: 'book-8',
@@ -222,7 +215,6 @@ export const INITIAL_BOOKS: Book[] = [
     score: 0.99,
     category: 'Philosophy',
     addedAt: '2026-08-25T19:00:00Z',
-    proofOfCaptureUrl: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?q=80&w=900&auto=format&fit=crop',
   },
 ];
 

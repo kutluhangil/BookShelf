@@ -67,17 +67,46 @@ function parseYear(value: unknown): number {
   return 0;
 }
 
+/**
+ * Open Library sometimes accepts a connection and never answers. Without a
+ * deadline one stalled request blocks the caller for as long as the browser
+ * keeps the socket, which freezes the sequential import enrichment loop.
+ */
+const LOOKUP_TIMEOUT_MS = 10_000;
+
 async function fetchJson(url: string, subject: string): Promise<unknown> {
-  let response: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
+  const timedOut = () =>
+    new AppError(
+      'lookup.timeout',
+      { subject, seconds: LOOKUP_TIMEOUT_MS / 1000 },
+      { detail: url }
+    );
+
   try {
-    response = await fetch(url, { headers: { Accept: 'application/json' } });
-  } catch (error) {
-    throw new AppError('lookup.network', { subject }, { detail: toDetail(error), cause: error });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) throw timedOut();
+      throw new AppError('lookup.network', { subject }, { detail: toDetail(error), cause: error });
+    }
+    if (!response.ok) {
+      throw new AppError('lookup.http', { subject, status: response.status }, { detail: url });
+    }
+    try {
+      return await response.json();
+    } catch (error) {
+      if (controller.signal.aborted) throw timedOut();
+      throw error;
+    }
+  } finally {
+    clearTimeout(timer);
   }
-  if (!response.ok) {
-    throw new AppError('lookup.http', { subject, status: response.status }, { detail: url });
-  }
-  return response.json();
 }
 
 /** Looks up a single book by ISBN (as produced by the barcode scanner). */

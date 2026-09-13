@@ -19,6 +19,12 @@ service cloud.firestore {
       match /shelves/{shelfId} {
         allow read, write: if isSignedIn() && request.auth.uid == userId;
       }
+
+      // Tombstones: what this reader deleted, kept after the document is gone
+      // so their other devices stop pushing their own copies back up.
+      match /deletions/{deletionId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     match /sharedLists/{listId} {

@@ -31,6 +31,10 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Each camera start takes a number. Stopping bumps it, so a start still
+  // awaiting getUserMedia can see that its stream is no longer wanted and
+  // release it instead of leaving the camera live behind a closed scanner.
+  const cameraSessionRef = useRef(0);
   const readerRef = useRef<BarcodeReader | null>(null);
   const scanLoopRef = useRef<number | null>(null);
   const wasAlignedRef = useRef<boolean>(false);
@@ -51,6 +55,10 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
   const [roll, setRoll] = useState<number | null>(null);
   const [pitch, setPitch] = useState<number | null>(null);
   const [orientationPermissionNeeded, setOrientationPermissionNeeded] = useState(false);
+  // Set once iOS grants orientation access, so the effect below owns the
+  // listener in every case and can take it back off the window on close.
+  const [isOrientationGranted, setIsOrientationGranted] = useState(false);
+  const [orientationError, setOrientationError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -60,6 +68,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
   const isAligned = hasOrientation ? isRollValid && isPitchValid : true;
 
   const stopCamera = useCallback(() => {
+    cameraSessionRef.current += 1;
     if (scanLoopRef.current !== null) {
       window.clearTimeout(scanLoopRef.current);
       scanLoopRef.current = null;
@@ -72,6 +81,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
   }, []);
 
   const startCamera = useCallback(async () => {
+    const session = (cameraSessionRef.current += 1);
     setCameraError(null);
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError(t.scanner.noCameraApi);
@@ -82,6 +92,11 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
       });
+      if (session !== cameraSessionRef.current) {
+        // The scanner closed (or restarted) while the camera was warming up.
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -127,6 +142,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
     if (!isOpen) {
       setRoll(null);
       setPitch(null);
+      setOrientationError(null);
       wasAlignedRef.current = false;
       return;
     }
@@ -141,7 +157,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
       DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<PermissionState> }
     ).requestPermission;
 
-    if (typeof requestPermission === 'function') {
+    if (typeof requestPermission === 'function' && !isOrientationGranted) {
       // iOS 13+ requires an explicit user gesture before orientation events fire.
       setOrientationPermissionNeeded(true);
     } else if ('DeviceOrientationEvent' in window) {
@@ -149,25 +165,29 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
     }
 
     return () => window.removeEventListener('deviceorientation', handleOrientation, true);
-  }, [isOpen]);
+  }, [isOpen, isOrientationGranted]);
 
   const enableOrientation = async () => {
     const requestPermission = (
       DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<PermissionState> }
     ).requestPermission;
     if (typeof requestPermission !== 'function') return;
-    const state = await requestPermission();
-    if (state === 'granted') {
-      setOrientationPermissionNeeded(false);
-      window.addEventListener(
-        'deviceorientation',
-        (event: DeviceOrientationEvent) => {
-          if (event.gamma === null || event.beta === null) return;
-          setRoll(Math.round(event.gamma * 10) / 10);
-          setPitch(Math.round(event.beta * 10) / 10);
-        },
-        true
-      );
+
+    setOrientationError(null);
+    try {
+      // iOS rejects this outright when the call does not come from a user
+      // gesture, and a rejected promise from a click handler reaches nobody:
+      // the button appeared to do nothing and the console got an unhandled
+      // rejection instead of the reader getting an explanation.
+      const state = await requestPermission();
+      if (state === 'granted') {
+        setOrientationPermissionNeeded(false);
+        setIsOrientationGranted(true);
+        return;
+      }
+      setOrientationError(t.scanner.orientationDenied);
+    } catch (error) {
+      setOrientationError(t.camera.orientationFailed(formatError(t, error)));
     }
   };
 
@@ -390,6 +410,12 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onCapture
             >
               {t.scanner.retryCamera}
             </button>
+          </div>
+        )}
+
+        {!cameraError && orientationError && (
+          <div className="absolute bottom-52 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/80 rounded-xl hairline-border max-w-xs text-center">
+            <p className="font-mono-ibm text-[11px] text-[#FF6B6B] leading-relaxed">{orientationError}</p>
           </div>
         )}
 

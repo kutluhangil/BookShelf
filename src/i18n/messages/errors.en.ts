@@ -3,6 +3,8 @@ import type { ErrorMessages } from './errors.types';
 export const errorsEn: ErrorMessages = {
   'lookup.network': ({ subject }) =>
     `Could not reach Open Library while looking up "${subject}". Check your network connection.`,
+  'lookup.timeout': ({ subject, seconds }) =>
+    `Open Library did not answer within ${seconds} seconds while looking up "${subject}".`,
   'lookup.http': ({ subject, status }) =>
     `Open Library returned HTTP ${status} for "${subject}". Try again in a moment.`,
   'lookup.invalidIsbn': ({ value }) => `"${value}" is not a valid ISBN-10 or ISBN-13.`,
@@ -21,10 +23,20 @@ export const errorsEn: ErrorMessages = {
   'sharedList.invalidEmail': ({ email }) => `"${email}" is not a valid email address.`,
   'sharedList.alreadyInvited': ({ email }) => `${email} has already been invited.`,
   'sharedList.inviteOnly': () => 'This list is invite-only.',
+  'sharedList.full': ({ limit }) =>
+    `This list already holds its maximum of ${limit} books. Remove one before adding another.`,
 
   'storage.schemaMismatch': ({ found, expected, key }) =>
     `The stored library uses schema version ${String(found)}, expected ${expected}. ` +
     `Clear the "${key}" localStorage key to reset.`,
+
+  'storage.quotaExceeded': ({ megabytes, key }) =>
+    `The browser refused to save the library: it is about ${megabytes}MB and the storage quota is full. ` +
+    'Scanned spine photos are the bulk of it — delete some scanned books, or export the library and ' +
+    `clear the "${key}" localStorage key. Changes made from now on are not being saved.`,
+
+  'capture.decodeFailed': () =>
+    'The captured shelf photo could not be decoded for cropping. Retake the photo.',
 
   'device.audioUnavailable': () => 'The Web Audio API is not available in this browser.',
   'device.canvasUnavailable': () => 'The 2D canvas is not available in this browser.',

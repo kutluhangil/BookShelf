@@ -1,12 +1,51 @@
 import { getFirestoreApi } from '../lib/firebase';
-import { SharedList, Book, SharedListMember } from '../types';
+import { SharedList, SharedListBook, Book, SharedListMember } from '../types';
 import { AppError } from './appError';
 
 const COLLECTION_NAME = 'sharedLists';
 
+/** The only keys a stored list entry may carry; see `SharedListBook`. */
+const SHARED_LIST_BOOK_KEYS = ['id', 'title', 'author', 'coverUrl', 'spineColor'] as const;
+
+/**
+ * Hard ceiling on how many books one list holds. Entries are small, but they
+ * share a single document and Firestore caps that at 1MB — a list that crosses
+ * the line can never be written again, not even to remove a book. Refusing the
+ * add keeps the list editable and says why.
+ */
+export const SHARED_LIST_MAX_BOOKS = 500;
+
+/** Copies the fields a shared list renders, leaving the spine crop behind. */
+export const toSharedListBook = (book: Book | SharedListBook): SharedListBook => ({
+  id: book.id,
+  title: book.title,
+  author: book.author,
+  coverUrl: book.coverUrl,
+  spineColor: book.spineColor,
+});
+
+/**
+ * Projects a stored document. Lists written before books were slimmed down hold
+ * whole `Book` records, so reading them raw would put the spine crops — and the
+ * pre-schema-3 `proofOfCaptureUrl` duplicate, which `deleteField` cannot reach
+ * inside an array — back in front of the UI and into the next write.
+ */
+function readList(data: unknown): SharedList {
+  const list = data as SharedList;
+  return { ...list, books: list.books.map(toSharedListBook) };
+}
+
+/** True while the document still holds entries carrying more than it needs. */
+function holdsLegacyEntries(data: unknown): boolean {
+  const stored = (data as { books: Array<Record<string, unknown>> }).books;
+  return stored.some((entry) =>
+    Object.keys(entry).some((key) => !SHARED_LIST_BOOK_KEYS.includes(key as (typeof SHARED_LIST_BOOK_KEYS)[number]))
+  );
+}
+
 export const createSharedList = async (list: SharedList): Promise<void> => {
   const { db, doc, setDoc } = await getFirestoreApi();
-  await setDoc(doc(db, COLLECTION_NAME, list.id), list);
+  await setDoc(doc(db, COLLECTION_NAME, list.id), { ...list, books: list.books.map(toSharedListBook) });
 };
 
 export const updateSharedList = async (listId: string, updates: Partial<SharedList>): Promise<void> => {
@@ -33,7 +72,7 @@ export const getSharedListsForUser = async (userId: string, max = SHARED_LIST_PA
     )
   );
   const lists: SharedList[] = [];
-  snap.forEach((entry) => lists.push(entry.data() as SharedList));
+  snap.forEach((entry) => lists.push(readList(entry.data())));
   return lists;
 };
 
@@ -59,7 +98,7 @@ export const getPublicSharedLists = async (
   );
   const lists: SharedList[] = [];
   snap.forEach((entry) => {
-    const list = entry.data() as SharedList;
+    const list = readList(entry.data());
     if (excludeMemberId && list.memberIds?.includes(excludeMemberId)) return;
     lists.push(list);
   });
@@ -69,12 +108,28 @@ export const getPublicSharedLists = async (
 export const getSharedList = async (listId: string): Promise<SharedList | null> => {
   const { db, doc, getDoc } = await getFirestoreApi();
   const snap = await getDoc(doc(db, COLLECTION_NAME, listId));
-  return snap.exists() ? (snap.data() as SharedList) : null;
+  return snap.exists() ? readList(snap.data()) : null;
 };
 
 export const addBookToSharedList = async (listId: string, book: Book): Promise<void> => {
-  const { db, doc, updateDoc, arrayUnion } = await getFirestoreApi();
-  await updateDoc(doc(db, COLLECTION_NAME, listId), { books: arrayUnion(book) });
+  const { db, doc, getDoc, updateDoc, arrayUnion } = await getFirestoreApi();
+  const ref = doc(db, COLLECTION_NAME, listId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new AppError('sharedList.missing', { listId });
+
+  const list = readList(snap.data());
+  if (list.books.length >= SHARED_LIST_MAX_BOOKS) {
+    throw new AppError('sharedList.full', { listId, limit: SHARED_LIST_MAX_BOOKS });
+  }
+
+  // `arrayUnion` keeps concurrent adds from overwriting each other, so it is the
+  // normal path. A document still holding fat entries is rewritten instead, so
+  // the oversized copies leave on the first edit rather than staying forever.
+  const entry = toSharedListBook(book);
+  await updateDoc(
+    ref,
+    holdsLegacyEntries(snap.data()) ? { books: [...list.books, entry] } : { books: arrayUnion(entry) }
+  );
 };
 
 export const removeBookFromSharedList = async (listId: string, bookId: string): Promise<void> => {
@@ -82,8 +137,8 @@ export const removeBookFromSharedList = async (listId: string, bookId: string): 
   const ref = doc(db, COLLECTION_NAME, listId);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new AppError('sharedList.missing', { listId });
-  const data = snap.data() as SharedList;
-  await updateDoc(ref, { books: data.books.filter((b) => b.id !== bookId) });
+  const list = readList(snap.data());
+  await updateDoc(ref, { books: list.books.filter((entry) => entry.id !== bookId) });
 };
 
 export const addMemberToSharedList = async (listId: string, member: SharedListMember): Promise<void> => {
@@ -92,7 +147,7 @@ export const addMemberToSharedList = async (listId: string, member: SharedListMe
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new AppError('sharedList.missing', { listId });
 
-  const data = snap.data() as SharedList;
+  const data = readList(snap.data());
   if (data.members.some((m) => m.userId === member.userId || (member.email && m.email === member.email))) {
     throw new AppError('sharedList.alreadyMember', { person: member.email ?? member.displayName ?? null });
   }
@@ -114,7 +169,7 @@ export const inviteByEmail = async (listId: string, email: string): Promise<void
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new AppError('sharedList.missing', { listId });
 
-  const data = snap.data() as SharedList;
+  const data = readList(snap.data());
   if (data.invitedEmails?.includes(normalized)) {
     throw new AppError('sharedList.alreadyInvited', { email: normalized });
   }
@@ -131,7 +186,7 @@ export const claimInvitations = async (member: SharedListMember): Promise<Shared
 
   const claimed: SharedList[] = [];
   for (const entry of snap.docs) {
-    const list = entry.data() as SharedList;
+    const list = readList(entry.data());
     if (list.memberIds?.includes(member.userId)) continue;
     await updateDoc(entry.ref, {
       members: arrayUnion(member),
@@ -148,7 +203,7 @@ export const joinPublicList = async (listId: string, member: SharedListMember): 
   const ref = doc(db, COLLECTION_NAME, listId);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new AppError('sharedList.missing', { listId });
-  const list = snap.data() as SharedList;
+  const list = readList(snap.data());
   if (!list.isPublic) throw new AppError('sharedList.inviteOnly', {});
   if (list.memberIds?.includes(member.userId)) return;
 
@@ -185,7 +240,7 @@ export const subscribeToUserLists = (
         query(collection(db, COLLECTION_NAME), where('memberIds', 'array-contains', userId)),
         (snapshot) => {
           const lists: SharedList[] = [];
-          snapshot.forEach((entry) => lists.push(entry.data() as SharedList));
+          snapshot.forEach((entry) => lists.push(readList(entry.data())));
           onChange(lists.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
         },
         (error) => onError(error instanceof Error ? error : new Error(String(error)))

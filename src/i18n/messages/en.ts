@@ -253,6 +253,7 @@ export const en = {
     permissionDenied: 'Camera permission was denied. Allow camera access in your browser settings.',
     notFound: 'No camera was found on this device.',
     startFailed: (detail: string) => `Camera could not be started: ${detail}`,
+    orientationFailed: (detail: string) => `The level indicator could not be enabled: ${detail}`,
   },
 
   quoteScanner: {
@@ -450,6 +451,8 @@ export const en = {
     levelLocked: (roll: string, pitch: string) => `LEVEL LOCKED (${roll}° ROLL / ${pitch}° PITCH)`,
     tilted: (roll: string) => `TILTED: ROLL ${roll}° — HOLD PARALLEL`,
     enableLevel: 'Enable level indicator',
+    orientationDenied:
+      'Motion access was denied, so the level indicator stays off. Allow it in your browser settings to use it.',
     toggleTorch: 'Toggle torch',
     retryCamera: 'Retry camera',
     softwareDecoder: 'Software decoder — hold steady',
@@ -812,6 +815,11 @@ Scope: the local catalog matching layer only. Accuracy is computed over the book
     serverUnreachable: 'Server unreachable',
     serverUnreachableDetail: (detail: string) => `Scanning and AI features are unavailable: ${detail}`,
     storedLibraryUnreadable: 'Stored library could not be read',
+    storedLibraryQuarantined: (reason: string, key: string) =>
+      `${reason} The record was moved to "${key}" so nothing overwrites it; this session starts from the sample library.`,
+    storedLibraryLocked: (reason: string, cause: string) =>
+      `${reason} It could not be copied aside either (${cause}), so saving stays off for this session rather than replace it.`,
+    saveFailed: 'Library not saved',
     storageUnavailable: 'Local storage unavailable',
     storageUnavailableDetail:
       'Your browser blocks local storage, so changes will be lost on reload. Sign in to keep a cloud copy.',
@@ -822,6 +830,12 @@ Scope: the local catalog matching layer only. Accuracy is computed over the book
       `Newest edit kept for: ${titles}` +
       (more > 0 ? ` and ${more} more.` : '.') +
       (supersededLocal > 0 ? ` ${supersededLocal} local change(s) were superseded by the cloud copy.` : ''),
+    removedByRemote: (count: number) => `${count} record(s) removed`,
+    removedByRemoteDetail: (titles: string, more: number) =>
+      `Deleted on another device: ${titles}` + (more > 0 ? ` and ${more} more.` : '.'),
+    accountSwitched: 'Switched account',
+    accountSwitchedDetail: (count: number) =>
+      `The library on this device belonged to another account and was not merged. This account's cloud copy was loaded (${count} volume(s)).`,
     cloudFetchFailed: 'Cloud fetch failed',
     cloudUnavailable: 'Cloud features unavailable',
     cloudUnavailableDetail: (detail: string) => `The Firebase SDK could not be loaded: ${detail}`,

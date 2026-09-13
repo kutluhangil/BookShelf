@@ -33,12 +33,35 @@ function getTrigrams(text: string): Set<string> {
   return trigrams;
 }
 
+/**
+ * The shortest containment that still identifies a book. `it` sits inside
+ * `the city we became` and `the` inside almost every title, so a fragment
+ * below this length is noise rather than evidence.
+ */
+const MIN_CONTAINED_CHARS = 4;
+
+/**
+ * Containment on word boundaries. Both inputs are already normalized to
+ * single-spaced `[a-z0-9 ]`, so padding each side is enough to stop a fragment
+ * from matching inside a longer word.
+ */
+function containsWholeWords(haystack: string, needle: string): boolean {
+  return ` ${haystack} `.includes(` ${needle} `);
+}
+
 export function calculateSimilarity(s1: string, s2: string): number {
   const n1 = normalizeSpineText(s1);
   const n2 = normalizeSpineText(s2);
   if (!n1 || !n2) return 0;
   if (n1 === n2) return 1.0;
-  if (n1.includes(n2) || n2.includes(n1)) return 0.88;
+
+  // A catalog title found in the spine text is strong evidence: a spine also
+  // carries the author and often the publisher. A fragment landing mid-word is
+  // not, and scoring it the same made every short or barely readable spine an
+  // 88% match for an unrelated book — high enough, once blended with a
+  // confident reading, to be filed as `matched` and saved without review.
+  const [shorter, longer] = n1.length <= n2.length ? [n1, n2] : [n2, n1];
+  if (shorter.length >= MIN_CONTAINED_CHARS && containsWholeWords(longer, shorter)) return 0.88;
 
   const t1 = getTrigrams(n1);
   const t2 = getTrigrams(n2);
@@ -168,10 +191,7 @@ function normalizeHexColor(value: string | undefined, fallbackIndex: number): st
  * Converts the vision model's spine list into review-ready candidates by matching
  * the recognized text against the local catalog with trigram similarity.
  */
-export function buildCandidatesFromRecognition(
-  shelfImageUrl: string,
-  spines: RecognizedSpine[]
-): SpineCandidate[] {
+export function buildCandidatesFromRecognition(spines: RecognizedSpine[]): SpineCandidate[] {
   return spines.map((spine, idx) => {
     const rawText = (spine.rawText || `${spine.title ?? ''} ${spine.author ?? ''}`).trim();
     const modelConfidence = typeof spine.confidence === 'number' ? Math.max(0, Math.min(1, spine.confidence)) : 0.5;
@@ -222,7 +242,7 @@ export function buildCandidatesFromRecognition(
             pageCount: 0,
             description: '',
             coverUrl: primary.coverUrl,
-            spineCropUrl: shelfImageUrl,
+            spineCropUrl: '',
             spineColor: dominantColor,
             shelfId: 'shelf-fiction',
             status: 'unread',
@@ -230,7 +250,6 @@ export function buildCandidatesFromRecognition(
             score,
             category: 'Physical Scan',
             addedAt: new Date().toISOString(),
-            proofOfCaptureUrl: shelfImageUrl,
           }
         : undefined;
 
@@ -248,7 +267,8 @@ export function buildCandidatesFromRecognition(
       dominantColor,
       confidence,
       score,
-      cropUrl: shelfImageUrl,
+      // Filled in by recognizeShelf once the spine has been cut out of the photo.
+      cropUrl: null,
       matchedBook,
       editions,
     };
@@ -281,21 +301,23 @@ export async function recognizeShelf(shelfImageDataUrl: string): Promise<SpineCa
     throw new AppError('shelf.noSpines', {}, { detail: JSON.stringify(payload).slice(0, 300) });
   }
 
-  const candidates = buildCandidatesFromRecognition(shelfImageDataUrl, spines as RecognizedSpine[]);
+  const candidates = buildCandidatesFromRecognition(spines as RecognizedSpine[]);
 
-  // Give every candidate its own spine thumbnail instead of the whole shelf.
+  // Give every candidate its own spine thumbnail. A box that yields nothing
+  // keeps `null`: the whole shelf photo is not a thumbnail, and storing it once
+  // per book is what used to exhaust the local storage quota in one scan.
   const crops = await cropRegions(
     shelfImageDataUrl,
     candidates.map((candidate) => candidate.bbox)
   );
 
   return candidates.map((candidate, index) => {
-    const cropUrl = crops[index] ?? shelfImageDataUrl;
+    const cropUrl = crops[index] ?? null;
     return {
       ...candidate,
       cropUrl,
       matchedBook: candidate.matchedBook
-        ? { ...candidate.matchedBook, spineCropUrl: cropUrl, proofOfCaptureUrl: cropUrl }
+        ? { ...candidate.matchedBook, spineCropUrl: cropUrl ?? '' }
         : undefined,
     };
   });
@@ -358,6 +380,7 @@ export function buildDemoCandidates(
             pageCount: 0,
             description: '',
             coverUrl: editions[0].coverUrl,
+            // A remote sample URL, not a data URL, so it costs nothing to store.
             spineCropUrl: shelfImageUrl,
             spineColor: dominantColor,
             shelfId: 'shelf-fiction',
@@ -366,7 +389,6 @@ export function buildDemoCandidates(
             score,
             category: 'Demo Sample',
             addedAt: new Date().toISOString(),
-            proofOfCaptureUrl: shelfImageUrl,
           }
         : undefined;
 

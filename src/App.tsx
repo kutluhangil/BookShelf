@@ -4,6 +4,7 @@ import { recognizeShelf, buildDemoCandidates } from './services/clusteringEngine
 import { lookupByIsbn, lookupFromQrPayload, BookLookupResult } from './services/bookLookup';
 import { isFirebaseConfigured } from './lib/firebase';
 import { isPersistenceAvailable } from './services/localStore';
+import { progressFromPage, progressFromPercent, type ReadingProgress } from './services/readingProgress';
 import { fetchServerCapabilities, type ServerCapabilities } from './services/apiClient';
 import { ShelfStrip } from './components/ShelfStrip';
 import { BookCard } from './components/BookCard';
@@ -85,6 +86,7 @@ export default function App() {
     setMonthlyGoal,
     setDeletedBookIds,
     setDeletedShelfIds,
+    persistenceError,
   } = library;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('library');
@@ -156,9 +158,16 @@ export default function App() {
   // Surface a storage problem instead of silently losing data.
   useEffect(() => {
     if (initialLibrary.error) {
+      const reason = formatError(t, initialLibrary.error);
+      const quarantine = initialLibrary.quarantine;
       pushToast({
         title: t.toasts.storedLibraryUnreadable,
-        description: formatError(t, initialLibrary.error),
+        description:
+          quarantine?.status === 'moved'
+            ? t.toasts.storedLibraryQuarantined(reason, quarantine.key)
+            : quarantine?.status === 'failed'
+              ? t.toasts.storedLibraryLocked(reason, formatError(t, quarantine.error))
+              : reason,
         icon: 'error',
       });
     } else if (!isPersistenceAvailable()) {
@@ -169,6 +178,18 @@ export default function App() {
       });
     }
   }, [pushToast, t]);
+
+  // A write that failed after startup — a full quota, most often, because a
+  // scanned book carries its spine photo. Silence here means the reader keeps
+  // working on a library that is no longer being saved.
+  useEffect(() => {
+    if (!persistenceError) return;
+    pushToast({
+      title: t.toasts.saveFailed,
+      description: formatError(t, persistenceError),
+      icon: 'error',
+    });
+  }, [persistenceError, pushToast, t]);
 
 
   useMilestoneToasts(books, isReminderEnabled, pushToast);
@@ -417,7 +438,7 @@ export default function App() {
           pageCount: 0,
           description: ed.description ?? '',
           coverUrl: ed.coverUrl,
-          spineCropUrl: c.cropUrl,
+          spineCropUrl: c.cropUrl ?? '',
           spineColor: c.dominantColor,
           shelfId: targetShelfId,
           status: 'unread',
@@ -426,7 +447,6 @@ export default function App() {
           category: 'Physical Scan',
           addedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          proofOfCaptureUrl: c.cropUrl,
         };
       });
 
@@ -460,7 +480,7 @@ export default function App() {
           pageCount: 0,
           description: edition.description ?? '',
           coverUrl: edition.coverUrl,
-          spineCropUrl: c.cropUrl,
+          spineCropUrl: c.cropUrl ?? '',
           spineColor: c.dominantColor,
           shelfId: targetShelfId,
           status: 'unread' as const,
@@ -469,7 +489,6 @@ export default function App() {
           category: 'Resolved Volume',
           addedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          proofOfCaptureUrl: c.cropUrl,
         },
       };
     });
@@ -509,7 +528,7 @@ export default function App() {
           pageCount: result.pageCount,
           description: result.description ?? '',
           coverUrl: result.coverUrl,
-          spineCropUrl: c.cropUrl,
+          spineCropUrl: c.cropUrl ?? '',
           spineColor: c.dominantColor,
           shelfId: targetShelfId,
           status: 'unread' as const,
@@ -518,7 +537,6 @@ export default function App() {
           category: 'Manual Identifier',
           addedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          proofOfCaptureUrl: c.cropUrl,
         },
       };
     });
@@ -557,24 +575,24 @@ export default function App() {
     });
   };
 
-  const handleUpdateProgress = (bookId: string, progress: number) => {
-    const clamped = Math.max(0, Math.min(100, Math.round(progress)));
-    const derivedStatus: ReadingStatus = clamped === 100 ? 'read' : clamped > 0 ? 'reading' : 'unread';
+  /** Percentage, page and status move together; `readingProgress` derives them. */
+  const applyReadingProgress = (bookId: string, next: (book: Book) => ReadingProgress) => {
     const now = new Date().toISOString();
-
     updateBook(bookId, (b) => {
-      const isNewlyRead = derivedStatus === 'read' && b.status !== 'read';
+      const derived = next(b);
+      const isNewlyRead = derived.status === 'read' && b.status !== 'read';
       return {
-        progress: clamped,
-        currentPage: b.pageCount ? Math.round((b.pageCount * clamped) / 100) : b.currentPage,
-        status: derivedStatus,
-        readAt: derivedStatus === 'read' ? (isNewlyRead ? now : b.readAt || now) : undefined,
+        ...derived,
+        readAt: derived.status === 'read' ? (isNewlyRead ? now : b.readAt || now) : undefined,
         readHistory: isNewlyRead ? [...(b.readHistory || []), now] : b.readHistory,
       };
     });
   };
 
-  /** Page-level progress; percentage is derived so both stay consistent. */
+  const handleUpdateProgress = (bookId: string, progress: number) =>
+    applyReadingProgress(bookId, (book) => progressFromPercent(book, progress));
+
+  /** Page-level progress; the percentage is derived, the page is kept as typed. */
   const handleUpdateCurrentPage = (bookId: string, page: number) => {
     const book = books.find((b) => b.id === bookId);
     if (!book) return;
@@ -586,8 +604,7 @@ export default function App() {
       });
       return;
     }
-    const clampedPage = Math.max(0, Math.min(book.pageCount, Math.round(page)));
-    handleUpdateProgress(bookId, (clampedPage / book.pageCount) * 100);
+    applyReadingProgress(bookId, (current) => progressFromPage(current, page));
   };
 
   const handleUpdatePageCount = (bookId: string, pageCount: number) => {

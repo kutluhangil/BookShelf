@@ -1,5 +1,5 @@
 import { getFirestoreApi } from '../lib/firebase';
-import type { WriteBatch } from 'firebase/firestore';
+import type { DocumentData, DocumentReference, WriteBatch } from 'firebase/firestore';
 import { Book, Shelf, ReadingGoals } from '../types';
 import { fingerprint, SyncFingerprints } from './syncPlan';
 
@@ -30,8 +30,37 @@ export interface SyncPayload {
  * no read needs a `where` clause (and therefore no composite index), and the
  * security rules reduce to a single uid comparison.
  */
+/** Firestore batches are capped at 500 writes; chunk to stay well inside the limit. */
+const CHUNK_SIZE = 400;
+
 const bookPath = (userId: string, bookId: string) => ['users', userId, 'books', bookId] as const;
 const shelfPath = (userId: string, shelfId: string) => ['users', userId, 'shelves', shelfId] as const;
+const deletionPath = (userId: string, kind: DeletionKind, id: string) =>
+  ['users', userId, 'deletions', `${kind}:${id}`] as const;
+
+export type DeletionKind = 'book' | 'shelf';
+
+/**
+ * A record the owner deleted, kept after the document itself is gone.
+ *
+ * Deleting a document is invisible to a second device: it only ever sees what
+ * the cloud holds, so a book it still has locally looks like a record the cloud
+ * has never heard of, and the merge pushes it straight back up. The tombstone
+ * is the missing evidence that the record was deleted, and when.
+ */
+export interface RemoteDeletion {
+  id: string;
+  kind: DeletionKind;
+  /** ISO timestamp. A local record edited after it survives the deletion. */
+  deletedAt: string;
+}
+
+/**
+ * How long a tombstone is kept. It has to outlive the longest plausible gap
+ * between two of a reader's devices being online; past that the record comes
+ * back on a device that was away, which is the same outcome as today.
+ */
+const TOMBSTONE_TTL_DAYS = 180;
 
 /**
  * Pushes the given records to Firestore and removes documents the user deleted
@@ -66,11 +95,20 @@ export const syncToCloud = async (userId: string, payload: SyncPayload): Promise
   for (const book of books) {
     operations.push((batch) => batch.set(doc(db, ...bookPath(userId, book.id)), stripUndefined(book), { merge: true }));
   }
+  // Each deletion is two writes: the document goes, and a tombstone records
+  // that it went, so another device stops pushing its own copy back up.
+  const deletedAt = new Date().toISOString();
   for (const bookId of deletedBookIds) {
     operations.push((batch) => batch.delete(doc(db, ...bookPath(userId, bookId))));
+    operations.push((batch) =>
+      batch.set(doc(db, ...deletionPath(userId, 'book', bookId)), { id: bookId, kind: 'book', deletedAt })
+    );
   }
   for (const shelfId of deletedShelfIds) {
     operations.push((batch) => batch.delete(doc(db, ...shelfPath(userId, shelfId))));
+    operations.push((batch) =>
+      batch.set(doc(db, ...deletionPath(userId, 'shelf', shelfId)), { id: shelfId, kind: 'shelf', deletedAt })
+    );
   }
   if (writeMeta) {
     operations.push((batch) =>
@@ -86,8 +124,6 @@ export const syncToCloud = async (userId: string, payload: SyncPayload): Promise
     );
   }
 
-  // Firestore batches are capped at 500 writes; chunk to stay well inside the limit.
-  const CHUNK_SIZE = 400;
   for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
     const batch = writeBatch(db);
     operations.slice(i, i + CHUNK_SIZE).forEach((apply) => apply(batch));
@@ -100,10 +136,26 @@ export interface CloudSnapshot {
   shelves: Shelf[];
   readingGoals?: ReadingGoals;
   monthlyGoal?: number;
+  /** Records another device deleted; absent on a snapshot from an older build. */
+  deletions?: RemoteDeletion[];
+}
+
+/**
+ * Documents written before schema 3 carry `proofOfCaptureUrl`, a second copy of
+ * the book's spine crop. The local migration only sees local records, so
+ * without this a cloud fetch would put the duplicate straight back into the
+ * library — and into local storage — on the next merge.
+ */
+const LEGACY_DUPLICATE_CROP_KEY = 'proofOfCaptureUrl';
+
+function dropLegacyFields(raw: Record<string, unknown>): Book {
+  if (!(LEGACY_DUPLICATE_CROP_KEY in raw)) return raw as unknown as Book;
+  const { [LEGACY_DUPLICATE_CROP_KEY]: legacyCrop, ...rest } = raw;
+  return (rest.spineCropUrl ? rest : { ...rest, spineCropUrl: String(legacyCrop ?? '') }) as unknown as Book;
 }
 
 export const fetchFromCloud = async (userId: string): Promise<CloudSnapshot> => {
-  const { db, collection, doc, getDoc, getDocs } = await getFirestoreApi();
+  const { db, collection, doc, getDoc, getDocs, writeBatch, deleteField } = await getFirestoreApi();
   const books: Book[] = [];
   const shelves: Shelf[] = [];
 
@@ -111,7 +163,44 @@ export const fetchFromCloud = async (userId: string): Promise<CloudSnapshot> => 
   shelvesSnapshot.forEach((snap) => shelves.push(snap.data() as Shelf));
 
   const booksSnapshot = await getDocs(collection(db, 'users', userId, 'books'));
-  booksSnapshot.forEach((snap) => books.push(snap.data() as Book));
+  const legacyRefs: Array<DocumentReference<DocumentData>> = [];
+  booksSnapshot.forEach((snap) => {
+    const data = snap.data();
+    if (LEGACY_DUPLICATE_CROP_KEY in data) legacyRefs.push(snap.ref);
+    books.push(dropLegacyFields(data));
+  });
+
+  // Dropping the field on read only protects the local library. Until it is
+  // deleted at the source it keeps eating the document's 1MB budget and is
+  // downloaded again on every fetch.
+  for (let i = 0; i < legacyRefs.length; i += CHUNK_SIZE) {
+    const batch = writeBatch(db);
+    legacyRefs
+      .slice(i, i + CHUNK_SIZE)
+      .forEach((ref) => batch.update(ref, { [LEGACY_DUPLICATE_CROP_KEY]: deleteField() }));
+    await batch.commit();
+  }
+
+  const deletionsSnapshot = await getDocs(collection(db, 'users', userId, 'deletions'));
+  const deletions: RemoteDeletion[] = [];
+  const expiredRefs: Array<DocumentReference<DocumentData>> = [];
+  const expiresBefore = Date.now() - TOMBSTONE_TTL_DAYS * 24 * 60 * 60 * 1000;
+  deletionsSnapshot.forEach((snap) => {
+    const entry = snap.data() as RemoteDeletion;
+    if (new Date(entry.deletedAt).getTime() < expiresBefore) {
+      expiredRefs.push(snap.ref);
+      return;
+    }
+    deletions.push(entry);
+  });
+
+  // Tombstones are the only records here nobody ever deletes by hand, so they
+  // are swept on read once they are older than any device could still need.
+  for (let i = 0; i < expiredRefs.length; i += CHUNK_SIZE) {
+    const batch = writeBatch(db);
+    expiredRefs.slice(i, i + CHUNK_SIZE).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
 
   const userSnap = await getDoc(doc(db, 'users', userId));
   const userData = userSnap.exists() ? userSnap.data() : undefined;
@@ -119,6 +208,7 @@ export const fetchFromCloud = async (userId: string): Promise<CloudSnapshot> => 
   return {
     books,
     shelves,
+    deletions,
     readingGoals: userData?.readingGoals ?? undefined,
     monthlyGoal: userData?.monthlyGoal ?? undefined,
   };
@@ -135,6 +225,8 @@ export interface MergeResult {
   /** Records that existed on both sides with different timestamps. */
   conflicts: Array<{ id: string; title: string; keptSide: 'local' | 'cloud' }>;
   addedFromCloud: number;
+  /** Local records dropped because another device deleted them. */
+  removedByRemote: Array<{ id: string; title: string }>;
 }
 
 export function mergeLibraries(
@@ -151,8 +243,25 @@ export function mergeLibraries(
   const deletedBooks = new Set(deleted.bookIds);
   const deletedShelves = new Set(deleted.shelfIds);
 
+  // A record another device deleted is only still wanted here if this device
+  // touched it afterwards; otherwise keeping it would push it back up and undo
+  // the deletion on every device.
+  const remoteBookDeaths = new Map<string, number>();
+  const remoteShelfDeaths = new Map<string, number>();
+  for (const entry of cloud.deletions ?? []) {
+    const at = new Date(entry.deletedAt).getTime();
+    if (Number.isNaN(at)) continue;
+    (entry.kind === 'shelf' ? remoteShelfDeaths : remoteBookDeaths).set(entry.id, at);
+  }
+
+  const survivesRemoteDeletion = (id: string, localTime: number, deaths: Map<string, number>): boolean => {
+    const deathTime = deaths.get(id);
+    return deathTime === undefined || localTime > deathTime;
+  };
+
   const bookMap = new Map<string, Book>();
   const conflicts: MergeResult['conflicts'] = [];
+  const remotelyDeleted: MergeResult['removedByRemote'] = [];
   const localIds = new Set(local.books.map((book) => book.id));
   let addedFromCloud = 0;
 
@@ -165,6 +274,11 @@ export function mergeLibraries(
   for (const book of local.books) {
     const existing = bookMap.get(book.id);
     if (!existing) {
+      const localTime = new Date(book.updatedAt ?? book.addedAt).getTime();
+      if (!survivesRemoteDeletion(book.id, localTime, remoteBookDeaths)) {
+        remotelyDeleted.push({ id: book.id, title: book.title });
+        continue;
+      }
       bookMap.set(book.id, book);
       continue;
     }
@@ -195,6 +309,12 @@ export function mergeLibraries(
   for (const shelf of local.shelves) {
     const remote = shelfMap.get(shelf.id);
     if (!remote) {
+      // Shelves carry no timestamp, so there is nothing that can outrank a
+      // remote deletion: a shelf deleted elsewhere goes.
+      if (remoteShelfDeaths.has(shelf.id)) {
+        remotelyDeleted.push({ id: shelf.id, title: shelf.name });
+        continue;
+      }
       shelfMap.set(shelf.id, shelf);
       continue;
     }
@@ -219,5 +339,6 @@ export function mergeLibraries(
     shelves: Array.from(shelfMap.values()).sort((a, b) => a.sortOrder - b.sortOrder),
     conflicts,
     addedFromCloud,
+    removedByRemote: remotelyDeleted,
   };
 }

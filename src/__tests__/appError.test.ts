@@ -10,6 +10,7 @@ import { tr } from '../i18n/messages/tr';
  */
 const SAMPLES: { [K in AppErrorCode]: ErrorPayloads[K] } = {
   'lookup.network': { subject: '9780140449136' },
+  'lookup.timeout': { subject: 'dune', seconds: 10 },
   'lookup.http': { subject: 'dune', status: 503 },
   'lookup.invalidIsbn': { value: '123' },
   'lookup.notFound': { isbn: '9780140449136' },
@@ -24,7 +25,10 @@ const SAMPLES: { [K in AppErrorCode]: ErrorPayloads[K] } = {
   'sharedList.invalidEmail': { email: 'nope' },
   'sharedList.alreadyInvited': { email: 'reader@example.com' },
   'sharedList.inviteOnly': {},
+  'sharedList.full': { listId: 'list-1', limit: 500 },
   'storage.schemaMismatch': { found: 99, expected: 1, key: 'bookshelf.library.v1' },
+  'storage.quotaExceeded': { megabytes: '6.4', key: 'bookshelf.library.v1' },
+  'capture.decodeFailed': {},
   'device.audioUnavailable': {},
   'device.canvasUnavailable': {},
   'firebase.notConfigured': { missing: 'VITE_FIREBASE_API_KEY' },

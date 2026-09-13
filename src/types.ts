@@ -16,6 +16,12 @@ export interface Book {
   pageCount: number;
   description: string;
   coverUrl: string;
+  /**
+   * The spine crop cut out of the shelf photo, as a base64 JPEG data URL, or an
+   * empty string for a book that was not scanned. This is the single copy: it
+   * used to be duplicated into `proofOfCaptureUrl`, which doubled what every
+   * scanned book cost in local storage and in a Firestore document.
+   */
   spineCropUrl: string;
   spineColor: string;
   shelfId: string;
@@ -40,7 +46,6 @@ export interface Book {
   addedAt: string;
   updatedAt?: string; // Last local mutation, used to resolve cloud sync conflicts
   isManual?: boolean;
-  proofOfCaptureUrl?: string;
 }
 
 export interface Shelf {
@@ -82,7 +87,8 @@ export interface SpineCandidate {
   dominantColor: string;
   confidence: ConfidenceLevel;
   score: number;
-  cropUrl: string;
+  /** The spine's own thumbnail, or null when this box could not be cropped. */
+  cropUrl: string | null;
   matchedBook?: Book;
   editions: EditionOption[];
   isDismissed?: boolean;
@@ -142,6 +148,24 @@ export interface SharedListMember {
   role: 'owner' | 'contributor';
 }
 
+/**
+ * What a shared list stores per book.
+ *
+ * A Firestore document is capped at 1MB, and a `Book` carries `spineCropUrl`:
+ * a base64 JPEG that runs to tens of kilobytes on its own. Embedding whole
+ * books pushed a list past the cap after a few dozen scanned volumes, and from
+ * there every write to it failed permanently — including removing a book. Only
+ * the fields the list renders are copied. `coverUrl` is always a remote URL,
+ * never image data.
+ */
+export interface SharedListBook {
+  id: string;
+  title: string;
+  author: string;
+  coverUrl: string;
+  spineColor: string;
+}
+
 export interface SharedList {
   id: string;
   name: string;
@@ -151,6 +175,6 @@ export interface SharedList {
   members: SharedListMember[];
   memberIds: string[]; // For fast queries
   invitedEmails?: string[]; // Pending invitations, claimed on first sign-in
-  books: Book[];
+  books: SharedListBook[];
   createdAt: string;
 }

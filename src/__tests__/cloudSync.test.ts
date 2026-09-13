@@ -148,7 +148,85 @@ describe('firestore layout', () => {
     expect(readPaths).toEqual([
       ['users', 'uid-1', 'shelves'],
       ['users', 'uid-1', 'books'],
+      ['users', 'uid-1', 'deletions'],
     ]);
+
+    vi.doUnmock('../lib/firebase');
+  });
+});
+
+describe('legacy crop cleanup', () => {
+  it('deletes the duplicated crop field from the cloud copies that still carry it', async () => {
+    const updates: Array<{ path: string[]; payload: Record<string, unknown> }> = [];
+    let commits = 0;
+
+    vi.resetModules();
+    vi.doMock('../lib/firebase', () => ({
+      getFirestoreApi: async () => ({
+        db: {},
+        doc: (_db: unknown, ...segments: string[]) => segments,
+        collection: (_db: unknown, ...segments: string[]) => segments,
+        getDocs: async (segments: string[]) => ({
+          forEach: (visit: (snap: { ref: string[]; data: () => Record<string, unknown> }) => void) => {
+            if (segments[segments.length - 1] !== 'books') return;
+            visit({
+              ref: [...segments, 'legacy'],
+              data: () => ({ ...book('legacy'), proofOfCaptureUrl: 'data:image/jpeg;base64,OLD' }),
+            });
+            visit({ ref: [...segments, 'clean'], data: () => ({ ...book('clean') }) });
+          },
+        }),
+        getDoc: async () => ({ exists: () => false }),
+        deleteField: () => 'DELETE_FIELD',
+        writeBatch: () => ({
+          update: (path: string[], payload: Record<string, unknown>) => updates.push({ path, payload }),
+          commit: async () => {
+            commits++;
+          },
+        }),
+      }),
+    }));
+
+    const { fetchFromCloud: fetch } = await import('../services/cloudSync');
+    const snapshot = await fetch('uid-1');
+
+    expect(updates).toEqual([
+      { path: ['users', 'uid-1', 'books', 'legacy'], payload: { proofOfCaptureUrl: 'DELETE_FIELD' } },
+    ]);
+    expect(commits).toBe(1);
+    // The fetched copy carries the crop once, under its current name.
+    expect(snapshot.books.map((b) => b.id).sort()).toEqual(['clean', 'legacy']);
+    expect(snapshot.books.every((b) => !('proofOfCaptureUrl' in b))).toBe(true);
+
+    vi.doUnmock('../lib/firebase');
+  });
+
+  it('commits nothing when no document carries the field', async () => {
+    let batches = 0;
+
+    vi.resetModules();
+    vi.doMock('../lib/firebase', () => ({
+      getFirestoreApi: async () => ({
+        db: {},
+        doc: (_db: unknown, ...segments: string[]) => segments,
+        collection: (_db: unknown, ...segments: string[]) => segments,
+        getDocs: async () => ({
+          forEach: (visit: (snap: { ref: string[]; data: () => Record<string, unknown> }) => void) =>
+            visit({ ref: ['users', 'uid-1', 'books', 'clean'], data: () => ({ ...book('clean') }) }),
+        }),
+        getDoc: async () => ({ exists: () => false }),
+        deleteField: () => 'DELETE_FIELD',
+        writeBatch: () => {
+          batches++;
+          return { update: () => undefined, commit: async () => undefined };
+        },
+      }),
+    }));
+
+    const { fetchFromCloud: fetch } = await import('../services/cloudSync');
+    await fetch('uid-1');
+
+    expect(batches).toBe(0);
 
     vi.doUnmock('../lib/firebase');
   });
@@ -211,5 +289,150 @@ describe('mergeLibraries: shelves', () => {
       { bookIds: [], shelfIds: ['shelf-1'] }
     );
     expect(merged.shelves).toHaveLength(0);
+  });
+});
+
+describe('remote deletions', () => {
+  const tombstone = (id: string, kind: 'book' | 'shelf', deletedAt: string) => ({ id, kind, deletedAt });
+
+  it('drops a local book another device deleted', () => {
+    const merged = mergeLibraries(
+      { books: [book('gone', { updatedAt: '2025-01-01T00:00:00.000Z' })], shelves: [] },
+      { books: [], shelves: [], deletions: [tombstone('gone', 'book', '2025-01-02T00:00:00.000Z')] },
+      { bookIds: [], shelfIds: [] }
+    );
+    expect(merged.books).toHaveLength(0);
+    expect(merged.removedByRemote).toEqual([{ id: 'gone', title: 'gone' }]);
+  });
+
+  it('keeps a book edited here after the remote deletion', () => {
+    const merged = mergeLibraries(
+      { books: [book('kept', { updatedAt: '2025-01-03T00:00:00.000Z' })], shelves: [] },
+      { books: [], shelves: [], deletions: [tombstone('kept', 'book', '2025-01-02T00:00:00.000Z')] },
+      { bookIds: [], shelfIds: [] }
+    );
+    expect(merged.books.map((b) => b.id)).toEqual(['kept']);
+    expect(merged.removedByRemote).toHaveLength(0);
+  });
+
+  it('drops a shelf another device deleted', () => {
+    const merged = mergeLibraries(
+      { books: [], shelves: [shelf] },
+      { books: [], shelves: [], deletions: [tombstone('shelf-1', 'shelf', '2025-01-02T00:00:00.000Z')] },
+      { bookIds: [], shelfIds: [] }
+    );
+    expect(merged.shelves).toHaveLength(0);
+    expect(merged.removedByRemote).toEqual([{ id: 'shelf-1', title: 'Fiction' }]);
+  });
+
+  it('lets a document that exists again outrank its tombstone', () => {
+    const merged = mergeLibraries(
+      { books: [], shelves: [] },
+      {
+        books: [book('reborn')],
+        shelves: [],
+        deletions: [tombstone('reborn', 'book', '2025-01-02T00:00:00.000Z')],
+      },
+      { bookIds: [], shelfIds: [] }
+    );
+    expect(merged.books.map((b) => b.id)).toEqual(['reborn']);
+  });
+
+  it('ignores a snapshot with no deletions field at all', () => {
+    const merged = mergeLibraries(
+      { books: [book('local')], shelves: [shelf] },
+      { books: [], shelves: [] },
+      { bookIds: [], shelfIds: [] }
+    );
+    expect(merged.books).toHaveLength(1);
+    expect(merged.removedByRemote).toHaveLength(0);
+  });
+});
+
+describe('tombstone documents', () => {
+  it('records a tombstone beside every deletion it pushes', async () => {
+    const setPaths: Array<{ path: string[]; payload: Record<string, unknown> }> = [];
+    const deletePaths: string[][] = [];
+
+    vi.resetModules();
+    vi.doMock('../lib/firebase', () => ({
+      getFirestoreApi: async () => ({
+        db: {},
+        doc: (_db: unknown, ...segments: string[]) => segments,
+        collection: (_db: unknown, ...segments: string[]) => segments,
+        getDocs: async () => ({ forEach: () => undefined }),
+        getDoc: async () => ({ exists: () => false }),
+        writeBatch: () => ({
+          set: (path: string[], payload: Record<string, unknown>) => setPaths.push({ path, payload }),
+          delete: (path: string[]) => deletePaths.push(path),
+          commit: async () => undefined,
+        }),
+      }),
+    }));
+
+    const { syncToCloud: sync } = await import('../services/cloudSync');
+    await sync('uid-1', {
+      books: [],
+      shelves: [],
+      writeMeta: false,
+      deletedBookIds: ['gone-book'],
+      deletedShelfIds: ['gone-shelf'],
+    });
+
+    expect(deletePaths).toEqual([
+      ['users', 'uid-1', 'books', 'gone-book'],
+      ['users', 'uid-1', 'shelves', 'gone-shelf'],
+    ]);
+    expect(setPaths.map((entry) => entry.path)).toEqual([
+      ['users', 'uid-1', 'deletions', 'book:gone-book'],
+      ['users', 'uid-1', 'deletions', 'shelf:gone-shelf'],
+    ]);
+    expect(setPaths[0].payload).toMatchObject({ id: 'gone-book', kind: 'book' });
+    expect(typeof setPaths[0].payload.deletedAt).toBe('string');
+
+    vi.doUnmock('../lib/firebase');
+  });
+
+  it('reads the tombstones and sweeps the ones that have expired', async () => {
+    const deleted: string[][] = [];
+    const fresh = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const ancient = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString();
+
+    vi.resetModules();
+    vi.doMock('../lib/firebase', () => ({
+      getFirestoreApi: async () => ({
+        db: {},
+        doc: (_db: unknown, ...segments: string[]) => segments,
+        collection: (_db: unknown, ...segments: string[]) => segments,
+        getDocs: async (segments: string[]) => ({
+          forEach: (visit: (snap: { ref: string[]; data: () => Record<string, unknown> }) => void) => {
+            if (segments[segments.length - 1] !== 'deletions') return;
+            visit({
+              ref: [...segments, 'book:fresh'],
+              data: () => ({ id: 'fresh', kind: 'book', deletedAt: fresh }),
+            });
+            visit({
+              ref: [...segments, 'book:ancient'],
+              data: () => ({ id: 'ancient', kind: 'book', deletedAt: ancient }),
+            });
+          },
+        }),
+        getDoc: async () => ({ exists: () => false }),
+        deleteField: () => 'DELETE_FIELD',
+        writeBatch: () => ({
+          update: () => undefined,
+          delete: (path: string[]) => deleted.push(path),
+          commit: async () => undefined,
+        }),
+      }),
+    }));
+
+    const { fetchFromCloud: fetch } = await import('../services/cloudSync');
+    const snapshot = await fetch('uid-1');
+
+    expect(snapshot.deletions?.map((entry) => entry.id)).toEqual(['fresh']);
+    expect(deleted).toEqual([['users', 'uid-1', 'deletions', 'book:ancient']]);
+
+    vi.doUnmock('../lib/firebase');
   });
 });
