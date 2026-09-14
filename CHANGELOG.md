@@ -4,6 +4,18 @@ Newest entries at the top.
 
 ## Unreleased
 
+### Fixed — half an hour of reading filed as half a minute
+- The reading session timer counted the one-second ticks it received. A browser throttles a background tab's timers to roughly one a minute, which is the state the tab is in while its owner reads, so a long sitting was recorded as a handful of seconds and every statistic drawn from reading sessions was wrong. The timer now reads the clock: the session's start is kept, and the interval only drives the redraw.
+
+### Fixed — recommendations asked in a loop
+- The recommendations dialog asked the AI endpoint whenever it was open and held no recommendations. A reply carrying an empty list leaves it holding none, so the next request went out the moment the last one came back, for as long as the dialog stayed open. It now records that this opening has asked; the refresh button still asks again.
+
+### Fixed — one spine's search results under another spine's query
+- The manual search sheet is one component reused for every spine, and its results outlived the query they answered. Reopening it for another spine kept the previous spine's matches on screen — and clickable — for the whole debounce and round trip of the new search, so a book could be filed against the wrong candidate. Opening the sheet now clears what the last one found.
+
+### Fixed — an abandoned goal edit came back
+- The reading goals dialog stays mounted for the life of the app and filled its boxes from the saved goals once, at mount. A target the reader typed and then walked away from was still in the box the next time the dialog opened, ready to be saved as if they had meant it. The boxes are filled from the saved goals every time it opens.
+
 ### Fixed — a resolved spine was dropped by the save right after it
 - The scan results screen seeded its selection once, from the candidates as they stood when it first rendered. Resolving a spine in the review sheet promoted it to matched but left it unselected, so the reader's own work was skipped by the save they pressed a moment later, and a spine marked as not a book stayed selected. The screen now tracks what the reader took *out* of the save: everything matched goes in unless it was unticked.
 

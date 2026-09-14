@@ -51,11 +51,21 @@ export const AIRecommendationsModal: React.FC<AIRecommendationsModalProps> = ({
     }
   }, [books, t]);
 
+  // Asking "is the list still empty?" is not a record of having asked: a reply
+  // carrying no recommendations leaves the list empty, so the request went
+  // straight back out and kept going for as long as the dialog was open. What
+  // the first request needs to know is whether this opening has asked yet.
+  const [hasRequested, setHasRequested] = useState(false);
+
   useEffect(() => {
-    if (isOpen && recommendations.length === 0 && books.length > 0 && !isLoading && !error) {
-      void generateRecommendations();
-    }
-  }, [isOpen, recommendations.length, books.length, isLoading, error, generateRecommendations]);
+    if (!isOpen) setHasRequested(false);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || hasRequested || books.length === 0) return;
+    setHasRequested(true);
+    void generateRecommendations();
+  }, [isOpen, hasRequested, books.length, generateRecommendations]);
 
   return (
     <AnimatePresence>

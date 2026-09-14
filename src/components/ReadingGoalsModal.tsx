@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ReadingGoals, GenreMilestone } from '../types';
 import { haptic } from '../services/haptics';
@@ -25,6 +25,18 @@ export const ReadingGoalsModal: React.FC<ReadingGoalsModalProps> = ({
 
   const [newGenre, setNewGenre] = useState('');
   const [newGenreTarget, setNewGenreTarget] = useState('');
+
+  // The dialog is mounted for the life of the app, so its draft outlives the
+  // opening it was typed in: an edit the reader walked away from used to be
+  // sitting in the boxes the next time, ready to be saved as if they meant it.
+  useEffect(() => {
+    if (!isOpen) return;
+    setAnnualPageCount(goals.annualPageCount?.toString() || '');
+    setAnnualBookCount(goals.annualBookCount?.toString() || '');
+    setGenreMilestones(goals.genreMilestones || []);
+    setNewGenre('');
+    setNewGenreTarget('');
+  }, [isOpen, goals]);
 
   if (!isOpen) return null;
 

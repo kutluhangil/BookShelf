@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Book, Shelf, ReadingStatus } from '../types';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -68,6 +68,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  /**
+   * When the running session started, in wall-clock time.
+   *
+   * The elapsed count used to be the number of one-second ticks received, and a
+   * browser throttles a background tab's timers to about one a minute — which
+   * is the state the tab is in while its owner reads. Half an hour of reading
+   * was filed as half a minute.
+   */
+  const timerStartedAtRef = useRef<number | null>(null);
   const [isAmbientMode, setIsAmbientMode] = useState(false);
   const [isQuoteScannerOpen, setIsQuoteScannerOpen] = useState(false);
   const [lentToInput, setLentToInput] = useState('');
@@ -83,27 +92,30 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
     }
   }, [book]);
 
+  /** Seconds since the running session began, or 0 when none is running. */
+  const secondsSinceStart = () =>
+    timerStartedAtRef.current === null ? 0 : Math.floor((Date.now() - timerStartedAtRef.current) / 1000);
+
   // Auto-save timer when modal closes
   useEffect(() => {
     if (!isOpen) {
-      if (isTimerActive && elapsedSeconds > 60 && book) {
-        onAddReadingSession?.(book.id, elapsedSeconds);
+      const sitting = secondsSinceStart();
+      if (isTimerActive && sitting > 60 && book) {
+        onAddReadingSession?.(book.id, sitting);
       }
+      timerStartedAtRef.current = null;
       setIsTimerActive(false);
       setElapsedSeconds(0);
       setIsAmbientMode(false);
       setShowDeleteConfirm(false);
     }
-  }, [isOpen, isTimerActive, elapsedSeconds, book, onAddReadingSession]);
+  }, [isOpen, isTimerActive, book, onAddReadingSession]);
 
-  // Timer interval
+  // The interval only drives the redraw; the clock is what it reads.
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isTimerActive) {
-      interval = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
-    }
+    if (!isTimerActive) return;
+    const tick = () => setElapsedSeconds(secondsSinceStart());
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [isTimerActive]);
 
@@ -118,12 +130,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const handleToggleTimer = () => {
     haptic.selectionClick();
     if (isTimerActive) {
+      const sitting = secondsSinceStart();
       setIsTimerActive(false);
-      if (elapsedSeconds > 0 && book) {
-        onAddReadingSession?.(book.id, elapsedSeconds);
+      timerStartedAtRef.current = null;
+      if (sitting > 0 && book) {
+        onAddReadingSession?.(book.id, sitting);
       }
       setElapsedSeconds(0);
     } else {
+      timerStartedAtRef.current = Date.now();
       setIsTimerActive(true);
       setElapsedSeconds(0);
     }

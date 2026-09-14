@@ -29,8 +29,15 @@ export const ManualSearchSheet: React.FC<ManualSearchSheetProps> = ({
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
+  // Opening the sheet for another spine has to clear the previous one's
+  // matches as well as its query: they stayed on screen, and clickable, for the
+  // whole debounce and round trip of the new search, so the reader could file a
+  // book that answered a question about a different spine.
   useEffect(() => {
-    if (isOpen) setSearchQuery(initialQuery);
+    if (!isOpen) return;
+    setSearchQuery(initialQuery);
+    setResults([]);
+    setError(null);
   }, [isOpen, initialQuery]);
 
   // Debounced live search against Open Library
