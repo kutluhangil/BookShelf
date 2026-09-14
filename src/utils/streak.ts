@@ -46,3 +46,28 @@ export const calculateReadingStreak = (books: Book[]): number => {
 
   return streak;
 };
+
+/** The day before the given local calendar day. */
+function previousDayKey(key: string): string {
+  const [year, month, day] = key.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() - 1);
+  return toLocalDateKey(date);
+}
+
+/** The longest run of consecutive reading days on record, today or not. */
+export const longestReadingStreak = (books: Book[]): number => {
+  const sorted = [...collectReadingDays(books)].sort();
+
+  let longest = 0;
+  let run = 0;
+  let previous: string | null = null;
+
+  for (const day of sorted) {
+    run = previous !== null && previousDayKey(day) === previous ? run + 1 : 1;
+    previous = day;
+    if (run > longest) longest = run;
+  }
+
+  return longest;
+};

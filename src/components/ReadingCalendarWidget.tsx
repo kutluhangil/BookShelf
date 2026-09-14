@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Book } from '../types';
+import { calculateReadingStreak, collectReadingDays, longestReadingStreak, toLocalDateKey } from '../utils/streak';
 import { useI18n } from '../i18n/I18nProvider';
 
 interface ReadingCalendarWidgetProps {
@@ -16,82 +17,50 @@ export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ bo
     today.setHours(0, 0, 0, 0);
     const msPerDay = 1000 * 60 * 60 * 24;
 
-    // 1. Build Activity Map
-    const map: Record<string, number> = {};
-    books.forEach(b => {
-      b.readingSessions?.forEach(s => {
-        const d = new Date(s.date);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        map[key] = (map[key] || 0) + s.durationSeconds;
+    // How long each day was read for, which is what shades a cell. Whether a
+    // day counts as read at all is the whole app's definition, in `streak`:
+    // this widget used to count sessions only, so a reader who finishes books
+    // without ever running the timer was shown a streak of zero while the
+    // milestone toasts congratulated them on the same streak.
+    const secondsPerDay: Record<string, number> = {};
+    books.forEach((book) => {
+      book.readingSessions?.forEach((session) => {
+        const key = toLocalDateKey(session.date);
+        secondsPerDay[key] = (secondsPerDay[key] || 0) + session.durationSeconds;
       });
     });
 
-    // 2. Calculate Current Streak
-    let cStreak = 0;
-    let checkDate = new Date(today.getTime());
-    let checkKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
-    
-    if (map[checkKey] > 0) {
-      // Read today
-      while (map[checkKey] > 0) {
-        cStreak++;
-        checkDate = new Date(checkDate.getTime() - msPerDay);
-        checkKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
-      }
-    } else {
-      // Check yesterday
-      checkDate = new Date(checkDate.getTime() - msPerDay);
-      checkKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
-      while (map[checkKey] > 0) {
-        cStreak++;
-        checkDate = new Date(checkDate.getTime() - msPerDay);
-        checkKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
-      }
-    }
+    const readingDays = collectReadingDays(books);
 
-    // 3. Calculate Max Streak & Total Active Days (looking back 2 years max to keep it bound)
-    let mStreak = 0;
-    let currentRun = 0;
-    let activeDaysCount = 0;
-    for (let i = 365 * 2; i >= 0; i--) {
-      const d = new Date(today.getTime() - i * msPerDay);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      if (map[key] > 0) {
-        currentRun++;
-        activeDaysCount++;
-        if (currentRun > mStreak) mStreak = currentRun;
-      } else {
-        currentRun = 0;
-      }
-    }
-
-    // 4. Generate Display Cells (20 weeks to show a good history on desktop, scrollable on mobile)
+    // 20 weeks of history on desktop, scrollable on mobile.
     const WEEKS_TO_SHOW = 20;
-    const dayOfWeek = today.getDay();
-    const totalCells = (WEEKS_TO_SHOW * 7) + dayOfWeek + 1;
-    
+    const totalCells = WEEKS_TO_SHOW * 7 + today.getDay() + 1;
+
     const generateCells = [];
     for (let i = totalCells - 1; i >= 0; i--) {
-      const d = new Date(today.getTime() - i * msPerDay);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const duration = map[key] || 0;
-      generateCells.push({ date: d, duration, key });
+      const date = new Date(today.getTime() - i * msPerDay);
+      const key = toLocalDateKey(date);
+      generateCells.push({ date, key, duration: secondsPerDay[key] || 0, isReadingDay: readingDays.has(key) });
     }
 
-    // The map itself stays internal: the cells already carry each day's duration.
-    return { cells: generateCells, currentStreak: cStreak, maxStreak: mStreak, activeDays: activeDaysCount };
+    return {
+      cells: generateCells,
+      currentStreak: calculateReadingStreak(books),
+      maxStreak: longestReadingStreak(books),
+      activeDays: readingDays.size,
+    };
   }, [books]);
 
-  const getColor = (durationSeconds: number) => {
-    if (durationSeconds === 0) return 'bg-[#262119] opacity-40';
+  const getColor = (durationSeconds: number, isReadingDay: boolean) => {
+    if (durationSeconds === 0) return isReadingDay ? 'bg-[#5c492a]' : 'bg-[#262119] opacity-40';
     if (durationSeconds < 900) return 'bg-[#5c492a]'; // < 15 min
     if (durationSeconds < 1800) return 'bg-[#917135]'; // < 30 min
     if (durationSeconds < 3600) return 'bg-[#ba903c]'; // < 60 min
     return 'bg-[#C9963F] shadow-[0_0_8px_rgba(201,150,63,0.3)]'; // >= 60 min
   };
 
-  const getLabel = (durationSeconds: number) => {
-    if (durationSeconds === 0) return t.calendar.noReading;
+  const getLabel = (durationSeconds: number, isReadingDay: boolean) => {
+    if (durationSeconds === 0) return isReadingDay ? t.calendar.readNoTimer : t.calendar.noReading;
     return t.calendar.minutes(Math.round(durationSeconds / 60));
   };
 
@@ -156,9 +125,9 @@ export const ReadingCalendarWidget: React.FC<ReadingCalendarWidgetProps> = ({ bo
           {cells.map((cell) => (
             <div 
               key={cell.key}
-              className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-[3px] sm:rounded-sm transition-colors cursor-default hover:border hover:border-[#F4EFE6]/30 ${getColor(cell.duration)}`}
+              className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-[3px] sm:rounded-sm transition-colors cursor-default hover:border hover:border-[#F4EFE6]/30 ${getColor(cell.duration, cell.isReadingDay)}`}
               title={t.calendar.cellTooltip(
-                getLabel(cell.duration),
+                getLabel(cell.duration, cell.isReadingDay),
                 cell.date.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })
               )}
             />

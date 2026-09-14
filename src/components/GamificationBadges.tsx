@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Book } from '../types';
+import { calculateReadingStreak } from '../utils/streak';
 import { useT } from '../i18n/I18nProvider';
 
 interface GamificationBadgesProps {
@@ -12,29 +13,9 @@ export const GamificationBadges: React.FC<GamificationBadgesProps> = ({ books })
   const badges = useMemo(() => {
     const earned = [];
     
-    // Streak logic
-    let currentStreak = 0;
-    // Basic logic for demonstration: check consecutive days read
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const readDates = new Set<string>();
-    books.forEach(b => {
-      b.readingSessions?.forEach(s => {
-        readDates.add(new Date(s.date).toDateString());
-      });
-      if (b.readAt) readDates.add(new Date(b.readAt).toDateString());
-    });
-
-    for (let i = 0; i < 30; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      if (readDates.has(d.toDateString())) {
-        currentStreak++;
-      } else if (i > 0) {
-        break;
-      }
-    }
+    // One definition of a streak for the whole app; this badge used to keep its
+    // own, which ignored a re-read's history and stopped looking after 30 days.
+    const currentStreak = calculateReadingStreak(books);
 
     const streakBadge = { icon: 'local_fire_department', ...t.badges.streak };
     earned.push(

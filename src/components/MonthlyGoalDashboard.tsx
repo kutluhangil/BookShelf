@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Book } from '../types';
+import { countCompletions } from '../utils/completions';
 import { useT } from '../i18n/I18nProvider';
 
 interface MonthlyGoalDashboardProps {
@@ -19,17 +20,13 @@ export const MonthlyGoalDashboard: React.FC<MonthlyGoalDashboardProps> = ({
 
   const currentMonthCount = useMemo(() => {
     const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-
-    return books.filter((b) => {
-      if (b.status !== 'read' || !b.readAt) return false;
-      const readDate = new Date(b.readAt);
-      return (
-        readDate.getFullYear() === currentYear &&
-        readDate.getMonth() === currentMonth
-      );
-    }).length;
+    // Counted over every finish the book records: reading one again is reading
+    // it, and `readAt` alone kept only the latest, so a book finished in
+    // January and again in March counted for neither month but March.
+    return countCompletions(
+      books,
+      (finishedAt) => finishedAt.getFullYear() === now.getFullYear() && finishedAt.getMonth() === now.getMonth()
+    );
   }, [books]);
 
   const progressPercent = Math.min(

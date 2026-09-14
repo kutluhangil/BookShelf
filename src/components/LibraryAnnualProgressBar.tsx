@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Book, ReadingGoals } from '../types';
+import { countCompletedPages, countCompletions } from '../utils/completions';
 import { useT } from '../i18n/I18nProvider';
 
 interface LibraryAnnualProgressBarProps {
@@ -12,20 +13,12 @@ export const LibraryAnnualProgressBar: React.FC<LibraryAnnualProgressBarProps> =
   const currentYear = new Date().getFullYear();
 
   const { totalBooks, totalPages } = useMemo(() => {
-    let bCount = 0;
-    let pCount = 0;
-
-    books.forEach(b => {
-      if (b.status === 'read' && b.readAt) {
-        const d = new Date(b.readAt);
-        if (d.getFullYear() === currentYear) {
-          bCount++;
-          pCount += (b.pageCount || 250);
-        }
-      }
-    });
-
-    return { totalBooks: bCount, totalPages: pCount };
+    // Every finish of the year counts, not only each book's latest one.
+    const inThisYear = (finishedAt: Date) => finishedAt.getFullYear() === currentYear;
+    return {
+      totalBooks: countCompletions(books, inThisYear),
+      totalPages: countCompletedPages(books, inThisYear),
+    };
   }, [books, currentYear]);
 
   // If no goals are set, return null or a prompt.

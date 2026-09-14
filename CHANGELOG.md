@@ -4,6 +4,15 @@ Newest entries at the top.
 
 ## Unreleased
 
+### Fixed — three answers to "how long is my streak?"
+- The reading streak was computed three times, in three places, from three different records: the milestone toasts counted sessions, finishes and re-reads; the calendar widget counted timed sessions only; the achievement badge counted sessions and the latest finish, and gave up after thirty days. A reader who finishes books without ever running the timer was congratulated on a seven-day streak by one and shown zero by the other. All three now ask `utils/streak`, which also gained the longest-run calculation the calendar needs, and a day that counts as read with no timed session is shaded as read.
+
+### Fixed — reading a book again counted for nothing
+- The monthly and annual goal counters read `readAt`, which holds only a book's latest finish. Finishing a book a second time moved it out of the month it was first finished in and added nothing to the year, so a re-read was worse than invisible: it took a book off an earlier month's tally. Both counters, and the annual page total, now count every finish in `readHistory`.
+
+### Fixed — the growth chart folded years together
+- Points on the library growth chart were keyed by a formatted "Mar 5" label, which carries no year. Books added on the same day of two different years shared one point, and the running total then counted the later books at the earlier point, so the curve of any library older than a year was wrong. Points are keyed by the calendar day and formatted only for display.
+
 ### Fixed — half an hour of reading filed as half a minute
 - The reading session timer counted the one-second ticks it received. A browser throttles a background tab's timers to roughly one a minute, which is the state the tab is in while its owner reads, so a long sitting was recorded as a handful of seconds and every statistic drawn from reading sessions was wrong. The timer now reads the clock: the session's start is kept, and the interval only drives the redraw.
 

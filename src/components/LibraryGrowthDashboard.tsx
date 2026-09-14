@@ -9,6 +9,7 @@ import {
   AreaChart,
 } from 'recharts';
 import { Book } from '../types';
+import { growthSeries } from '../utils/libraryGrowth';
 import { useI18n } from '../i18n/I18nProvider';
 
 interface LibraryGrowthDashboardProps {
@@ -19,31 +20,11 @@ export const LibraryGrowthDashboard: React.FC<LibraryGrowthDashboardProps> = ({ 
   const { t, locale } = useI18n();
 
   const chartData = useMemo(() => {
-    // Sort books by addedAt date
-    const sortedBooks = [...books].sort(
-      (a, b) => new Date(a.addedAt).getTime() - new Date(b.addedAt).getTime()
-    );
-
-    // Group by date and calculate cumulative total
-    const grouped: Record<string, number> = {};
-    let cumulative = 0;
-
-    sortedBooks.forEach((book) => {
-      if (!book.addedAt) return;
-      const dateObj = new Date(book.addedAt);
-      const dateStr = dateObj.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
-      grouped[dateStr] = (grouped[dateStr] || 0) + 1;
-    });
-
-    const data = [];
-    for (const [date, count] of Object.entries(grouped)) {
-      cumulative += count;
-      data.push({
-        date,
-        total: cumulative,
-        added: count,
-      });
-    }
+    const data = growthSeries(books).map((point) => ({
+      date: new Date(`${point.key}T00:00:00`).toLocaleDateString(locale, { month: 'short', day: 'numeric' }),
+      total: point.total,
+      added: point.added,
+    }));
 
     // Ensure we have some data even if empty or single point
     if (data.length === 1) {

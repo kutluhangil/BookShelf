@@ -199,6 +199,7 @@ export const en = {
     totalDays: 'Total Days',
     days: 'Days',
     noReading: 'No reading',
+    readNoTimer: 'Read (no timed session)',
     minutes: (count: number) => `${count} min${count !== 1 ? 's' : ''}`,
     cellTooltip: (amount: string, date: string) => `${amount} on ${date}`,
   },

@@ -193,6 +193,7 @@ export const tr: Messages = {
     totalDays: 'Toplam gün',
     days: 'gün',
     noReading: 'Okuma yok',
+    readNoTimer: 'Okundu (süre tutulmadı)',
     minutes: (count: number) => `${count} dakika`,
     cellTooltip: (amount: string, date: string) => `${date}: ${amount}`,
   },
