@@ -26,13 +26,22 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
 }) => {
   const t = useT();
   const [isBannerCollapsed, setIsBannerCollapsed] = useState(false);
-  const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(
-    new Set(candidates.filter((c) => c.confidence === 'matched' && !c.isDismissed).map((c) => c.id))
-  );
+  /**
+   * What the reader took *out* of the save, rather than what is in it.
+   *
+   * A list of selected ids is a snapshot: it was seeded when this screen first
+   * rendered, so a spine resolved afterwards arrived as matched but unselected
+   * and was dropped by the save that followed, and a spine marked as not a book
+   * stayed in. Everything matched is saved unless the reader unticked it.
+   */
+  const [deselectedIds, setDeselectedIds] = useState<Set<string>>(new Set());
 
   const matched = candidates.filter((c) => c.confidence === 'matched' && !c.isDismissed);
   const needsReview = candidates.filter((c) => c.confidence === 'review' && !c.isDismissed);
   const unrecognized = candidates.filter((c) => c.confidence === 'unknown' && !c.isDismissed);
+
+  const selected = matched.filter((c) => !deselectedIds.has(c.id));
+  const isSelected = (id: string) => !deselectedIds.has(id);
 
   const spineColors = candidates
     .filter((c) => !c.isDismissed)
@@ -40,16 +49,17 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
 
   const toggleSelect = (id: string) => {
     haptic.selectionClick();
-    const next = new Set(selectedCandidates);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedCandidates(next);
+    setDeselectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const handleAddAllValid = () => {
     haptic.success();
-    const toSave = candidates.filter((c) => selectedCandidates.has(c.id));
-    onSaveMatchedBooks(toSave);
+    onSaveMatchedBooks(selected);
   };
 
   return (
@@ -210,33 +220,31 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
               <button
                 onClick={() => {
                   haptic.selectionClick();
-                  if (selectedCandidates.size === matched.length) {
-                    setSelectedCandidates(new Set());
-                  } else {
-                    setSelectedCandidates(new Set(matched.map((m) => m.id)));
-                  }
+                  setDeselectedIds(
+                    selected.length === matched.length ? new Set(matched.map((m) => m.id)) : new Set()
+                  );
                 }}
                 className="font-mono-ibm text-[11px] text-[#A79C8C] hover:text-[#F4EFE6]"
               >
-                {selectedCandidates.size === matched.length ? t.scanResults.deselectAll : t.scanResults.selectAll}
+                {selected.length === matched.length ? t.scanResults.deselectAll : t.scanResults.selectAll}
               </button>
             </div>
 
             <div className="space-y-2.5">
               {matched.map((cand) => {
-                const isSelected = selectedCandidates.has(cand.id);
+                const checked = isSelected(cand.id);
                 const book = cand.matchedBook || cand.editions[0];
 
                 return (
                   <div
                     key={cand.id}
                     role="checkbox"
-                    aria-checked={isSelected}
+                    aria-checked={checked}
                     tabIndex={0}
                     onClick={() => toggleSelect(cand.id)}
                     onKeyDown={activateOnKey(() => toggleSelect(cand.id))}
                     className={`bg-[#1C1916] rounded-xl p-3 sm:p-3.5 hairline-border flex items-center justify-between gap-3 cursor-pointer transition-all ${
-                      isSelected
+                      checked
                         ? 'border-[#6E8F6A]/60 bg-[#22271E]'
                         : 'border-[#3A332A] opacity-75 hover:opacity-100'
                     }`}
@@ -245,12 +253,12 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
                       {/* Checkbox */}
                       <div
                         className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
-                          isSelected
+                          checked
                             ? 'bg-[#6E8F6A] text-[#12100E]'
                             : 'border border-[#4F4537] bg-transparent'
                         }`}
                       >
-                        {isSelected && (
+                        {checked && (
                           <span className="material-symbols-outlined text-[16px] font-bold" aria-hidden="true">check</span>
                         )}
                       </div>
@@ -348,7 +356,7 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
         <div className="max-w-[800px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-center sm:text-left">
             <p className="font-mono-ibm text-[12px] text-[#F4EFE6] font-semibold">
-              {t.scanResults.selectedCount(selectedCandidates.size, matched.length + needsReview.length)}
+              {t.scanResults.selectedCount(selected.length, matched.length + needsReview.length)}
             </p>
             <p className="font-sans-inter text-[11px] text-[#A79C8C]">
               {t.scanResults.readyToSave}
@@ -380,10 +388,10 @@ export const ScanResultsView: React.FC<ScanResultsViewProps> = ({
 
             <button
               onClick={handleAddAllValid}
-              disabled={selectedCandidates.size === 0}
+              disabled={selected.length === 0}
               className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-[#C9963F] hover:bg-[#b58332] text-[#12100E] font-mono-ibm text-[12px] font-bold tracking-wider transition-all shadow-[0_4px_16px_rgba(201,150,63,0.35)] disabled:opacity-40 disabled:pointer-events-none"
             >
-              {t.scanResults.addMatched(selectedCandidates.size)}
+              {t.scanResults.addMatched(selected.length)}
             </button>
           </div>
         </div>

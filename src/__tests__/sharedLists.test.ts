@@ -51,6 +51,16 @@ function mockFirestore(documents: Record<string, Record<string, unknown>>) {
         return { exists: () => data !== undefined, data: () => data };
       },
       arrayUnion: (...values: unknown[]) => ({ arrayUnion: values }),
+      arrayRemove: (...values: unknown[]) => ({ arrayRemove: values }),
+      getDocs: async () => ({
+        docs: Object.entries(documents).map(([id, data]) => ({
+          ref: `sharedLists/${id}`,
+          data: () => data,
+        })),
+      }),
+      collection: (_db: unknown, ...segments: string[]) => segments.join('/'),
+      query: (...parts: unknown[]) => parts,
+      where: (...parts: unknown[]) => parts,
     }),
   }));
   return writes;
@@ -167,5 +177,59 @@ describe('shared list documents stay under the 1MB Firestore cap', () => {
         spineColor: '#334455',
       },
     ]);
+  });
+});
+
+describe('edits that have to survive a collaborator editing at the same time', () => {
+  it('removes a book without rewriting the whole list', async () => {
+    const slim = (id: string): SharedListBook => ({
+      id,
+      title: `Title ${id}`,
+      author: 'Author',
+      coverUrl: 'https://covers.example/1.jpg',
+      spineColor: '#334455',
+    });
+    const writes = mockFirestore({ 'list-1': list([slim('keep'), slim('drop')]) });
+    const { removeBookFromSharedList } = await import('../services/sharedLists');
+
+    await removeBookFromSharedList('list-1', 'drop');
+
+    // Sending the surviving entries back would drop a book a collaborator added
+    // between the read and the write.
+    expect(writes[0].payload).toEqual({ books: { arrayRemove: [slim('drop')] } });
+  });
+
+  it('says nothing to write when the book is already gone', async () => {
+    const writes = mockFirestore({ 'list-1': list([]) });
+    const { removeBookFromSharedList } = await import('../services/sharedLists');
+
+    await removeBookFromSharedList('list-1', 'never-there');
+
+    expect(writes).toHaveLength(0);
+  });
+});
+
+describe('claiming an invitation', () => {
+  const invited = { userId: 'uid-2', email: 'Friend@Example.com', role: 'contributor' as const };
+
+  it('takes the claimed address off the pending list', async () => {
+    const withInvite = { ...list([]), invitedEmails: ['friend@example.com'], memberIds: ['uid-1'] };
+    const writes = mockFirestore({ 'list-1': withInvite });
+    const { claimInvitations } = await import('../services/sharedLists');
+
+    const claimed = await claimInvitations(invited);
+
+    expect(claimed.map((entry) => entry.id)).toEqual(['list-1']);
+    expect(writes[0].payload).toMatchObject({ invitedEmails: { arrayRemove: ['friend@example.com'] } });
+  });
+
+  it('writes nothing for a list the user already belongs to', async () => {
+    const withInvite = { ...list([]), invitedEmails: ['friend@example.com'], memberIds: ['uid-1', 'uid-2'] };
+    const writes = mockFirestore({ 'list-1': withInvite });
+    const { claimInvitations } = await import('../services/sharedLists');
+
+    await claimInvitations(invited);
+
+    expect(writes).toHaveLength(0);
   });
 });

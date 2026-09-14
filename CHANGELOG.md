@@ -4,6 +4,18 @@ Newest entries at the top.
 
 ## Unreleased
 
+### Fixed — a resolved spine was dropped by the save right after it
+- The scan results screen seeded its selection once, from the candidates as they stood when it first rendered. Resolving a spine in the review sheet promoted it to matched but left it unselected, so the reader's own work was skipped by the save they pressed a moment later, and a spine marked as not a book stayed selected. The screen now tracks what the reader took *out* of the save: everything matched goes in unless it was unticked.
+
+### Fixed — a shared list lost a book to a collaborator
+- Removing a book sent the surviving entries back as a whole array, so a book another member added between the read and the write was wiped out — in the one feature where two people edit the same document on purpose. Removal now uses `arrayRemove`, the way adding already used `arrayUnion`, and a book that is already gone writes nothing at all. Documents still holding pre-slimming entries are rewritten as before, which is what compacts them.
+
+### Fixed — an accepted invitation stayed pending
+- Claiming an invitation added the member and left the address in `invitedEmails`, so the owner's "pending" line went on naming people who had already joined, and the address stayed in the document for good. An accepted invitation is now spent.
+
+### Fixed — the profile menu could not be closed from the keyboard
+- The menu was dismissed by a `mousedown` outside it and nothing else. It now closes on Escape.
+
 ### Fixed — a cleared field came back from the cloud
 - Every record was pushed with `set(..., { merge: true })` after its `undefined` keys were stripped, and a merge leaves a key it is not given exactly as it was. A field the reader cleared — a loan that came back, a rating taken away, a completion date dropped when a book was marked unread — is precisely such a key, so the old value stayed in the cloud and the next device to fetch got it back and showed the book as still lent. Those keys are now written as an explicit field deletion; a field that was never set stays out of the write.
 

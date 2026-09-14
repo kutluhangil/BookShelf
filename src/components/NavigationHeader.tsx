@@ -57,8 +57,17 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
         setIsProfileMenuOpen(false);
       }
     };
+    // Clicking elsewhere was the only way out of the menu, which leaves a reader
+    // on the keyboard with no way to dismiss it.
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsProfileMenuOpen(false);
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, [isProfileMenuOpen]);
 
   const readerStats = useMemo(() => {

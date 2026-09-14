@@ -133,12 +133,27 @@ export const addBookToSharedList = async (listId: string, book: Book): Promise<v
 };
 
 export const removeBookFromSharedList = async (listId: string, bookId: string): Promise<void> => {
-  const { db, doc, getDoc, updateDoc } = await getFirestoreApi();
+  const { db, doc, getDoc, updateDoc, arrayRemove } = await getFirestoreApi();
   const ref = doc(db, COLLECTION_NAME, listId);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new AppError('sharedList.missing', { listId });
+
   const list = readList(snap.data());
-  await updateDoc(ref, { books: list.books.filter((entry) => entry.id !== bookId) });
+  const entry = list.books.find((candidate) => candidate.id === bookId);
+  // Another member removed it between this reader's screen and this write; the
+  // list already holds what they asked for.
+  if (!entry) return;
+
+  // `arrayRemove` for the same reason `arrayUnion` is used to add: sending the
+  // surviving entries back would drop a book a collaborator added between the
+  // read above and this write. A document still holding fat entries is rewritten
+  // instead, which is also how the oversized copies leave.
+  await updateDoc(
+    ref,
+    holdsLegacyEntries(snap.data())
+      ? { books: list.books.filter((candidate) => candidate.id !== bookId) }
+      : { books: arrayRemove(entry) }
+  );
 };
 
 export const addMemberToSharedList = async (listId: string, member: SharedListMember): Promise<void> => {
@@ -179,18 +194,23 @@ export const inviteByEmail = async (listId: string, email: string): Promise<void
 /** Claims any pending invitations addressed to the signed-in user's email. */
 export const claimInvitations = async (member: SharedListMember): Promise<SharedList[]> => {
   if (!member.email) return [];
-  const { db, collection, getDocs, query, where, updateDoc, arrayUnion } = await getFirestoreApi();
+  const email = member.email.toLowerCase();
+  const { db, collection, getDocs, query, where, updateDoc, arrayUnion, arrayRemove } = await getFirestoreApi();
   const snap = await getDocs(
-    query(collection(db, COLLECTION_NAME), where('invitedEmails', 'array-contains', member.email.toLowerCase()))
+    query(collection(db, COLLECTION_NAME), where('invitedEmails', 'array-contains', email))
   );
 
   const claimed: SharedList[] = [];
   for (const entry of snap.docs) {
     const list = readList(entry.data());
     if (list.memberIds?.includes(member.userId)) continue;
+    // The invitation is spent once it is accepted. Leaving it behind kept the
+    // owner's list of pending invitations showing people who had already
+    // joined, and kept their address in the document for good.
     await updateDoc(entry.ref, {
       members: arrayUnion(member),
       memberIds: arrayUnion(member.userId),
+      invitedEmails: arrayRemove(email),
     });
     claimed.push(list);
   }
