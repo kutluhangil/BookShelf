@@ -4,6 +4,12 @@ Newest entries at the top.
 
 ## Unreleased
 
+### Fixed — a retry that could never succeed
+- A dashboard panel whose chunk failed to load offered "Retry", which cleared the panel's own error and rendered the same lazy component again. `React.lazy` records a rejected import and re-throws it ever after without fetching anything, so the button could only ever show the same failure. It now offers a reload, which is what actually asks for the chunk a second time.
+
+### Fixed — the reading queue was not a shortlist
+- "Queued for reading" capped itself at five books only when it fell back to the newest unread ones. A reader who tags books "priority" got every one of them in a strip meant to hold a shortlist. Both branches now show five.
+
 ### Fixed — an AI call that never came back
 - Neither side of the AI endpoints had a deadline. A request the server accepted and the model never answered left the reader watching the processing screen behind a spinner for as long as the browser kept the socket open, and held an Express request — with the rate-limit slot behind it — on the server. The client now abandons a call after 60 seconds with a coded `api.timeout` in both locales (10 seconds for the health check), and the server answers 504 after 55 rather than hanging on.
 

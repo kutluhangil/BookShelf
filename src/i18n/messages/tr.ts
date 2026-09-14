@@ -15,6 +15,7 @@ export const tr: Messages = {
     back: 'Geri',
     done: 'Tamam',
     retry: 'Tekrar dene',
+    reload: 'Yeniden yükle',
     loading: 'Yükleniyor…',
     search: 'Ara',
     all: 'Tümü',

@@ -5,6 +5,9 @@ import { BookCover } from './BookCover';
 import { useT } from '../i18n/I18nProvider';
 import { activateOnKey } from '../utils/interactive';
 
+/** How many books the queue shows, whichever branch picked them. */
+const QUEUE_LENGTH = 5;
+
 interface QueuedForReadingProps {
   books: Book[];
   onSelectBook: (book: Book) => void;
@@ -30,10 +33,13 @@ export const QueuedForReading: React.FC<QueuedForReadingProps> = ({ books, onSel
         const dateA = a.addedAt ? new Date(a.addedAt).getTime() : 0;
         const dateB = b.addedAt ? new Date(b.addedAt).getTime() : 0;
         return dateB - dateA;
-      }).slice(0, 5);
+      });
     }
     
-    return priorityBooks;
+    // This is a shortlist of what to read next, not a second library view: the
+    // tagged branch used to render every priority book there was, so a reader
+    // who tags freely got a strip of eighty covers.
+    return priorityBooks.slice(0, QUEUE_LENGTH);
   }, [books]);
 
   if (queuedBooks.length === 0) {

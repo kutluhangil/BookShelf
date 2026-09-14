@@ -19,6 +19,7 @@ export const en = {
     back: 'Back',
     done: 'Done',
     retry: 'Retry',
+    reload: 'Reload',
     loading: 'Loading…',
     search: 'Search',
     all: 'All',

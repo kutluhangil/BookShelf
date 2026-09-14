@@ -19,19 +19,23 @@ class PanelBoundary extends React.Component<{ children: React.ReactNode; label: 
     return { error };
   }
 
-  private handleRetry = () => {
-    this.setState({ error: null });
-  };
-
   render(): React.ReactNode {
     if (!this.state.error) return this.props.children;
 
-    return <PanelFallback label={this.props.label} onRetry={this.handleRetry} />;
+    return <PanelFallback label={this.props.label} />;
   }
 }
 
-/** Split out of the boundary so the copy can come from the i18n hook. */
-const PanelFallback: React.FC<{ label: string; onRetry: () => void }> = ({ label, onRetry }) => {
+/**
+ * Split out of the boundary so the copy can come from the i18n hook.
+ *
+ * The button used to clear the boundary's own error and render the panel
+ * again, which cannot work: `React.lazy` records a rejected import and throws
+ * that same rejection ever after without fetching anything, so the reader was
+ * offered a retry that could only ever show this screen again. Reloading the
+ * page is what actually asks for the chunk a second time.
+ */
+const PanelFallback: React.FC<{ label: string }> = ({ label }) => {
   const t = useT();
 
   return (
@@ -39,10 +43,10 @@ const PanelFallback: React.FC<{ label: string; onRetry: () => void }> = ({ label
       <span className="material-symbols-outlined text-[28px] text-[#C97A3F]" aria-hidden="true">wifi_off</span>
       <p className="font-sans-inter text-[13px] text-[#A79C8C] max-w-[240px]">{t.lazyPanel.failed(label)}</p>
       <button
-        onClick={onRetry}
+        onClick={() => window.location.reload()}
         className="px-3 py-1.5 bg-[#262119] hairline-border rounded-lg font-mono-ibm text-[10px] text-[#C9963F] uppercase tracking-wider"
       >
-        {t.common.retry}
+        {t.common.reload}
       </button>
     </div>
   );
