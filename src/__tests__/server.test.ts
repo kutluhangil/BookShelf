@@ -211,3 +211,52 @@ describe('security headers', () => {
     expect(response.headers['content-security-policy']).toBeUndefined();
   });
 });
+
+describe('an upstream call that never returns', () => {
+  /** A Gemini client that accepts the call and never answers. */
+  const silentAi = () =>
+    ({
+      models: {
+        generateContent: vi.fn(
+          () =>
+            new Promise(() => {
+              /* never settles */
+            })
+        ),
+      },
+    }) as unknown as AppOptions['ai'];
+
+  /** The real deadline is a minute; the route takes it as an option so this need not be. */
+  const impatient = () => app({ ai: silentAi(), upstreamTimeoutMs: 20 });
+
+  it('answers the shelf request instead of holding it open forever', async () => {
+    const response = await request(impatient()).post('/api/gemini/shelf').send(IMAGE);
+
+    expect(response.status).toBe(504);
+    expect(response.body.error).toBe('Shelf recognition timed out');
+    expect(response.body.detail).toContain('did not answer');
+  });
+
+  it('answers the quote request', async () => {
+    const response = await request(impatient()).post('/api/gemini/quote').send(IMAGE);
+
+    expect(response.status).toBe(504);
+    expect(response.body.error).toBe('Text extraction timed out');
+  });
+
+  it('answers the recommendation request', async () => {
+    const response = await request(impatient())
+      .post('/api/gemini/recommend')
+      .send({ books: [{ title: 'A Book', author: 'Author' }] });
+
+    expect(response.status).toBe(504);
+    expect(response.body.error).toBe('Recommendation generation timed out');
+  });
+
+  it('still answers normally when the model is quick enough', async () => {
+    const response = await request(app({ upstreamTimeoutMs: 20 })).post('/api/gemini/shelf').send(IMAGE);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ spines: [] });
+  });
+});

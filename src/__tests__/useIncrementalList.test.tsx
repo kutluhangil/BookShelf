@@ -24,8 +24,12 @@ beforeAll(() => {
 // is not registered; without this each test would inherit the previous DOM.
 afterEach(cleanup);
 
-const Harness: React.FC<{ items: number[]; pageSize?: number }> = ({ items, pageSize = 3 }) => {
-  const { visible, hasMore, remaining, sentinelRef, loadMore } = useIncrementalList(items, pageSize);
+const Harness: React.FC<{ items: number[]; pageSize?: number; resetKey?: string }> = ({
+  items,
+  pageSize = 3,
+  resetKey = 'all',
+}) => {
+  const { visible, hasMore, remaining, sentinelRef, loadMore } = useIncrementalList(items, pageSize, resetKey);
   return (
     <div>
       <p data-testid="visible">{visible.join(',')}</p>
@@ -69,12 +73,22 @@ describe('useIncrementalList', () => {
     expect(screen.getByTestId('remaining').textContent).toBe('0');
   });
 
-  it('resets to the first page when the list changes, e.g. a new filter', () => {
-    const { rerender } = render(<Harness items={range(10)} />);
+  it('resets to the first page when the reader asks a new question of the list', () => {
+    const { rerender } = render(<Harness items={range(10)} resetKey="all" />);
     act(() => observerCallbacks.at(-1)?.([{ isIntersecting: true }]));
     expect(screen.getByTestId('visible').textContent).toBe('0,1,2,3,4,5');
 
-    rerender(<Harness items={range(10).map((n) => n + 100)} />);
+    rerender(<Harness items={range(10).map((n) => n + 100)} resetKey="unread" />);
     expect(screen.getByTestId('visible').textContent).toBe('100,101,102');
+  });
+
+  it('keeps what it has rendered when a book in the list is edited', () => {
+    const { rerender } = render(<Harness items={range(10)} resetKey="all" />);
+    act(() => observerCallbacks.at(-1)?.([{ isIntersecting: true }]));
+    expect(screen.getByTestId('visible').textContent).toBe('0,1,2,3,4,5');
+
+    // An edit rebuilds the filtered array without changing the question asked.
+    rerender(<Harness items={[...range(10)]} resetKey="all" />);
+    expect(screen.getByTestId('visible').textContent).toBe('0,1,2,3,4,5');
   });
 });

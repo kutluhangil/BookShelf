@@ -250,7 +250,13 @@ export default function App() {
     remaining: remainingBooks,
     sentinelRef: listSentinelRef,
     loadMore: loadMoreBooks,
-  } = useIncrementalList(filteredBooks, 60);
+  } = useIncrementalList(
+    filteredBooks,
+    60,
+    // What the reader is asking of the library; a new question starts the
+    // list at the top, an edit to a book in it does not.
+    `${selectedShelfId}|${readingStatusFilter}|${smartFilter}|${sortMode}|${searchQuery.trim()}`
+  );
 
   const allSpineColors = useMemo(() => books.map((b) => b.spineColor || '#C9963F'), [books]);
 

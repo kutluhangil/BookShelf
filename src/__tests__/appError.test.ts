@@ -17,6 +17,7 @@ const SAMPLES: { [K in AppErrorCode]: ErrorPayloads[K] } = {
   'lookup.qrUnrecognized': {},
   'api.healthFailed': { status: 502 },
   'api.requestFailed': { status: 500 },
+  'api.timeout': { path: '/api/gemini/shelf', seconds: 60 },
   'api.unauthorized': {},
   'shelf.signInRequired': {},
   'shelf.noSpines': {},

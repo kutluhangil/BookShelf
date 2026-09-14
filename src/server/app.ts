@@ -21,6 +21,8 @@ export interface AppOptions {
   isProduction: boolean;
   /** Express `trust proxy` value; see readTrustProxy in the entry point. */
   trustProxy: boolean | number | string;
+  /** How long an upstream call may take; injected so a test need not wait it out. */
+  upstreamTimeoutMs?: number;
 }
 
 /**
@@ -68,6 +70,40 @@ function createRateLimiter(options: { windowMs: number; max: number }) {
     }
     next();
   };
+}
+
+/**
+ * How long the model may take before the request is abandoned.
+ *
+ * A call the upstream accepts and never answers otherwise holds an Express
+ * request — and the rate-limit slot behind it — for as long as the socket
+ * lives, while the reader watches a spinner that will never stop.
+ */
+export const UPSTREAM_TIMEOUT_MS = 55_000;
+
+/** An upstream call that ran out of time, so it maps to 504 rather than 502. */
+class UpstreamTimeoutError extends Error {
+  constructor(context: string, timeoutMs: number) {
+    super(`${context}: the model did not answer within ${timeoutMs / 1000} seconds.`);
+    this.name = "UpstreamTimeoutError";
+  }
+}
+
+/** Resolves the call, or raises once the deadline passes. */
+function runWithDeadline<T>(work: Promise<T>, context: string, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new UpstreamTimeoutError(context, timeoutMs)), timeoutMs);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 /** Client-side input problems, so they map to 400 instead of an upstream 502. */
@@ -124,8 +160,19 @@ function parseJsonResponse<T>(text: string | undefined, context: string): T {
  * Builds the API surface. Static file serving and `listen` stay in the entry
  * point, so a test can drive these routes without a port or a real Gemini key.
  */
-export function createApp({ ai, model, auth, isProduction, trustProxy }: AppOptions): Express {
+export function createApp({
+  ai,
+  model,
+  auth,
+  isProduction,
+  trustProxy,
+  upstreamTimeoutMs = UPSTREAM_TIMEOUT_MS,
+}: AppOptions): Express {
   const app = express();
+
+  /** Every model call runs under the same deadline. */
+  const withDeadline = <T,>(work: Promise<T>, context: string) =>
+    runWithDeadline(work, context, upstreamTimeoutMs);
 
   app.set("trust proxy", trustProxy);
   if (isProduction && trustProxy === false) {
@@ -207,7 +254,8 @@ export function createApp({ ai, model, auth, isProduction, trustProxy }: AppOpti
     try {
       const imageBase64 = readImageBase64(req);
 
-      const response = await ai.models.generateContent({
+      const response = await withDeadline(
+        ai.models.generateContent({
         model,
         contents: [
           {
@@ -227,7 +275,9 @@ For each spine return:
 Return JSON: {"spines": [...]}. Never invent books you cannot see. If a spine is unreadable, still return it with empty title/author and a low confidence.`,
         ],
         config: { responseMimeType: "application/json" },
-      });
+        }),
+        "Shelf recognition"
+      );
 
       const data = parseJsonResponse<{ spines: unknown[] }>(response.text, "Shelf recognition");
       res.json(data);
@@ -236,6 +286,10 @@ Return JSON: {"spines": [...]}. Never invent books you cannot see. If a spine is
       console.error("[/api/gemini/shelf]", error);
       if (error instanceof ValidationError) {
         res.status(400).json({ error: "Invalid request", detail: message });
+        return;
+      }
+      if (error instanceof UpstreamTimeoutError) {
+        res.status(504).json({ error: "Shelf recognition timed out", detail: message });
         return;
       }
       res.status(502).json({ error: "Shelf recognition failed", detail: message, hint: detail });
@@ -247,13 +301,16 @@ Return JSON: {"spines": [...]}. Never invent books you cannot see. If a spine is
     try {
       const imageBase64 = readImageBase64(req);
 
-      const response = await ai.models.generateContent({
-        model,
-        contents: [
-          { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
-          "Extract all the readable text from this book page. Return the text exactly as printed, nothing else. If no text is legible, return an empty string.",
-        ],
-      });
+      const response = await withDeadline(
+        ai.models.generateContent({
+          model,
+          contents: [
+            { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
+            "Extract all the readable text from this book page. Return the text exactly as printed, nothing else. If no text is legible, return an empty string.",
+          ],
+        }),
+        "Text extraction"
+      );
 
       const text = response.text?.trim() ?? "";
       if (!text) {
@@ -266,6 +323,10 @@ Return JSON: {"spines": [...]}. Never invent books you cannot see. If a spine is
       console.error("[/api/gemini/quote]", error);
       if (error instanceof ValidationError) {
         res.status(400).json({ error: "Invalid request", detail: message });
+        return;
+      }
+      if (error instanceof UpstreamTimeoutError) {
+        res.status(504).json({ error: "Text extraction timed out", detail: message });
         return;
       }
       res.status(502).json({ error: "Text extraction failed", detail: message, hint: detail });
@@ -290,19 +351,26 @@ Return JSON: {"spines": [...]}. Never invent books you cannot see. If a spine is
         status: book.status,
       }));
 
-      const response = await ai.models.generateContent({
+      const response = await withDeadline(
+        ai.models.generateContent({
         model,
         contents: `These are the books in my library: ${JSON.stringify(summary)}.
 Recommend 5 books I do not already own that I would likely enjoy.
 Return JSON: {"recommendations":[{"title","author","year","category","reason"}]} where "reason" is one sentence explaining the match.`,
         config: { responseMimeType: "application/json" },
-      });
+        }),
+        "Recommendations"
+      );
 
       const data = parseJsonResponse<{ recommendations: unknown[] }>(response.text, "Recommendations");
       res.json(data);
     } catch (error) {
       const { message, detail } = describeError(error, isProduction);
       console.error("[/api/gemini/recommend]", error);
+      if (error instanceof UpstreamTimeoutError) {
+        res.status(504).json({ error: "Recommendation generation timed out", detail: message });
+        return;
+      }
       res.status(502).json({ error: "Recommendation generation failed", detail: message, hint: detail });
     }
   });

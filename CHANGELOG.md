@@ -4,6 +4,12 @@ Newest entries at the top.
 
 ## Unreleased
 
+### Fixed — an AI call that never came back
+- Neither side of the AI endpoints had a deadline. A request the server accepted and the model never answered left the reader watching the processing screen behind a spinner for as long as the browser kept the socket open, and held an Express request — with the rate-limit slot behind it — on the server. The client now abandons a call after 60 seconds with a coded `api.timeout` in both locales (10 seconds for the health check), and the server answers 504 after 55 rather than hanging on.
+
+### Fixed — the library list jumped back to the top after any edit
+- The incremental list started over whenever the array it renders changed identity, and every edit to any book rebuilds that array. A reader who had scrolled to their three hundredth volume and ticked a page number was dropped back to the first sixty. The list now starts over only when the reader asks a new question of it — a filter, a search or a sort.
+
 ### Fixed — three answers to "how long is my streak?"
 - The reading streak was computed three times, in three places, from three different records: the milestone toasts counted sessions, finishes and re-reads; the calendar widget counted timed sessions only; the achievement badge counted sessions and the latest finish, and gave up after thirty days. A reader who finishes books without ever running the timer was congratulated on a seven-day streak by one and shown zero by the other. All three now ask `utils/streak`, which also gained the longest-run calculation the calendar needs, and a day that counts as read with no timed session is shaded as read.
 

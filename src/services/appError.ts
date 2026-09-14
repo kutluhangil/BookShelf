@@ -17,6 +17,7 @@ export interface ErrorPayloads {
   'lookup.qrUnrecognized': Record<string, never>;
 
   'api.healthFailed': { status: number };
+  'api.timeout': { path: string; seconds: number };
   'api.requestFailed': { status: number };
   'api.unauthorized': Record<string, never>;
 

@@ -13,6 +13,8 @@ export const errorsTr: ErrorMessages = {
 
   'api.healthFailed': ({ status }) => `Yapay zekâ sunucusu sağlık kontrolüne yanıt vermedi (HTTP ${status}).`,
   'api.requestFailed': ({ status }) => `Yapay zekâ sunucusu isteği reddetti (HTTP ${status}).`,
+  'api.timeout': ({ path, seconds }) =>
+    `Yapay zekâ sunucusu ${path} isteğini ${seconds} saniye içinde yanıtlamadı. Birazdan tekrar dene.`,
   'api.unauthorized': () => 'Bu özelliği kullanmak için giriş yap.',
 
   'shelf.signInRequired': () => 'Raf tarayıcısını kullanmak için giriş yap.',

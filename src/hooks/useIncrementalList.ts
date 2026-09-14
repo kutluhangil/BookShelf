@@ -7,14 +7,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * so a few hundred volumes made the library view stutter on load. Capping the
  * rendered slice bounds React's work as well as layout and paint.
  */
-export function useIncrementalList<T>(items: T[], pageSize = 60) {
+export function useIncrementalList<T>(items: T[], pageSize: number, resetKey: string) {
   const [limit, setLimit] = useState(pageSize);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // Any change to the underlying list (filter, sort, search) starts over.
+  /*
+   * Only a new question about the library starts the list over, which is what
+   * `resetKey` names: the filter, the search and the sort. Watching the array
+   * itself started over on every edit as well — ticking a page number rebuilds
+   * it — so a reader who had scrolled to their three hundredth book was thrown
+   * back to the first page for changing something about one of them.
+   */
   useEffect(() => {
     setLimit(pageSize);
-  }, [items, pageSize]);
+  }, [resetKey, pageSize]);
 
   const hasMore = limit < items.length;
 

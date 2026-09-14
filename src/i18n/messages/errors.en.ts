@@ -13,6 +13,8 @@ export const errorsEn: ErrorMessages = {
 
   'api.healthFailed': ({ status }) => `The AI server did not respond to the health check (HTTP ${status}).`,
   'api.requestFailed': ({ status }) => `The AI server rejected the request (HTTP ${status}).`,
+  'api.timeout': ({ path, seconds }) =>
+    `The AI server did not answer ${path} within ${seconds} seconds. Try again in a moment.`,
   'api.unauthorized': () => 'Sign in to use this feature.',
 
   'shelf.signInRequired': () => 'Sign in to use the shelf scanner.',
